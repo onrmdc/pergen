@@ -22,22 +22,61 @@ A web panel for pre/post checks, NAT lookup, Find Leaf, BGP Looking Glass, route
 
 Order: Home → Navigation (event popups) → Pre/Post Check → Pre/Post consistency → NAT Lookup → Find Leaf → BGP (lookup, Looking Glass table, WAN paths) → Transceiver → Credential → DCI/WAN Routers → Inventory.
 
-| Page | Screenshot |
-|------|------------|
-| **Home** — 3×3 feature cards | ![Home](docs/screenshots/home.png) |
-| **Navigation** — Successful operations popup | ![Success popup](docs/screenshots/success-popup.png) |
-| **Navigation** — Errors popup (connection refused, only Arista EOS supported) | ![Errors popup](docs/screenshots/errors-popup.png) |
-| **Pre/Post Check** — Phase, filters, device list, Run PRE/POST | ![Pre/Post Check](docs/screenshots/prepost-check.png) |
-| **Pre/Post** — BGP/IS-IS shortfall (DOWN interfaces) and interface consistency (column layout) | ![Pre/Post consistency](docs/screenshots/prepost-consistency.png) |
-| **NAT Lookup** — Source/Destination IP, results with “Open on BGP page” link | ![NAT Lookup](docs/screenshots/nat-lookup.png) |
-| **Find Leaf** — Search by IP, found devices, leaf details | ![Find Leaf](docs/screenshots/find-leaf.png) |
-| **BGP / Looking Glass** — Prefix or AS input, favourites, status cards | ![BGP Lookup](docs/screenshots/bgp-lookup.png) |
-| **BGP** — Looking Glass (RIS peers) and BGP play (path changes) | ![BGP Looking Glass](docs/screenshots/bgp-looking-glass.png) |
-| **BGP** — WAN RTR match table, visibility, per-prefix paths (Path 1 & 2) | ![BGP WAN paths](docs/screenshots/bgp-wan-paths.png) |
-| **Transceiver Check** — Device selection and DOM results (TX/RX power) | ![Transceiver](docs/screenshots/transceiver.png) |
-| **Credential** — Add/Update form and credential table (Name, Method) | ![Credential](docs/screenshots/credential.png) |
-| **DCI / WAN Routers** — Prefix search, route-map IN/OUT, prefix-lists | ![DCI WAN Routers](docs/screenshots/dci-wan-routers.png) |
-| **Inventory** — Filters, Add/Edit/Import/Export, device table | ![Inventory](docs/screenshots/inventory.png) |
+**Home** — 3×3 feature cards
+
+![Home](docs/screenshots/home.png)
+
+**Navigation** — Successful operations popup
+
+![Success popup](docs/screenshots/success-popup.png)
+
+**Navigation** — Errors popup (connection refused, only Arista EOS supported)
+
+![Errors popup](docs/screenshots/errors-popup.png)
+
+**Pre/Post Check** — Phase, filters, device list, Run PRE/POST
+
+![Pre/Post Check](docs/screenshots/prepost-check.png)
+
+**Pre/Post** — BGP/IS-IS shortfall (DOWN interfaces) and interface consistency (column layout)
+
+![Pre/Post consistency](docs/screenshots/prepost-consistency.png)
+
+**NAT Lookup** — Source/Destination IP, results with "Open on BGP page" link
+
+![NAT Lookup](docs/screenshots/nat-lookup.png)
+
+**Find Leaf** — Search by IP, found devices, leaf details
+
+![Find Leaf](docs/screenshots/find-leaf.png)
+
+**BGP / Looking Glass** — Prefix or AS input, favourites, status cards
+
+![BGP Lookup](docs/screenshots/bgp-lookup.png)
+
+**BGP** — Looking Glass (RIS peers) and BGP play (path changes)
+
+![BGP Looking Glass](docs/screenshots/bgp-looking-glass.png)
+
+**BGP** — WAN RTR match table, visibility, per-prefix paths (Path 1 & 2)
+
+![BGP WAN paths](docs/screenshots/bgp-wan-paths.png)
+
+**Transceiver Check** — Device selection and DOM results (TX/RX power)
+
+![Transceiver](docs/screenshots/transceiver.png)
+
+**Credential** — Add/Update form and credential table (Name, Method)
+
+![Credential](docs/screenshots/credential.png)
+
+**DCI / WAN Routers** — Prefix search, route-map IN/OUT, prefix-lists
+
+![DCI WAN Routers](docs/screenshots/dci-wan-routers.png)
+
+**Inventory** — Filters, Add/Edit/Import/Export, device table
+
+![Inventory](docs/screenshots/inventory.png)
 
 ## Backend (Flask)
 
