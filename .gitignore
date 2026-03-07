@@ -1,0 +1,11 @@
+.DS_Store
+venv/
+__pycache__/
+*.pyc
+.env
+.env.local
+instance/
+*.db
+backend/inventory/inventory.csv
+frontend/dist/
+node_modules/

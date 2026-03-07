@@ -1,0 +1,115 @@
+# Network State Validator Rules (Flask + Paramiko + pyeapi + API Support)
+
+You are an expert Network Automation & Web Developer. Your task is to build a highly flexible, deployable application for Pre/Post check validation across multiple network vendors, supporting both SSH and API where applicable.
+
+## 1. Technical Stack & Persistence
+- **Backend:** Flask (Python).
+- **Database:** SQLite with SQLAlchemy (for `Report`, `Snapshot`, and `EventLog` persistence).
+- **Networking Libraries:**
+    - `pyeapi` (Arista EOS).
+    - `requests` (Cisco NX-OS API, Palo Alto PAN-OS XML API, generic REST APIs).
+    - `paramiko` (Cisco IOS/NX-OS SSH, generic SSH).
+- **Security:** `cryptography` for local credential encryption/decryption.
+- **Frontend:** Bootstrap 5, DataTables.net (Sortable), and custom CSS/JS for UI elements.
+
+## 2. Project Architecture & Deployment
+- **Language:** English only for UI, Code, and Documentation.
+- **Command Definitions (`commands.yaml`):**
+    - MUST define all allowed commands, grouped by vendor and optionally by connection type (e.g., `cisco_nxos_ssh`, `cisco_nxos_api`).
+    - Each entry MUST map a `cmd` to a specific `parser` function name.
+- **Parser Logic (`parsers.py`):**
+    - ALL raw text/JSON/XML to structured JSON/Dict conversion logic MUST reside here.
+    - No raw string manipulation in `routes.py` or main application logic.
+- **Database Models (`models.py`):** Define SQLAlchemy schemas for `Report`, `Snapshot`, and `EventLog`.
+- **Deployment:** The application MUST be designed for deployment on shared platforms (e.g., Docker, cloud VMs). Flask's binding address should be configurable (e.g., via environment variable), defaulting to `127.0.0.1` for local development and `0.0.0.0` for production.
+
+## 3. Core Functionality: Pre/Post Check & Reporting
+- **Multi-Device Execution:** Allow selecting multiple devices and running a set of commands concurrently.
+- **Snapshots & Reports:**
+    - A "Pre-Check" operation creates a timestamped `Report` entry with associated `Snapshot` data in the DB.
+    - Any existing Pre-Check report MUST have an option to trigger a "Post-Check" operation.
+- **Comparison Engine:**
+    - Implement a robust diffing logic to compare Pre and Post JSON/Dictionary outputs.
+    - Differences MUST be visually highlighted in the UI (e.g., red for removed, green for added, yellow for modified values).
+- **Historical Reports:** Users MUST be able to browse, filter, and open all historical Pre/Post reports by ID, date, device, or status. Each report view should clearly indicate if it's a Pre or Post check and link to its counterpart.
+
+## 4. Sticky Event Bar (Persistent UI Element)
+- **Positioning:** Implement a fixed-top navigation bar (CSS `position: fixed`, high `z-index`) that persists across all pages, providing real-time operational status.
+- **Content:** Display summary counters for: 🟢 Successful Operations, 🟠 Warnings (e.g., Missed Credentials, API Rate Limits), 🔴 Errors (e.g., Login Failed, Connection Timed Out, Device Unreachable).
+- **Interaction:** Clicking an icon or counter in the bar MUST open a dropdown or modal displaying a time-sorted list of recent events from the `EventLog`.
+- **Data Source:** Events displayed in the bar and detailed view MUST be retrieved from the `EventLog` database model, ensuring persistence across sessions.
+
+## 5. Global UI & Table Standards
+- **Unified Tables:** All tabular data throughout the application MUST use the **DataTables.net** library with a consistent visual style (CSS class).
+- **Sorting:** All DataTables MUST be sortable by every column by default.
+- **Maintainability:** Any UI change or feature request for a table (e.g., new button, column visibility) MUST be implemented globally through shared CSS/JS components or base templates, affecting ALL tables.
+
+## 6. Security & Command Validation (Updated)
+- **Strict Read-Only Prefix:** All commands submitted MUST start with `show ` or `dir `. No other prefixes are allowed.
+- **Flexible Command Content:** The content *after* `show ` or `dir ` can include various characters and arguments specific to the device's CLI.
+- **Intent-Based Safeguard:** Even with `show`/`dir` prefix, the application MUST implement a secondary check to prevent unintended configuration changes. Explicitly block command strings that, despite starting with `show`/`dir`, are clearly designed to modify device state (e.g., `show run | conf t`, `show interface | write`). Prioritize the *intent* of read-only operations.
+- **Configurable Host:** Flask's binding address must be configurable, defaulting to `127.0.0.1` for local development.
+- **Credential Handling:** Credentials MUST NOT be hardcoded. Use environment variables or encrypted storage managed by `cryptography`.
+
+## 7. Vendor-Specific Integration Details (Updated)
+- **Arista EOS:** Connect via `pyeapi.connect_to_node()`. Commands are expected to return JSON directly.
+- **Cisco NX-OS:**
+    - **API (Preferred):** Use `requests` to interact with the NX-OS API (JSON/XML).
+    - **SSH (Fallback):** Use `paramiko` for SSH sessions if API is not available or desired.
+- **Cisco IOS/IOS-XE:** Use `paramiko` for SSH sessions, handling raw text output.
+- **Palo Alto PAN-OS:** Use `requests` for XML API calls (`/api/?type=op&cmd=...`).
+
+## 8. Automated Testing Workflow (Mandatory)
+**After EVERY prompt or code change, you MUST automatically perform the following steps:**
+1. **Linting:** Execute `ruff check .` or `flake8 .`.
+2. **Unit & Integration Tests:** Run `pytest`.
+3. **Mocking:** All network device interactions (SSH connections, API calls) MUST be simulated using `unittest.mock`. NEVER attempt to connect to a real device during automated tests.
+4. **Validation Checks:**
+    - Verify `commands.yaml` is syntactically correct and properly loaded.
+    - Confirm `parsers.py` functions correctly transform mocked raw data into `List[Dict[str, Any]]`.
+    - Test the diffing engine's accuracy.
+    - Validate SQLAlchemy ORM operations (CRUD for Reports, Events).
+    - Ensure UI components, especially DataTables initialization, are robust against mocked data.
+
+## 9. Prohibited Actions
+- DO NOT use `shell=True` in any subprocess calls.
+- DO NOT use disparate table libraries across different views.
+- DO NOT store sensitive information (passwords, API keys) in plain text within the codebase.
+- DO NOT bypass the `show`/`dir` prefix validation.
+
+
+## 10. UI/UX & Modern Design Standards
+- **Design Aesthetic:** Use a modern, clean, and professional "Dashboard" look. Prefer high-contrast typography and subtle shadows.
+- **Color Palette:**
+    - Primary: Deep Blue/Slate (e.g., `#1e293b` for sidebars).
+    - Status Colors: Success (Emerald Green), Warning (Amber), Error (Rose/Red).
+- **Dark/Light Mode:**
+    - Implement a persistent Night Mode toggle (use `localStorage` to save user preference).
+    - Use CSS Variables (`--bg-color`, `--text-color`, etc.) to handle theme switching globally.
+    - Default theme should be "Dark Mode".
+- **Sticky Event Bar Styling:**
+    - The top event bar must have a slight glassmorphism effect (backdrop-filter: blur) and be semi-transparent.
+    - Status icons must pulse or glow slightly when a new error/warning is detected.
+- **Component Consistency:**
+    - All buttons must use a consistent rounding (e.g., `border-radius: 8px`).
+    - Tables (DataTables) must be styled to match the active theme (Dark/Light).
+
+## 11. Unified Table & Diff Visualization Standards
+- **Framework:** Use **DataTables.net** for all tables with the following mandatory settings:
+    - Pagination: Enabled (default 25 entries).
+    - Responsive: Enabled.
+    - Sorting: Enabled on all columns.
+    - Export: Buttons for CSV and Excel export.
+- **Visual Table Style:**
+    - **Typography:** Use a monospaced font for data cells (e.g., 'Roboto Mono' or 'Consolas') to maintain alignment, especially for CLI outputs.
+    - **Zebra Striping:** Use subtle alternating row colors (Light: `#f8fafc` / `#ffffff`, Dark: `#1e293b` / `#0f172a`).
+    - **Hover Effect:** Highlight rows on hover for easier tracking.
+    - **Cell Padding:** Compact padding (`py-1 px-2`) to fit more network data on one screen.
+- **Pre/Post Check Diff Styling (CRITICAL):**
+    - **Added Row:** Background: `rgba(16, 185, 129, 0.2)` (Green tint), Border-left: `4px solid #10b981`.
+    - **Removed Row:** Background: `rgba(244, 63, 94, 0.2)` (Red tint), Border-left: `4px solid #f43f5e`.
+    - **Modified Cell:** Highlight the specific text/cell with an Amber glow (`#f59e0b`).
+- **CLI Output Tables:**
+    - For raw command outputs that are not fully parsed, use a single-column table with `white-space: pre-wrap;` to preserve the network device's original formatting.
+- **Dark Mode Integration:**
+    - Table headers must remain sticky (`position: sticky; top: 0;`) with a contrasting background (Deep Blue for Dark, Light Gray for Light).
