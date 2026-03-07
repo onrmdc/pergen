@@ -2,7 +2,7 @@
 
 A web panel for pre/post checks, NAT lookup, Find Leaf, BGP Looking Glass, route-map comparison, transceiver checks, and inventory management. Single CSV inventory, encrypted credentials, and hierarchical device selection (Fabric → Site → Hall → Role).
 
-![Home](docs/screenshots/home.png)
+![Home](backend/static/screenshots/home.png)
 
 ## Features
 
@@ -24,59 +24,59 @@ Order: Home → Navigation (event popups) → Pre/Post Check → Pre/Post consis
 
 **Home** — 3×3 feature cards
 
-![Home](docs/screenshots/home.png)
+![Home](backend/static/screenshots/home.png)
 
 **Navigation** — Successful operations popup
 
-![Success popup](docs/screenshots/success-popup.png)
+<img src="backend/static/screenshots/success-popup.png" width="33%" alt="Success popup" />
 
 **Navigation** — Errors popup (connection refused, only Arista EOS supported)
 
-![Errors popup](docs/screenshots/errors-popup.png)
+<img src="backend/static/screenshots/errors-popup.png" width="33%" alt="Errors popup" />
 
 **Pre/Post Check** — Phase, filters, device list, Run PRE/POST
 
-![Pre/Post Check](docs/screenshots/prepost-check.png)
+![Pre/Post Check](backend/static/screenshots/prepost-check.png)
 
 **Pre/Post** — BGP/IS-IS shortfall (DOWN interfaces) and interface consistency (column layout)
 
-![Pre/Post consistency](docs/screenshots/prepost-consistency.png)
+![Pre/Post consistency](backend/static/screenshots/prepost-consistency.png)
 
 **NAT Lookup** — Source/Destination IP, results with "Open on BGP page" link
 
-![NAT Lookup](docs/screenshots/nat-lookup.png)
+![NAT Lookup](backend/static/screenshots/nat-lookup.png)
 
 **Find Leaf** — Search by IP, found devices, leaf details
 
-![Find Leaf](docs/screenshots/find-leaf.png)
+![Find Leaf](backend/static/screenshots/find-leaf.png)
 
 **BGP / Looking Glass** — Prefix or AS input, favourites, status cards
 
-![BGP Lookup](docs/screenshots/bgp-lookup.png)
+![BGP Lookup](backend/static/screenshots/bgp-lookup.png)
 
 **BGP** — Looking Glass (RIS peers) and BGP play (path changes)
 
-![BGP Looking Glass](docs/screenshots/bgp-looking-glass.png)
+![BGP Looking Glass](backend/static/screenshots/bgp-looking-glass.png)
 
 **BGP** — WAN RTR match table, visibility, per-prefix paths (Path 1 & 2)
 
-![BGP WAN paths](docs/screenshots/bgp-wan-paths.png)
+![BGP WAN paths](backend/static/screenshots/bgp-wan-paths.png)
 
 **Transceiver Check** — Device selection and DOM results (TX/RX power)
 
-![Transceiver](docs/screenshots/transceiver.png)
+![Transceiver](backend/static/screenshots/transceiver.png)
 
 **Credential** — Add/Update form and credential table (Name, Method)
 
-![Credential](docs/screenshots/credential.png)
+![Credential](backend/static/screenshots/credential.png)
 
 **DCI / WAN Routers** — Prefix search, route-map IN/OUT, prefix-lists
 
-![DCI WAN Routers](docs/screenshots/dci-wan-routers.png)
+![DCI WAN Routers](backend/static/screenshots/dci-wan-routers.png)
 
 **Inventory** — Filters, Add/Edit/Import/Export, device table
 
-![Inventory](docs/screenshots/inventory.png)
+![Inventory](backend/static/screenshots/inventory.png)
 
 ## Backend (Flask)
 
