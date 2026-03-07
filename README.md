@@ -28,11 +28,11 @@ Order: Home → Navigation (event popups) → Pre/Post Check → Pre/Post consis
 
 **Navigation** — Successful operations popup
 
-![Success popup](backend/static/screenshots/success-popup.png)
+<img src="backend/static/screenshots/success-popup.png" width="33%" alt="Success popup" />
 
 **Navigation** — Errors popup (connection refused, only Arista EOS supported)
 
-![Errors popup](backend/static/screenshots/errors-popup.png)
+<img src="backend/static/screenshots/errors-popup.png" width="33%" alt="Errors popup" />
 
 **Pre/Post Check** — Phase, filters, device list, Run PRE/POST
 
