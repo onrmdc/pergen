@@ -24,8 +24,13 @@ def _default_inventory_path():
     base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     path = os.path.join(base, "inventory", "inventory.csv")
     example = os.path.join(base, "inventory", "example_inventory.csv")
-    if not os.path.isfile(path) and os.path.isfile(example):
+    sample = os.path.join(base, "inventory", "inventory_sample.csv")
+    if os.path.isfile(path):
+        return path
+    if os.path.isfile(example):
         return example
+    if os.path.isfile(sample):
+        return sample
     return path
 
 

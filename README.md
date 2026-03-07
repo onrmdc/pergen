@@ -89,7 +89,7 @@ export FLASK_APP=backend.app
 flask run
 ```
 
-Default port **5000**. The UI is served from `backend/static/index.html` at `/`. Inventory: `backend/inventory/inventory.csv` (or `backend/inventory/example_inventory.csv` if missing). Override with `PERGEN_INVENTORY_PATH`.
+Default port **5000**. The UI is served from `backend/static/index.html` at `/`. Inventory: `backend/inventory/inventory.csv` (or `example_inventory.csv` if present, else `inventory_sample.csv`). Override with `PERGEN_INVENTORY_PATH`.
 
 ### API overview
 
@@ -121,16 +121,18 @@ These are **ignored** by Git so they are never committed:
 
 - **`.env`** / **`.env.local`** — Environment variables (e.g. `SECRET_KEY`). Copy `.env.example` to `.env` and set your own `SECRET_KEY` locally.
 - **`backend/instance/`** — Credential store (SQLite DB with encrypted passwords/API keys). Created at first run; keep it local only.
-- **`backend/inventory/inventory.csv`** — Your real device list. Only `example_inventory.csv` is in the repo as a sample.
+- **`backend/inventory/inventory.csv`** — Your real device list.
+- **`backend/inventory/example_inventory.csv`** — Optional local sample; if present it is used when `inventory.csv` is missing. Not in the repo (gitignored).
+- Repo includes only **`backend/inventory/inventory_sample.csv`** (minimal 2-row sample) as reference.
 
 **Before pushing to your Git account:** Ensure you have no `.env` or `backend/inventory/inventory.csv` in the repo (they are in `.gitignore`). Credential *names* in inventory (e.g. `tyc`, `wallet`) are not secrets; the actual credentials are stored in the app via the Credential page and saved under `instance/`, which is gitignored.
 
-If you already committed `inventory.csv` or `.env` in the past, remove them from Git (files stay on disk):  
-`git rm --cached backend/inventory/inventory.csv` and/or `git rm --cached .env` then commit.
+If you already committed `inventory.csv`, `example_inventory.csv`, or `.env` in the past, remove them from Git (files stay on disk):  
+`git rm --cached backend/inventory/inventory.csv` and/or `git rm --cached backend/inventory/example_inventory.csv` and/or `git rm --cached .env` then commit.
 
 ## Configuration
 
-- **Inventory**: CSV with columns such as hostname, ip, fabric, site, hall, vendor, model, role, tag, credential. Use tag `leaf-search` for Find Leaf, `nat lookup` for NAT Lookup firewalls, role `wan-router` for BGP WAN RTR search. Put your file at `backend/inventory/inventory.csv` (or set `PERGEN_INVENTORY_PATH`); it is gitignored.
+- **Inventory**: CSV with columns such as hostname, ip, fabric, site, hall, vendor, model, role, tag, credential. Use tag `leaf-search` for Find Leaf, `nat lookup` for NAT Lookup firewalls, role `wan-router` for BGP WAN RTR search. Put your file at `backend/inventory/inventory.csv` (or set `PERGEN_INVENTORY_PATH`). Repo contains only `inventory_sample.csv` (minimal); `inventory.csv` and `example_inventory.csv` are gitignored.
 - **Credentials**: Stored encrypted in `backend/instance/credentials.db`; set credential name per device in inventory. Use **Credential** page in the app to add/update; do not commit `.env` or the `instance/` folder.
 - **Binding**: Set `FLASK_RUN_HOST=0.0.0.0` for production; default is `127.0.0.1`.
 
