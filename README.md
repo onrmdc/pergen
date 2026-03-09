@@ -9,6 +9,7 @@ A web panel for pre/post checks, NAT lookup, Find Leaf, BGP Looking Glass, route
 | Feature | Description |
 |--------|-------------|
 | **Pre/Post Check** | Capture device state before and after changes; compare diffs, save reports, export as ZIP. Interface consistency view shows devices as columns with up/down status per interface. |
+| **Live Notepad** | Single shared plain-text notepad; everyone sees and edits the same content. Changes sync every few seconds (polling). No formatting. |
 | **NAT Lookup** | Find NAT rule and translated IP for a source/destination pair via Palo Alto firewalls; link to BGP page with translated prefix. |
 | **Find Leaf** | Locate which leaf switch has a given IP in the fabric (uses devices with tag `leaf-search`). |
 | **BGP / Looking Glass** | Prefix or AS lookup via RIPEStat: status, RPKI, visibility, history diff. Per-prefix best two AS paths from one router (with router icon viz). WAN RTR search: which WAN routers have `router bgp <AS>` in config. |
@@ -41,6 +42,8 @@ Order: Home → Navigation (event popups) → Pre/Post Check → Pre/Post consis
 **Pre/Post** — BGP/IS-IS shortfall (DOWN interfaces) and interface consistency (column layout)
 
 ![Pre/Post consistency](backend/static/screenshots/prepost-consistency.png)
+
+**Export ZIP (Pre/Post)** — On the Pre/Post results page, use **Export as ZIP (HTML + styles)** to download a ZIP file containing a self-contained HTML report. The report includes: the main results table (hostname, IP, vendor, model, parsed fields), BGP/IS-IS shortfall (interfaces DOWN), interface consistency (devices as columns, status per interface), ports flapped in the last 24 hours, and the PRE vs POST diff section. Styles are embedded so the ZIP can be opened offline in any browser.
 
 **NAT Lookup** — Source/Destination IP, results with "Open on BGP page" link
 
@@ -111,6 +114,8 @@ Default port **5000**. The UI is served from `backend/static/index.html` at `/`.
 | `POST /api/run/pre` | Run PRE; returns `run_id`, `device_results` |
 | `POST /api/run/post` | Run POST; body `{ "run_id": "..." }`; returns comparison |
 | `GET /api/run/result/<run_id>` | Stored run (PRE/POST) |
+| `GET /api/notepad` | Live notepad content (plain text) |
+| `PUT /api/notepad` | Update notepad; body `{"content": "..."}` |
 | `GET /api/bgp/status?prefix=&asn=` | BGP status (RIPEStat) |
 | `GET /api/bgp/looking-glass?prefix=&asn=` | Looking Glass peers |
 | `GET /api/bgp/wan-rtr-match?asn=` | WAN routers with `router bgp <AS>` |

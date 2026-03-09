@@ -1174,6 +1174,95 @@ def api_report_delete(run_id):
         return jsonify({"error": "failed to delete"}), 500
 
 
+# ---------- Live Notepad (single shared plain-text notepad, line editors) ----------
+def _notepad_dir():
+    d = app.instance_path
+    os.makedirs(d, exist_ok=True)
+    return d
+
+
+def _notepad_json_path():
+    return os.path.join(_notepad_dir(), "notepad.json")
+
+
+def _notepad_txt_path():
+    return os.path.join(_notepad_dir(), "notepad.txt")
+
+
+def _load_notepad_data():
+    """Return {"content": str, "line_editors": [str, ...]}."""
+    jpath = _notepad_json_path()
+    tpath = _notepad_txt_path()
+    if os.path.isfile(jpath):
+        try:
+            with open(jpath, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            content = (data.get("content") or "").replace("\r\n", "\n").replace("\r", "\n")
+            editors = data.get("line_editors")
+            if not isinstance(editors, list):
+                editors = []
+            lines = content.split("\n")
+            while len(editors) < len(lines):
+                editors.append("")
+            return {"content": content, "line_editors": editors[: len(lines)]}
+        except Exception:
+            pass
+    if os.path.isfile(tpath):
+        try:
+            with open(tpath, "r", encoding="utf-8") as f:
+                content = f.read().replace("\r\n", "\n").replace("\r", "\n")
+            lines = content.split("\n")
+            return {"content": content, "line_editors": [""] * len(lines)}
+        except Exception:
+            pass
+    return {"content": "", "line_editors": []}
+
+
+def _save_notepad_data(content, line_editors):
+    content = (content or "").replace("\r\n", "\n").replace("\r", "\n")
+    lines = content.split("\n")
+    editors = (line_editors or [])[: len(lines)]
+    while len(editors) < len(lines):
+        editors.append("")
+    with open(_notepad_json_path(), "w", encoding="utf-8") as f:
+        json.dump({"content": content, "line_editors": editors}, f, ensure_ascii=False)
+
+
+@app.route("/api/notepad", methods=["GET"])
+def api_notepad_get():
+    """Return shared notepad: { \"content\": \"...\", \"line_editors\": [\"user\", ...] }."""
+    data = _load_notepad_data()
+    return jsonify({"content": data["content"], "line_editors": data["line_editors"]})
+
+
+@app.route("/api/notepad", methods=["PUT", "POST"])
+def api_notepad_put():
+    """Update notepad. Body: { \"content\": \"...\", \"user\": \"Name\" }. Tracks last editor per line."""
+    data = request.get_json() or {}
+    content = data.get("content")
+    user = (data.get("user") or "").strip() or "—"
+    if content is None:
+        return jsonify({"error": "content required"}), 400
+    if not isinstance(content, str):
+        content = str(content)
+    content = content.replace("\r\n", "\n").replace("\r", "\n")
+    try:
+        old = _load_notepad_data()
+        old_lines = (old["content"] or "").split("\n")
+        old_editors = list(old["line_editors"] or [])
+        new_lines = content.split("\n")
+        new_editors = []
+        for i, new_line in enumerate(new_lines):
+            if i < len(old_lines) and old_lines[i] == new_line and i < len(old_editors):
+                new_editors.append(old_editors[i] or "")
+            else:
+                new_editors.append(user)
+        _save_notepad_data(content, new_editors)
+        return jsonify({"content": content, "line_editors": new_editors})
+    except Exception:
+        return jsonify({"error": "failed to save"}), 500
+
+
 # ---------- Credentials (name = inventory credential field) ----------
 @app.route("/api/credentials", methods=["GET"])
 def api_credentials_list():

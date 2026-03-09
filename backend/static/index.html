@@ -514,6 +514,8 @@
         <a href="#credential">Credential</a>
         <a href="#routemap">DCI / WAN Routers</a>
         <a href="#inventory">Inventory</a>
+        <a href="#notepad">Live Notepad</a>
+        <a href="#diff">Diff Checker</a>
         <a href="#help">Help</a>
       </nav>
     </div>
@@ -531,6 +533,8 @@
     <a href="#credential" class="home-card"><img src="/static/assets/credential-043ebd94-e24b-4e60-911a-f3efaca1a3f2.png" alt=""><span class="home-card-title">Credential</span><span class="home-card-desc">Store and manage login credentials for inventory devices.</span></a>
     <a href="#routemap" class="home-card"><img src="/static/assets/route-map-afb79359-5a34-4511-b5ab-b38ef1e4e885.png" alt=""><span class="home-card-title">DCI / WAN Routers</span><span class="home-card-desc">Compare route-maps on Arista DCI/WAN routers.</span></a>
     <a href="#inventory" class="home-card"><img src="/static/assets/inventory-525bb8c4-58e9-4240-97e9-df5491bb9268.png" alt=""><span class="home-card-title">Inventory</span><span class="home-card-desc">Manage fabric, site, and device list.</span></a>
+    <a href="#notepad" class="home-card"><img src="/static/assets/notepad.png" alt=""><span class="home-card-title">Live Notepad</span><span class="home-card-desc">Shared plain-text notepad; everyone sees and edits the same content in real time.</span></a>
+    <a href="#diff" class="home-card"><img src="/static/assets/diff-checker.png" alt=""><span class="home-card-title">Diff Checker</span><span class="home-card-desc">Compare two texts line by line; differences shown as green (+), red (-), yellow (≠).</span></a>
   </div>
   </section>
 
@@ -1023,6 +1027,46 @@
   </div>
   </section>
 
+  <section id="page-notepad" class="page">
+  <h1>Live Notepad</h1>
+  <p class="muted" style="margin-bottom:0.5rem;">Single shared notepad. Everyone sees the same content; changes sync live. Plain text only.</p>
+  <div style="margin-bottom:0.75rem; display:flex; align-items:center; gap:0.5rem;">
+    <label style="font-size:0.9em;">Your name</label>
+    <input type="text" id="notepadUserName" placeholder="Enter your name" maxlength="80" style="width:180px; padding:0.4rem 0.5rem; background:var(--card); color:var(--text); border:1px solid var(--border); border-radius:6px; font-size:1rem;" />
+  </div>
+  <div id="notepadWrap" style="display:flex; gap:0; min-height:320px; max-height:65vh;">
+    <div id="notepadLeftCol" style="width:7rem; flex-shrink:0; overflow-y:auto; overflow-x:hidden; background:var(--card); border:1px solid var(--border); border-right:none; border-radius:8px 0 0 8px; font-size:1rem; color:var(--muted); line-height:1.5; padding:0.75rem 0.4rem 0.75rem 0.5rem; font-family:inherit;"></div>
+    <textarea id="notepadText" placeholder="Type here…" style="flex:1; box-sizing:border-box; padding:0.75rem 0.5rem; background:var(--card); color:var(--text); border:1px solid var(--border); border-radius:0 8px 8px 0; font-family:inherit; font-size:1rem; line-height:1.5em; resize:vertical; min-height:320px;"></textarea>
+  </div>
+  <p class="muted" style="margin-top:0.5rem; font-size:0.85em;" id="notepadStatus">Loading…</p>
+  </section>
+
+  <section id="page-diff" class="page">
+  <h1>Diff Checker</h1>
+  <p class="muted" style="margin-bottom:1rem;">Paste or type text in the left and right boxes, then click Diff check. Uses line alignment like Git: matching lines are paired, so a deleted line does not shift the rest. − removed (red, left only), + added (green, right only).</p>
+  <div style="display:flex; gap:1rem; flex-wrap:wrap;">
+    <div style="flex:1; min-width:280px;">
+      <label style="display:block; font-size:0.9em; margin-bottom:0.35rem;">Left (before)</label>
+      <textarea id="diffLeft" rows="14" style="width:100%; box-sizing:border-box; padding:0.6rem; background:var(--card); color:var(--text); border:1px solid var(--border); border-radius:8px; font-family:monospace; font-size:0.9rem; line-height:1.4; resize:vertical;"></textarea>
+    </div>
+    <div style="flex:1; min-width:280px;">
+      <label style="display:block; font-size:0.9em; margin-bottom:0.35rem;">Right (after)</label>
+      <textarea id="diffRight" rows="14" style="width:100%; box-sizing:border-box; padding:0.6rem; background:var(--card); color:var(--text); border:1px solid var(--border); border-radius:8px; font-family:monospace; font-size:0.9rem; line-height:1.4; resize:vertical;"></textarea>
+    </div>
+  </div>
+  <div style="margin-top:1rem; text-align:center;">
+    <button type="button" id="diffCheckBtn" style="padding:0.5rem 1.25rem; background:var(--accent); color:#fff; border:none; border-radius:8px; font-size:1rem; cursor:pointer;">Diff check</button>
+  </div>
+  <div id="diffResultWrap" style="margin-top:1.5rem; display:none;">
+    <h2 style="font-size:1rem; margin-bottom:0.5rem;">Result (same line aligned)</h2>
+    <div id="diffSummaryBar" style="display:flex; flex-wrap:wrap; gap:0.5rem; margin-bottom:0.5rem; align-items:center;"></div>
+    <div id="diffResultContainer" style="display:flex; gap:0; max-height:60vh;">
+      <div id="diffResult" style="flex:1; overflow-x:auto; overflow-y:auto; border:1px solid var(--border); border-right:none; border-radius:8px 0 0 8px; background:var(--card); font-family:monospace; font-size:0.9rem; line-height:1.4;"></div>
+      <div id="diffGuide" style="width:20px; flex-shrink:0; border:1px solid var(--border); border-radius:0 8px 8px 0; background:rgba(0,0,0,0.03); position:relative; cursor:pointer;"></div>
+    </div>
+  </div>
+  </section>
+
   <section id="page-help" class="page">
   <h1>Help</h1>
   <p class="muted" style="margin-bottom: 1.5rem;">This panel helps you run pre/post checks, look up NAT and BGP, find leaves, and manage inventory. All tables support sorting and export (CSV/Excel) where indicated.</p>
@@ -1092,6 +1136,12 @@
   <h2>Inventory</h2>
   <p>Manage the device list used by all other pages: hostname, IP, fabric, site, hall, vendor, model, role, tag, and credential. Use <strong>Add device</strong>, <strong>Edit</strong>, <strong>Import</strong> (CSV), and <strong>Export</strong>. Column visibility can be toggled via <strong>Columns</strong>.</p>
   <p><img src="/static/screenshots/inventory.png" alt="Inventory table" class="help-screenshot" /></p>
+
+  <h2>Live Notepad</h2>
+  <p>One shared plain-text notepad for everyone. Open <strong>Live Notepad</strong> from the menu; type in the text area. Changes are saved automatically and synced every few seconds. Everyone sees the same content; no formatting, just text.</p>
+
+  <h2>Diff Checker</h2>
+  <p>Compare two texts like Git/GitHub diff. Paste in <strong>Left (before)</strong> and <strong>Right (after)</strong>, then click <strong>Diff check</strong>. Matching lines are found automatically (LCS), so deleting one line does not mark everything below as changed. Table: <span style="color:#f43f5e;">−</span> removed (red, left column only), <span style="color:#10b981;">+</span> added (green, right column only). Left # and Right # are line numbers in each file.</p>
 
   <h2>Tables and export</h2>
   <p>Tables use DataTables.net: sort by column, paginate, and use CSV/Excel export where the buttons are shown. Pre/Post diff tables use green for added, red for removed, and amber for modified values.</p>
@@ -2753,7 +2803,7 @@
     $("selectAll").addEventListener("click", selectAll);
     $("selectNone").addEventListener("click", selectNone);
 
-    var PAGE_TITLES = { home: "Home", prepost: "Pre/Post Check", "prepost-results": "Pre Check — Results", nat: "NAT Lookup", findleaf: "Find Leaf", bgp: "BGP / Looking Glass", custom: "Send Custom Command", transceiver: "Transceiver Check", credential: "Credential", routemap: "DCI / WAN Routers", inventory: "Inventory", restapi: "REST API" };
+    var PAGE_TITLES = { home: "Home", prepost: "Pre/Post Check", "prepost-results": "Pre Check — Results", nat: "NAT Lookup", findleaf: "Find Leaf", bgp: "BGP / Looking Glass", custom: "Send Custom Command", transceiver: "Transceiver Check", credential: "Credential", routemap: "DCI / WAN Routers", inventory: "Inventory", notepad: "Live Notepad", diff: "Diff Checker", restapi: "REST API" };
     function setHeaderPageTitle(pageName) {
       var el = document.getElementById("headerPageTitle");
       if (el) el.textContent = PAGE_TITLES[pageName] || pageName || "Home";
@@ -2797,6 +2847,7 @@
     function onHashChange() {
       closeMenu();
       const hash = (location.hash || "#home").slice(1) || "home";
+      if (hash !== "notepad" && notepadPollTimer) { clearInterval(notepadPollTimer); notepadPollTimer = null; }
       showPage(hash);
       if (hash === "home") refreshAllPages();
       if (hash === "prepost") {
@@ -2807,6 +2858,8 @@
         }
       }
       if (hash === "prepost-results") initResultsPage();
+      if (hash === "notepad") initNotepadPage();
+      if (hash === "diff") initDiffPage();
       if (hash === "routemap") initRouterPage();
       if (hash === "transceiver") initTransceiverPage();
       if (hash === "restapi") initRestApiPage();
@@ -3692,6 +3745,200 @@
             if (prefixStatusEl) prefixStatusEl.textContent = "Failed to load routers.";
           });
         }
+      });
+    }
+
+    var notepadPollTimer = null;
+    var notepadSaveTimer = null;
+    var NOTEPAD_NAME_KEY = "pergen_notepad_name";
+    function initNotepadPage() {
+      var ta = document.getElementById("notepadText");
+      var statusEl = document.getElementById("notepadStatus");
+      var leftCol = document.getElementById("notepadLeftCol");
+      var nameInput = document.getElementById("notepadUserName");
+      if (!ta) return;
+      try {
+        var savedName = localStorage.getItem(NOTEPAD_NAME_KEY);
+        if (nameInput && savedName) nameInput.value = savedName;
+      } catch (e) {}
+      if (nameInput) { nameInput.addEventListener("change", function() { try { localStorage.setItem(NOTEPAD_NAME_KEY, nameInput.value || ""); } catch (e) {} }); nameInput.addEventListener("input", function() { try { localStorage.setItem(NOTEPAD_NAME_KEY, nameInput.value || ""); } catch (e) {} }); }
+      function setStatus(msg) { if (statusEl) statusEl.textContent = msg; }
+      function renderLineEditors(lineEditors) {
+        if (!leftCol || !Array.isArray(lineEditors)) return;
+        var lines = lineEditors.length ? lineEditors : [""];
+        var rowStyle = "height:1.5em; line-height:1.5em; box-sizing:border-box; border-bottom:1px solid rgba(128,128,128,0.12); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-size:1rem;";
+        leftCol.innerHTML = lines.map(function(u, i) {
+          var num = i + 1;
+          var who = (u && u.trim()) ? u : "—";
+          return "<div style=\"" + rowStyle + "\" title=\"" + escapeHtml(who) + "\"><span style=\"opacity:0.7;\">" + num + "</span> " + escapeHtml(who) + "</div>";
+        }).join("");
+      }
+      function applyNotepadData(d) {
+        var content = (d && d.content != null) ? String(d.content) : "";
+        var editors = (d && d.line_editors) ? d.line_editors : [];
+        if (document.activeElement !== ta && ta.value !== content) ta.value = content;
+        var lines = content.split("\n");
+        while (editors.length < lines.length) editors.push("");
+        renderLineEditors(editors.slice(0, lines.length));
+      }
+      function loadNotepad() {
+        fetch(API + "/api/notepad").then(function(r) { return r.json(); }).then(function(d) {
+          applyNotepadData(d);
+          setStatus("Synced. Changes sync live for everyone.");
+        }).catch(function() { setStatus("Failed to load."); });
+      }
+      function saveNotepad() {
+        var content = ta.value;
+        var user = (nameInput && nameInput.value) ? nameInput.value.trim() : "";
+        if (!user) { setStatus("Enter your name above, then edit."); return; }
+        try { localStorage.setItem(NOTEPAD_NAME_KEY, user); } catch (e) {}
+        fetch(API + "/api/notepad", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ content: content, user: user })
+        }).then(function(r) { return r.json(); }).then(function(d) {
+          if (d && d.content != null && ta.value === content) { ta.value = d.content; if (d.line_editors) renderLineEditors(d.line_editors); }
+          setStatus("Saved. Synced for everyone.");
+        }).catch(function() { setStatus("Save failed."); });
+      }
+      loadNotepad();
+      if (notepadPollTimer) clearInterval(notepadPollTimer);
+      notepadPollTimer = setInterval(function() {
+        if (location.hash !== "#notepad") return;
+        fetch(API + "/api/notepad").then(function(r) { return r.json(); }).then(function(d) {
+          if (document.activeElement !== ta) applyNotepadData(d);
+        }).catch(function() {});
+      }, 2000);
+      ta.addEventListener("input", function() {
+        if (notepadSaveTimer) clearTimeout(notepadSaveTimer);
+        notepadSaveTimer = setTimeout(saveNotepad, 800);
+      });
+      ta.addEventListener("blur", function() { saveNotepad(); });
+      ta.addEventListener("scroll", function() { if (leftCol) leftCol.scrollTop = ta.scrollTop; });
+    }
+
+    function computeLcsPairs(leftArr, rightArr) {
+      var n = leftArr.length;
+      var m = rightArr.length;
+      var dp = [];
+      for (var i = 0; i <= n; i++) { dp[i] = []; dp[i][0] = 0; }
+      for (var j = 1; j <= m; j++) dp[0][j] = 0;
+      for (i = 1; i <= n; i++) {
+        for (j = 1; j <= m; j++) {
+          if (leftArr[i - 1] === rightArr[j - 1]) dp[i][j] = dp[i - 1][j - 1] + 1;
+          else dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1]);
+        }
+      }
+      var pairs = [];
+      i = n; j = m;
+      while (i > 0 && j > 0) {
+        if (leftArr[i - 1] === rightArr[j - 1]) { pairs.push([i - 1, j - 1]); i--; j--; }
+        else if (dp[i - 1][j] >= dp[i][j - 1]) i--;
+        else j--;
+      }
+      return pairs.reverse();
+    }
+    function computeDiffRows(leftLines, rightLines) {
+      var lcsPairs = computeLcsPairs(leftLines, rightLines);
+      var rows = [];
+      var prevI = -1, prevJ = -1;
+      for (var p = 0; p < lcsPairs.length; p++) {
+        var ii = lcsPairs[p][0], jj = lcsPairs[p][1];
+        for (var k = prevI + 1; k < ii; k++) rows.push({ kind: "rem", left: leftLines[k], right: null, leftNum: k + 1, rightNum: null });
+        for (var k = prevJ + 1; k < jj; k++) rows.push({ kind: "add", left: null, right: rightLines[k], leftNum: null, rightNum: k + 1 });
+        rows.push({ kind: "same", left: leftLines[ii], right: rightLines[jj], leftNum: ii + 1, rightNum: jj + 1 });
+        prevI = ii; prevJ = jj;
+      }
+      for (var k = prevI + 1; k < leftLines.length; k++) rows.push({ kind: "rem", left: leftLines[k], right: null, leftNum: k + 1, rightNum: null });
+      for (var k = prevJ + 1; k < rightLines.length; k++) rows.push({ kind: "add", left: null, right: rightLines[k], leftNum: null, rightNum: k + 1 });
+      var merged = [];
+      for (var idx = 0; idx < rows.length; idx++) {
+        if (rows[idx].kind === "rem" && idx + 1 < rows.length && rows[idx + 1].kind === "add") {
+          merged.push({ kind: "mod", left: rows[idx].left, right: rows[idx + 1].right, leftNum: rows[idx].leftNum, rightNum: rows[idx + 1].rightNum });
+          idx++;
+        } else merged.push(rows[idx]);
+      }
+      return merged;
+    }
+    var diffPageInited = false;
+    var diffScrollToRow = function(rowIndex) {
+      var el = document.getElementById("diff-row-" + rowIndex);
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    };
+    function initDiffPage() {
+      if (diffPageInited) return;
+      diffPageInited = true;
+      var btn = document.getElementById("diffCheckBtn");
+      var leftTa = document.getElementById("diffLeft");
+      var rightTa = document.getElementById("diffRight");
+      var resultEl = document.getElementById("diffResult");
+      var resultWrap = document.getElementById("diffResultWrap");
+      var summaryBar = document.getElementById("diffSummaryBar");
+      var guideEl = document.getElementById("diffGuide");
+      if (!btn || !resultEl) return;
+      btn.addEventListener("click", function() {
+        var left = (leftTa && leftTa.value) ? leftTa.value : "";
+        var right = (rightTa && rightTa.value) ? rightTa.value : "";
+        var leftLines = left.split("\n");
+        var rightLines = right.split("\n");
+        var rows = computeDiffRows(leftLines, rightLines);
+        if (rows.length === 0) rows = [{ kind: "same", left: "", right: "", leftNum: 1, rightNum: 1 }];
+        var countAdd = 0, countRem = 0, countMod = 0;
+        var addIndices = [], remIndices = [], modIndices = [];
+        var changeRowIndices = [];
+        for (var i = 0; i < rows.length; i++) {
+          if (rows[i].kind === "add") { countAdd++; addIndices.push(i); changeRowIndices.push({ i: i, kind: "add" }); }
+          else if (rows[i].kind === "rem") { countRem++; remIndices.push(i); changeRowIndices.push({ i: i, kind: "rem" }); }
+          else if (rows[i].kind === "mod") { countMod++; modIndices.push(i); changeRowIndices.push({ i: i, kind: "mod" }); }
+        }
+        var addIdx = 0, remIdx = 0, modIdx = 0;
+        var rowStyle = { add: "background:rgba(16,185,129,0.18); border-left:4px solid #10b981;", rem: "background:rgba(244,63,94,0.18); border-left:4px solid #f43f5e;", mod: "background:rgba(245,158,11,0.18); border-left:4px solid #f59e0b;", same: "" };
+        var table = "<table style=\"width:100%; border-collapse:collapse;\"><thead><tr><th style=\"width:2.5rem; text-align:right; padding:0.35rem 0.5rem; border-bottom:1px solid var(--border); color:var(--muted);\">Left #</th><th style=\"width:2rem; text-align:center; padding:0.35rem; border-bottom:1px solid var(--border);\"></th><th style=\"text-align:left; padding:0.35rem 0.5rem; border-bottom:1px solid var(--border);\">Left (before)</th><th style=\"width:2.5rem; text-align:right; padding:0.35rem 0.5rem; border-bottom:1px solid var(--border); color:var(--muted);\">Right #</th><th style=\"text-align:left; padding:0.35rem 0.5rem; border-bottom:1px solid var(--border);\">Right (after)</th></tr></thead><tbody>";
+        for (var i = 0; i < rows.length; i++) {
+          var r = rows[i];
+          var style = rowStyle[r.kind] ? " style=\"" + rowStyle[r.kind] + "\"" : "";
+          var leftNum = r.leftNum != null ? r.leftNum : "";
+          var rightNum = r.rightNum != null ? r.rightNum : "";
+          var ind = r.kind === "add" ? "<span style=\"color:#10b981;\">+</span>" : r.kind === "rem" ? "<span style=\"color:#f43f5e;\">−</span>" : r.kind === "mod" ? "<span style=\"color:#f59e0b;\">≠</span>" : "";
+          table += "<tr id=\"diff-row-" + i + "\"" + style + "><td style=\"text-align:right; padding:0.35rem 0.5rem; border-bottom:1px solid rgba(128,128,128,0.2); color:var(--muted);\">" + leftNum + "</td><td style=\"text-align:center; padding:0.35rem; border-bottom:1px solid rgba(128,128,128,0.2);\">" + ind + "</td><td style=\"padding:0.35rem 0.5rem; border-bottom:1px solid rgba(128,128,128,0.2); white-space:pre-wrap; word-break:break-all;\">" + escapeHtml(r.left != null ? r.left : "") + "</td><td style=\"text-align:right; padding:0.35rem 0.5rem; border-bottom:1px solid rgba(128,128,128,0.2); color:var(--muted);\">" + rightNum + "</td><td style=\"padding:0.35rem 0.5rem; border-bottom:1px solid rgba(128,128,128,0.2); white-space:pre-wrap; word-break:break-all;\">" + escapeHtml(r.right != null ? r.right : "") + "</td></tr>";
+        }
+        table += "</tbody></table>";
+        resultEl.innerHTML = table;
+        if (summaryBar) {
+          summaryBar.innerHTML = "";
+          var addBtn = document.createElement("button");
+          addBtn.type = "button";
+          addBtn.style.cssText = "padding:0.35rem 0.75rem; background:rgba(16,185,129,0.25); color:#10b981; border:1px solid #10b981; border-radius:6px; cursor:pointer; font-size:0.9rem;";
+          addBtn.textContent = "Added " + countAdd;
+          addBtn.addEventListener("click", function() { if (addIndices.length) { diffScrollToRow(addIndices[addIdx % addIndices.length]); addIdx++; } });
+          summaryBar.appendChild(addBtn);
+          var remBtn = document.createElement("button");
+          remBtn.type = "button";
+          remBtn.style.cssText = "padding:0.35rem 0.75rem; background:rgba(244,63,94,0.25); color:#f43f5e; border:1px solid #f43f5e; border-radius:6px; cursor:pointer; font-size:0.9rem;";
+          remBtn.textContent = "Deleted " + countRem;
+          remBtn.addEventListener("click", function() { if (remIndices.length) { diffScrollToRow(remIndices[remIdx % remIndices.length]); remIdx++; } });
+          summaryBar.appendChild(remBtn);
+          var modBtn = document.createElement("button");
+          modBtn.type = "button";
+          modBtn.style.cssText = "padding:0.35rem 0.75rem; background:rgba(245,158,11,0.25); color:#f59e0b; border:1px solid #f59e0b; border-radius:6px; cursor:pointer; font-size:0.9rem;";
+          modBtn.textContent = "Changed " + countMod;
+          modBtn.addEventListener("click", function() { if (modIndices.length) { diffScrollToRow(modIndices[modIdx % modIndices.length]); modIdx++; } });
+          summaryBar.appendChild(modBtn);
+        }
+        if (guideEl && changeRowIndices.length > 0) {
+          guideEl.innerHTML = "";
+          guideEl.style.position = "relative";
+          var total = rows.length;
+          changeRowIndices.forEach(function(o) {
+            var m = document.createElement("div");
+            var pct = total > 0 ? (o.i / total * 100) : 0;
+            m.style.cssText = "position:absolute; left:2px; width:10px; height:10px; top:" + pct + "%; margin-top:-5px; background:" + (o.kind === "add" ? "rgba(16,185,129,0.7)" : o.kind === "rem" ? "rgba(244,63,94,0.7)" : "rgba(245,158,11,0.7)") + "; cursor:pointer; border-radius:2px; transform:rotate(45deg);";
+            m.title = (o.kind === "add" ? "Added" : o.kind === "rem" ? "Deleted" : "Changed") + " (row " + (o.i + 1) + ")";
+            m.addEventListener("click", (function(idx) { return function() { diffScrollToRow(idx); }; })(o.i));
+            guideEl.appendChild(m);
+          });
+        }
+        if (resultWrap) resultWrap.style.display = "block";
       });
     }
 
