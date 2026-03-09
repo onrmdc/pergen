@@ -2,6 +2,8 @@
 Flask app for network device panel.
 Run from repo root: FLASK_APP=backend.app flask run
 """
+import gzip
+import json
 import os
 import sys
 import uuid
@@ -42,6 +44,86 @@ creds.init_db(app.config["SECRET_KEY"])
 
 # Pre/Post run state: run_id -> { phase, devices, device_results, created_at }
 _run_state = {}
+
+# Saved reports: persisted to disk (gzip), index for list
+def _reports_dir():
+    d = os.path.join(app.instance_path, "reports")
+    os.makedirs(d, exist_ok=True)
+    return d
+
+
+def _reports_index_path():
+    return os.path.join(_reports_dir(), "index.json")
+
+
+def _report_path(run_id):
+    safe = (run_id or "").replace("/", "_").replace("\\", "_") or "default"
+    return os.path.join(_reports_dir(), safe + ".json.gz")
+
+
+def _load_reports_index():
+    path = _reports_index_path()
+    if not os.path.isfile(path):
+        return []
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return data if isinstance(data, list) else []
+    except Exception:
+        return []
+
+
+def _save_reports_index(entries):
+    path = _reports_index_path()
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(entries[:200], f, ensure_ascii=False)  # cap 200
+
+
+def _persist_report(run_id, name, created_at, devices, device_results, post_created_at=None, post_device_results=None, comparison=None):
+    path = _report_path(run_id)
+    payload = {
+        "run_id": run_id,
+        "name": name or "pre_report",
+        "created_at": created_at,
+        "devices": devices,
+        "device_results": device_results,
+        "post_created_at": post_created_at,
+        "post_device_results": post_device_results,
+        "comparison": comparison,
+    }
+    with gzip.open(path, "wt", encoding="utf-8") as f:
+        json.dump(payload, f, ensure_ascii=False)
+    entries = _load_reports_index()
+    by_id = {e.get("run_id"): i for i, e in enumerate(entries)}
+    meta = {"run_id": run_id, "name": name or "pre_report", "created_at": created_at, "post_created_at": post_created_at}
+    if run_id in by_id:
+        entries[by_id[run_id]] = meta
+    else:
+        entries.insert(0, meta)
+    _save_reports_index(entries)
+
+
+def _load_report(run_id):
+    path = _report_path(run_id)
+    if not os.path.isfile(path):
+        return None
+    try:
+        with gzip.open(path, "rt", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return None
+
+
+def _delete_report(run_id):
+    path = _report_path(run_id)
+    if os.path.isfile(path):
+        try:
+            os.remove(path)
+        except Exception:
+            pass
+    entries = _load_reports_index()
+    entries = [e for e in entries if (e.get("run_id") or "") != (run_id or "")]
+    _save_reports_index(entries)
 
 
 def _inventory_path():
@@ -835,11 +917,13 @@ def api_bgp_wan_rtr_match():
 def api_run_pre_create():
     """
     Create a PRE run from devices + device_results (e.g. after running devices one-by-one).
-    Body: { "devices": [...], "device_results": [...] }. Returns { run_id, run_created_at }.
+    Body: { "devices": [...], "device_results": [...], "name": "optional" }. Returns { run_id, run_created_at }.
+    Persists report to disk (gzip) for Saved reports list.
     """
     data = request.get_json() or {}
     devices = data.get("devices") or []
     device_results = data.get("device_results") or []
+    name = (data.get("name") or "").strip() or None
     if not isinstance(devices, list) or not devices:
         return jsonify({"error": "devices list required"}), 400
     if not isinstance(device_results, list) or len(device_results) != len(devices):
@@ -852,6 +936,10 @@ def api_run_pre_create():
         "device_results": device_results,
         "created_at": created_at,
     }
+    try:
+        _persist_report(run_id, name, created_at, devices, device_results, post_created_at=None, post_device_results=None, comparison=None)
+    except Exception:
+        pass
     return jsonify({"run_id": run_id, "run_created_at": created_at})
 
 
@@ -984,6 +1072,21 @@ def api_run_post_complete():
     _run_state[run_id]["post_device_results"] = device_results
     _run_state[run_id]["comparison"] = comparison
     _run_state[run_id]["post_created_at"] = post_created_at
+    try:
+        loaded = _load_report(run_id)
+        name = (loaded.get("name") or "pre_report") if isinstance(loaded, dict) else "pre_report"
+        _persist_report(
+            run_id,
+            name,
+            pre_run.get("created_at"),
+            pre_run.get("devices") or [],
+            pre_run.get("device_results") or [],
+            post_created_at=post_created_at,
+            post_device_results=device_results,
+            comparison=comparison,
+        )
+    except Exception:
+        pass
     return jsonify({
         "run_id": run_id,
         "phase": "POST",
@@ -1021,6 +1124,54 @@ def api_run_result(run_id):
     if run_id not in _run_state:
         return jsonify({"error": "not found"}), 404
     return jsonify(_run_state[run_id])
+
+
+@app.route("/api/reports", methods=["GET"])
+def api_reports_list():
+    """List saved reports (from disk index). Returns { reports: [ { run_id, name, created_at, post_created_at }, ... ] }."""
+    try:
+        entries = _load_reports_index()
+        return jsonify({"reports": entries})
+    except Exception:
+        return jsonify({"reports": []})
+
+
+@app.route("/api/reports/<run_id>", methods=["GET"])
+def api_report_get(run_id):
+    """Get a single saved report by run_id (from disk). Optionally ?restore=1 to also load into run state for POST."""
+    run_id = (run_id or "").strip()
+    if not run_id:
+        return jsonify({"error": "run_id required"}), 400
+    try:
+        report = _load_report(run_id)
+    except Exception:
+        return jsonify({"error": "failed to load report"}), 500
+    if report is None:
+        return jsonify({"error": "report not found"}), 404
+    if request.args.get("restore") == "1":
+        _run_state[run_id] = {
+            "phase": "POST" if report.get("post_created_at") else "PRE",
+            "devices": report.get("devices") or [],
+            "device_results": report.get("device_results") or [],
+            "created_at": report.get("created_at"),
+            "post_device_results": report.get("post_device_results"),
+            "post_created_at": report.get("post_created_at"),
+            "comparison": report.get("comparison"),
+        }
+    return jsonify(report)
+
+
+@app.route("/api/reports/<run_id>", methods=["DELETE"])
+def api_report_delete(run_id):
+    """Delete a saved report from disk."""
+    run_id = (run_id or "").strip()
+    if not run_id:
+        return jsonify({"error": "run_id required"}), 400
+    try:
+        _delete_report(run_id)
+        return jsonify({"ok": True})
+    except Exception:
+        return jsonify({"error": "failed to delete"}), 500
 
 
 # ---------- Credentials (name = inventory credential field) ----------

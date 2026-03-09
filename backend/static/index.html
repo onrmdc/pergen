@@ -403,6 +403,8 @@
       background: rgba(245, 158, 11, 0.08);
       border-radius: 10px;
       padding: 1rem 1.25rem;
+      overflow-x: auto;
+      max-width: 100%;
     }
     body.theme-light #shortfallWrap { background: rgba(245, 158, 11, 0.06); }
     #shortfallWrap .shortfall-main-title {
@@ -419,6 +421,8 @@
       border-radius: 8px;
       padding: 0.75rem 1rem;
       margin-bottom: 1rem;
+      overflow-x: auto;
+      max-width: 100%;
     }
     .shortfall-device-block:last-child { margin-bottom: 0; }
     body.theme-light .shortfall-device-block { background: rgba(244, 63, 94, 0.04); }
@@ -436,6 +440,8 @@
       background: rgba(245, 158, 11, 0.08);
       border-radius: 10px;
       padding: 1rem 1.25rem;
+      overflow-x: auto;
+      max-width: 100%;
     }
     #consistencyWrap .shortfall-main-title { color: var(--warn); }
     .consistency-group-block {
@@ -445,12 +451,19 @@
       border-radius: 8px;
       padding: 0.75rem 1rem;
       margin-bottom: 1rem;
+      overflow-x: auto;
+      max-width: 100%;
     }
     .consistency-group-block .consistency-group-title { font-weight: 700; color: var(--warn); font-size: 0.95rem; margin-bottom: 0.5rem; }
     .consistency-group-block .results-table .cell-diff { color: var(--danger); font-weight: 600; }
     .consistency-table { margin-top: 0.5rem; }
     .consistency-table th { white-space: nowrap; }
     .consistency-cell-down { background: rgba(244, 63, 94, 0.2); color: var(--danger); font-weight: 600; }
+    .table-details { border: 1px solid var(--border); border-radius: 8px; padding: 0.5rem 0.75rem; background: var(--card); }
+    .table-details summary { list-style: none; user-select: none; }
+    .table-details summary::-webkit-details-marker { display: none; }
+    .table-details summary::before { content: "\25b8"; display: inline-block; min-width: 1.25em; font-size: 1.1em; margin-right: 0.5rem; transition: transform 0.15s; color: var(--muted); text-align: center; }
+    .table-details[open] summary::before { transform: rotate(90deg); }
   </style>
 </head>
 <body>
@@ -587,22 +600,39 @@
       <div id="gearFieldList"></div>
     </div>
   </div>
-  <div class="results-table-wrap" id="resultsTableWrap" style="display:none;">
-    <table class="results-table" id="resultsTable">
-      <thead id="resultsThead"></thead>
-      <tbody id="resultsTbody"></tbody>
-    </table>
+  <div id="resultsExportWrap" class="results-report-actions" style="display:none; flex-wrap:wrap; align-items:center; gap:0.75rem; margin-bottom:0.75rem;">
+    <label style="display:inline-flex; align-items:center; gap:0.35rem;">Report name <input type="text" id="mainReportNameInput" placeholder="Report name" style="width:180px; padding:0.4rem; background:var(--card); color:var(--text); border:1px solid var(--border); border-radius:6px;" /></label>
+    <button type="button" id="mainExportZipBtn" style="padding:0.4rem 0.75rem; background:var(--card); color:var(--text); border:1px solid var(--border); border-radius:6px; cursor:pointer;">Export as ZIP (HTML + styles)</button>
   </div>
-  <div id="shortfallWrap" style="display:none; margin-top:1rem;">
-    <p class="shortfall-main-title"><span class="shortfall-icon" aria-hidden="true">⚠️</span> BGP / IS-IS shortfall — DOWN interfaces with IS-IS or BGP config</p>
+  <details id="resultsTableDetails" class="table-details" open style="display:none; margin-top:1rem;">
+    <summary style="cursor:pointer; font-weight:600;">Results table</summary>
+    <div class="results-table-wrap" id="resultsTableWrap" style="margin-top:0.5rem;">
+      <table class="results-table" id="resultsTable">
+        <thead id="resultsThead"></thead>
+        <tbody id="resultsTbody"></tbody>
+      </table>
+    </div>
+  </details>
+  <details id="shortfallWrap" class="table-details" open style="display:none; margin-top:1rem;">
+    <summary style="cursor:pointer;" class="shortfall-main-title"><span class="shortfall-icon" aria-hidden="true">⚠️</span> BGP / IS-IS shortfall — DOWN interfaces with IS-IS or BGP config</summary>
     <p class="shortfall-desc">Only interfaces that have IS-IS or BGP configuration (from run config or IS-IS interface list) and are currently DOWN are listed.</p>
     <div id="shortfallContent"></div>
-  </div>
-  <div id="consistencyWrap" style="display:none; margin-top:1rem;">
-    <p class="shortfall-main-title"><span class="shortfall-icon" aria-hidden="true">🔀</span> Interface consistency — same fabric+site (DCI, Border-Leaf, Spine, Wan-Edge, Wan-Router)</p>
+  </details>
+  <details id="consistencyWrap" class="table-details" open style="display:none; margin-top:1rem;">
+    <summary style="cursor:pointer;" class="shortfall-main-title"><span class="shortfall-icon" aria-hidden="true">🔀</span> Interface consistency — same fabric+site (DCI, Border-Leaf, Spine, Wan-Edge, Wan-Router)</summary>
     <p class="shortfall-desc">Groups with different up-interface count or different interface state. Shows interface, status, peer-group, route-map (IP and description excluded).</p>
     <div id="consistencyContent"></div>
-  </div>
+  </details>
+  <details id="flappedPortsWrap" class="table-details" open style="display:none; margin-top:1rem;">
+    <summary style="cursor:pointer;" class="shortfall-main-title"><span class="shortfall-icon" aria-hidden="true">📡</span> Ports flapped in last 24 hours — input errors</summary>
+    <p class="shortfall-desc">Interfaces that had a link state change in the last 24 hours (from interface status). Input errors column shows per-interface error count.</p>
+    <div class="results-table-wrap" style="max-height:400px; overflow:auto; margin-top:0.5rem;">
+      <table class="results-table" id="flappedPortsTable">
+        <thead><tr id="flappedPortsThead"></tr></thead>
+        <tbody id="flappedPortsTbody"></tbody>
+      </table>
+    </div>
+  </details>
   <div id="diffPopup" class="diff-popup" aria-hidden="true">
     <h3 id="diffPopupTitle">PRE vs POST</h3>
     <div class="diff-pre"><strong>PRE:</strong> <span id="diffPopupPre"></span></div>
@@ -652,12 +682,25 @@
         <div id="gearFieldList2"></div>
       </div>
     </div>
-    <div class="results-table-wrap" style="max-height:400px; overflow:auto; border:1px solid var(--border); border-radius:4px;">
-      <table class="results-table" id="resultsTable2">
-        <thead id="resultsThead2"></thead>
-        <tbody id="resultsTbody2"></tbody>
-      </table>
-    </div>
+    <details class="table-details" open style="margin-top:0.5rem;">
+      <summary style="cursor:pointer; font-weight:600;">Results table</summary>
+      <div class="results-table-wrap" style="max-height:400px; overflow:auto; border:1px solid var(--border); border-radius:4px; margin-top:0.5rem;">
+        <table class="results-table" id="resultsTable2">
+          <thead id="resultsThead2"></thead>
+          <tbody id="resultsTbody2"></tbody>
+        </table>
+      </div>
+    </details>
+    <details id="flappedPortsWrapResults" class="table-details" open style="display:none; margin-top:1rem;">
+      <summary style="cursor:pointer; font-size:0.95rem;" class="shortfall-main-title"><span class="shortfall-icon" aria-hidden="true">📡</span> Ports flapped in last 24 hours — input errors</summary>
+      <p class="shortfall-desc" style="font-size:0.85em; color:var(--muted); margin:0 0 0.5rem 0;">Interfaces that had a link state change in the last 24 hours. Input errors column shows per-interface error count.</p>
+      <div class="results-table-wrap" style="max-height:300px; overflow:auto; border:1px solid var(--border); border-radius:4px; margin-top:0.5rem;">
+        <table class="results-table" id="flappedPortsTableResults">
+          <thead><tr id="flappedPortsTheadResults"></tr></thead>
+          <tbody id="flappedPortsTbodyResults"></tbody>
+        </table>
+      </div>
+    </details>
     <div style="margin-top:1rem;">
       <button type="button" id="postCheckBtn" style="padding:0.5rem 1rem; background:var(--accent); color:var(--text); border:1px solid var(--border); border-radius:4px; cursor:pointer;">Post Check (compare with last saved report)</button>
     </div>
@@ -1823,7 +1866,11 @@
         lastComparison = d.comparison || [];
         lastRunMeta = { run_created_at: d.run_created_at, post_created_at: d.post_created_at };
         updateSavedReportPost(lastRunId, d.post_created_at, d.device_results, d.comparison);
+        refreshSavedReportsList();
         renderResultsTable();
+        renderShortfall(lastPreDeviceResults);
+        renderConsistency(lastRunDevices, lastPreDeviceResults);
+        renderFlappedPorts24h(lastDeviceResults);
         fillShowRunDiffDropdown();
         $("runBtn").disabled = false;
         var rpb = document.getElementById("runPostBtn");
@@ -1871,12 +1918,15 @@
       const successCount = deviceResults.filter(function(r) { return !getDeviceResultError(r); }).length;
       let runId = null;
       let runCreatedAt = null;
+      const fabricName = (fabricSel && fabricSel.value) ? fabricSel.value.trim() : "";
+      const roleName = (roleSel && roleSel.value) ? roleSel.value.trim() : "";
+      const preName = preReportName(fabricName, roleName, list.length);
       if (successCount > 0) {
         try {
           const cr = await fetch(API + "/api/run/pre/create", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ devices: list, device_results: deviceResults }),
+            body: JSON.stringify({ devices: list, device_results: deviceResults, name: preName }),
           });
           const cj = await cr.json();
           if (!cr.ok) throw new Error(cj.error || "Run creation failed");
@@ -1888,12 +1938,10 @@
           $("runBtn").disabled = false;
           return;
         }
-        const fabricName = (fabricSel && fabricSel.value) ? fabricSel.value.trim() : "";
-        const roleName = (roleSel && roleSel.value) ? roleSel.value.trim() : "";
-        const preName = preReportName(fabricName, roleName, list.length);
         try {
           localStorage.setItem("pergen_last_pre", JSON.stringify({ name: preName, run_id: runId, devices: list, device_results: deviceResults, created_at: runCreatedAt }));
           addSavedReport({ run_id: runId, name: preName, created_at: runCreatedAt, devices: list, device_results: deviceResults });
+          await refreshSavedReportsList();
         } catch (e) {}
       }
       hideHeaderProgress();
@@ -1914,6 +1962,9 @@
       renderResultsTable();
       renderShortfall(deviceResults);
       renderConsistency(lastRunDevices, deviceResults);
+      renderFlappedPorts24h(deviceResults);
+      var mainReportNameInp = document.getElementById("mainReportNameInput");
+      if (mainReportNameInp) mainReportNameInp.value = successCount > 0 ? preReportName((fabricSel && fabricSel.value) ? fabricSel.value.trim() : "", (roleSel && roleSel.value) ? roleSel.value.trim() : "", list.length) : "";
       $("runBtn").disabled = false;
       var runPostBtn = document.getElementById("runPostBtn");
       if (runPostBtn) runPostBtn.style.display = "";
@@ -1988,6 +2039,10 @@
     }
     function showResultsTable(show) {
       $("resultsToolbar").style.display = show ? "flex" : "none";
+      var exportWrap = document.getElementById("resultsExportWrap");
+      if (exportWrap) exportWrap.style.display = show ? "flex" : "none";
+      var detailsEl = document.getElementById("resultsTableDetails");
+      if (detailsEl) detailsEl.style.display = show ? "block" : "none";
       $("resultsTableWrap").style.display = show ? "block" : "none";
     }
     /** Parse ISIS string: "up/ready" (e.g. 174/176) -> { up, ready }; single number -> { up, ready: null }. */
@@ -2291,6 +2346,55 @@
       }
       content.innerHTML = blocks.join("");
       wrap.style.display = "block";
+    }
+    var FLAPPED_24H_SEC = 24 * 3600;
+    function renderFlappedPorts24h(deviceResults) {
+      var nowEpoch = Date.now() / 1000;
+      var rows = [];
+      (deviceResults || []).forEach(function(r) {
+        var hostname = (r.hostname != null && r.hostname !== "") ? String(r.hostname) : (r.ip || "?");
+        var flat = r.parsed_flat || {};
+        var statusRows = flat.interface_flapped_rows && flat.interface_flapped_rows.length ? flat.interface_flapped_rows : (flat.interface_status_rows || []);
+        statusRows.forEach(function(row) {
+          if (!row || typeof row !== "object") return;
+          var epoch = row.last_status_change_epoch;
+          if (epoch == null || typeof epoch !== "number") return;
+          if ((nowEpoch - epoch) > FLAPPED_24H_SEC) return;
+          rows.push({
+            hostname: hostname,
+            interface: (row.interface != null ? String(row.interface) : "").trim(),
+            description: (row.description != null ? String(row.description) : "").trim() || "-",
+            state: (row.state != null ? String(row.state) : "").trim() || "-",
+            last_link_flapped: (row.last_link_flapped != null ? String(row.last_link_flapped) : "").trim() || "-",
+            flap_counter: (row.flap_counter != null ? String(row.flap_counter) : row.in_errors != null ? String(row.in_errors) : "").trim() || "-"
+          });
+        });
+      });
+      var headerHtml = "<th>Hostname</th><th>Interface</th><th>Description</th><th>Last flap time</th><th>Flap counter</th>";
+      var bodyHtml;
+      if (rows.length === 0) {
+        bodyHtml = "<tr><td colspan=\"5\" class=\"muted\">Son 24 saat i&ccedil;inde flapped interface yok.</td></tr>";
+      } else {
+        bodyHtml = rows.map(function(row) {
+          return "<tr><td>" + escapeHtml(row.hostname) + "</td><td>" + escapeHtml(row.interface) + "</td><td>" + escapeHtml(row.description) + "</td><td>" + escapeHtml(row.last_link_flapped) + "</td><td>" + escapeHtml(row.flap_counter) + "</td></tr>";
+        }).join("");
+      }
+      var wrap = document.getElementById("flappedPortsWrap");
+      var thead = document.getElementById("flappedPortsThead");
+      var tbody = document.getElementById("flappedPortsTbody");
+      if (wrap && thead && tbody) {
+        thead.innerHTML = headerHtml;
+        tbody.innerHTML = bodyHtml;
+        wrap.style.display = "block";
+      }
+      var wrapRes = document.getElementById("flappedPortsWrapResults");
+      var theadRes = document.getElementById("flappedPortsTheadResults");
+      var tbodyRes = document.getElementById("flappedPortsTbodyResults");
+      if (wrapRes && theadRes && tbodyRes) {
+        theadRes.innerHTML = headerHtml;
+        tbodyRes.innerHTML = bodyHtml;
+        wrapRes.style.display = "block";
+      }
     }
     function isScalarForTable(v) {
       if (v === null || v === undefined) return true;
@@ -4478,10 +4582,16 @@
     var SAVED_REPORTS_KEY = "pergen_saved_reports";
     var SAVED_REPORTS_MAX = 50;
     var savedReportsOpenBound = false;
+    var savedReportsListCache = [];
     function getSavedReports() {
+      if (savedReportsListCache.length > 0) return savedReportsListCache;
       try {
         var raw = localStorage.getItem(SAVED_REPORTS_KEY);
-        var list = raw ? JSON.parse(raw) : [];
+        var list = [];
+        if (raw) {
+          try { list = JSON.parse(raw); } catch (e) {}
+        }
+        if (!Array.isArray(list)) list = [];
         if (list.length === 0) {
           var last = localStorage.getItem("pergen_last_pre");
           if (last) {
@@ -4497,12 +4607,25 @@
                 post_device_results: null,
                 comparison: null
               }];
-              setSavedReports(list);
+              try { setSavedReports(list); } catch (e2) {}
             } catch (e) {}
           }
         }
         return list;
       } catch (e) { return []; }
+    }
+    async function refreshSavedReportsList() {
+      try {
+        var r = await fetch(API + "/api/reports");
+        var data = await r.json();
+        if (r.ok && Array.isArray(data.reports)) {
+          savedReportsListCache = data.reports;
+          renderSavedReportsList();
+          return;
+        }
+      } catch (e) {}
+      savedReportsListCache = [];
+      renderSavedReportsList();
     }
     function setSavedReports(list) {
       try {
@@ -4510,17 +4633,25 @@
       } catch (e) {}
     }
     function addSavedReport(report) {
+      if (!report || !report.run_id) return;
       var list = getSavedReports();
-      list.unshift({
+      var runIdStr = String(report.run_id);
+      var existing = list.findIndex(function(r) { return String(r.run_id || "") === runIdStr; });
+      var entry = {
         run_id: report.run_id,
         name: report.name || "pre_report",
         created_at: report.created_at || null,
         devices: report.devices || [],
         device_results: report.device_results || [],
-        post_created_at: null,
-        post_device_results: null,
-        comparison: null
-      });
+        post_created_at: (existing >= 0 ? list[existing].post_created_at : null) || null,
+        post_device_results: (existing >= 0 ? list[existing].post_device_results : null) || null,
+        comparison: (existing >= 0 ? list[existing].comparison : null) || null
+      };
+      if (existing >= 0) {
+        list[existing] = entry;
+      } else {
+        list.unshift(entry);
+      }
       setSavedReports(list);
     }
     function updateSavedReportPost(run_id, post_created_at, post_device_results, comparison) {
@@ -4543,11 +4674,12 @@
         setSavedReports(list);
       }
     }
-    function deleteSavedReport(run_id) {
+    async function deleteSavedReport(run_id) {
       if (!run_id) return;
-      var list = getSavedReports().filter(function(r) { return r.run_id !== run_id; });
-      setSavedReports(list);
-      renderSavedReportsList();
+      try {
+        await fetch(API + "/api/reports/" + encodeURIComponent(run_id), { method: "DELETE" });
+      } catch (e) {}
+      await refreshSavedReportsList();
     }
     function renameSavedReport(run_id, newName) {
       if (!run_id || !(newName = (newName || "").trim())) return false;
@@ -4561,10 +4693,9 @@
       }
       return false;
     }
-    function buildReportHtml() {
-      var title = (resultsSavedName || "Report") + " — " + (resultsLastRunMeta && resultsLastRunMeta.run_created_at ? resultsLastRunMeta.run_created_at : "");
-      var cols = resultsTable2Columns || [];
-      var rows = resultsTable2Rows || [];
+    var REPORT_EXPORT_CSS = ":root{--bg:#0f172a;--card:#1e293b;--border:#334155;--text:#f1f5f9;--muted:#94a3b8;--accent:#58a6ff;--success:#10b981;--warn:#f59e0b;--danger:#f43f5e;--table-zebra-odd:#1e293b;--table-zebra-even:#0f172a;--table-header-bg:#1e293b}body{font-family:system-ui,sans-serif;background:var(--bg);color:var(--text);padding:1rem;margin:0}.results-table{width:100%;border-collapse:collapse;font-size:0.9em}.results-table th,.results-table td{border:1px solid var(--border);padding:0.35rem 0.6rem;text-align:left}.results-table thead th{background:var(--table-header-bg);position:sticky;top:0}.results-table tbody tr:nth-child(odd){background:var(--table-zebra-odd)}.results-table tbody tr:nth-child(even){background:var(--table-zebra-even)}.results-table tbody tr:hover{background:rgba(88,166,255,0.15)}.cell-error,.device-error-cell{color:var(--danger)}.muted{color:var(--muted)}h1{font-size:1.1rem;margin-bottom:0.5rem}h2{font-size:1rem;margin:1.25rem 0 0.5rem 0}.export-section{margin-top:1.25rem}#shortfallWrap,#consistencyWrap{border-radius:10px;padding:1rem 1.25rem;margin-top:0.75rem;overflow-x:auto;max-width:100%}#shortfallWrap{border:1px solid var(--warn);border-left:4px solid var(--danger);background:rgba(245,158,11,0.08)}#shortfallWrap .shortfall-main-title{display:flex;align-items:center;gap:0.5rem;font-size:1.05rem;font-weight:700;color:var(--danger);margin:0 0 0.35rem 0}#shortfallWrap .shortfall-desc{font-size:0.9em;color:var(--muted);margin:0 0 0.75rem 0}.shortfall-device-block{border:1px solid rgba(244,63,94,0.4);border-left:4px solid var(--danger);background:rgba(244,63,94,0.06);border-radius:8px;padding:0.75rem 1rem;margin-bottom:1rem;overflow-x:auto;max-width:100%}.shortfall-device-block .shortfall-device-title{display:flex;align-items:center;gap:0.4rem;font-weight:700;color:var(--danger);font-size:0.95rem;margin-bottom:0.5rem}.shortfall-device-block .shortfall-lines{color:var(--warn);font-size:0.9em;margin-bottom:0.5rem}.shortfall-device-block .results-table{margin-top:0.5rem}#consistencyWrap{border:1px solid var(--warn);border-left:4px solid var(--warn);background:rgba(245,158,11,0.08)}#consistencyWrap .shortfall-main-title{color:var(--warn)}.consistency-group-block{border:1px solid rgba(245,158,11,0.5);border-left:4px solid var(--warn);background:rgba(245,158,11,0.06);border-radius:8px;padding:0.75rem 1rem;margin-bottom:1rem;overflow-x:auto;max-width:100%}.consistency-group-block .consistency-group-title{font-weight:700;color:var(--warn);font-size:0.95rem;margin-bottom:0.5rem}.consistency-cell-down{background:rgba(244,63,94,0.2);color:var(--danger);font-weight:600}.export-pre{max-height:300px;overflow:auto;font-size:0.8em;background:var(--card);padding:0.5rem;border-radius:4px;white-space:pre-wrap;word-break:break-all;border:1px solid var(--border)}.table-details{border:1px solid var(--border);border-radius:8px;padding:0.5rem 0.75rem;background:var(--card)}.table-details summary{list-style:none}.table-details summary::-webkit-details-marker{display:none}.table-details summary::before{content:\"\25b8\";display:inline-block;min-width:1.25em;font-size:1.1em;margin-right:0.5rem;transition:transform 0.15s;color:var(--muted);text-align:center}.table-details[open] summary::before{transform:rotate(90deg)}";
+    function buildReportHtmlFromData(cols, rows, reportName, runCreatedAt) {
+      var title = (reportName || "Report") + " — " + (runCreatedAt || "");
       var theadCells = cols.map(function(c) { return "<th>" + escapeHtml(c) + "</th>"; }).join("");
       var tbodyTrs = rows.map(function(row) {
         return "<tr>" + cols.map(function(col) {
@@ -4574,26 +4705,115 @@
         }).join("") + "</tr>";
       }).join("");
       var tableHtml = "<table class=\"results-table\"><thead><tr>" + theadCells + "</tr></thead><tbody>" + tbodyTrs + "</tbody></table>";
-      var css = ":root{--bg:#0f172a;--card:#1e293b;--border:#334155;--text:#f1f5f9;--muted:#94a3b8;--accent:#58a6ff;--success:#10b981;--warn:#f59e0b;--danger:#f43f5e;--table-zebra-odd:#1e293b;--table-zebra-even:#0f172a;--table-header-bg:#1e293b}body{font-family:system-ui,sans-serif;background:var(--bg);color:var(--text);padding:1rem;margin:0}.results-table{width:100%;border-collapse:collapse;font-size:0.9em}.results-table th,.results-table td{border:1px solid var(--border);padding:0.35rem 0.6rem;text-align:left}.results-table thead th{background:var(--table-header-bg);position:sticky;top:0}.results-table tbody tr:nth-child(odd){background:var(--table-zebra-odd)}.results-table tbody tr:nth-child(even){background:var(--table-zebra-even)}.results-table tbody tr:hover{background:rgba(88,166,255,0.15)}.cell-error,.device-error-cell{color:var(--danger)}h1{font-size:1.1rem;margin-bottom:0.5rem}";
-      return "<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>" + escapeHtml(title) + "</title><style>" + css + "</style></head><body><h1>" + escapeHtml(title) + "</h1>" + tableHtml + "</body></html>";
+      return "<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>" + escapeHtml(title) + "</title><style>" + REPORT_EXPORT_CSS + "</style></head><body><h1>" + escapeHtml(title) + "</h1>" + tableHtml + "</body></html>";
+    }
+    /** Build full-page report HTML from main Pre/Post page: main table + shortfall + consistency + raw JSON + show run diff. */
+    function buildFullPageReportHtml(reportName, runCreatedAt) {
+      var title = (reportName || "Report") + " — " + (runCreatedAt || "");
+      var exportData = getMainPageExportData();
+      var mainTableHtml = "";
+      if (exportData.rows.length) {
+        var cols = exportData.columns;
+        var rows = exportData.rows;
+        var theadCells = cols.map(function(c) { return "<th>" + escapeHtml(c) + "</th>"; }).join("");
+        var tbodyTrs = rows.map(function(row) {
+          return "<tr>" + cols.map(function(col) {
+            var val = row[col];
+            var text = (val != null && val !== "") ? String(val) : "";
+            return "<td>" + escapeHtml(text) + "</td>";
+          }).join("") + "</tr>";
+        }).join("");
+        mainTableHtml = "<h2>Results</h2><div class=\"export-section\">" + "<table class=\"results-table\"><thead><tr>" + theadCells + "</tr></thead><tbody>" + tbodyTrs + "</tbody></table>" + "</div>";
+      }
+      var shortfallWrap = document.getElementById("shortfallWrap");
+      var shortfallHtml = (shortfallWrap && shortfallWrap.style.display !== "none" && shortfallWrap.innerHTML) ? "<div class=\"export-section\" id=\"shortfallWrap\">" + shortfallWrap.innerHTML + "</div>" : "";
+      var consistencyWrap = document.getElementById("consistencyWrap");
+      var consistencyHtml = (consistencyWrap && consistencyWrap.style.display !== "none" && consistencyWrap.innerHTML) ? "<div class=\"export-section\" id=\"consistencyWrap\">" + consistencyWrap.innerHTML + "</div>" : "";
+      var flappedPortsWrap = document.getElementById("flappedPortsWrap");
+      var flappedPortsHtml = (flappedPortsWrap && flappedPortsWrap.style.display !== "none" && flappedPortsWrap.innerHTML) ? "<div class=\"export-section\" id=\"flappedPortsWrap\">" + flappedPortsWrap.innerHTML + "</div>" : "";
+      var showRunDiffWrap = document.getElementById("showRunDiffWrap");
+      var diffHtml = "";
+      if (showRunDiffWrap && showRunDiffWrap.style.display !== "none") {
+        var diffSummary = showRunDiffWrap.querySelector("summary");
+        var diffInner = showRunDiffWrap.querySelector("div");
+        var diffPre = showRunDiffWrap.querySelector("#showRunDiffOut");
+        diffHtml = "<h2>Show run diff (PRE vs POST)</h2><div class=\"export-section\">";
+        if (diffPre && diffPre.textContent) diffHtml += "<pre class=\"export-pre\">" + escapeHtml(diffPre.textContent) + "</pre>";
+        diffHtml += "</div>";
+      }
+      var body = "<h1>" + escapeHtml(title) + "</h1>" + mainTableHtml + shortfallHtml + consistencyHtml + flappedPortsHtml + diffHtml;
+      return "<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>" + escapeHtml(title) + "</title><style>" + REPORT_EXPORT_CSS + "</style></head><body>" + body + "</body></html>";
+    }
+    function buildReportHtml() {
+      return buildReportHtmlFromData(
+        resultsTable2Columns || [],
+        resultsTable2Rows || [],
+        resultsSavedName || "Report",
+        resultsLastRunMeta && resultsLastRunMeta.run_created_at ? resultsLastRunMeta.run_created_at : ""
+      );
+    }
+    /** Build columns and rows from main page lastDeviceResults for export. */
+    function getMainPageExportData() {
+      var data = lastDeviceResults;
+      if (!data || !data.length) return { columns: [], rows: [] };
+      var fixedCols = ["hostname", "ip", "vendor", "model", "error"];
+      var allParsedKeys = [];
+      data.forEach(function(r) {
+        var flat = r.parsed_flat || {};
+        Object.keys(flat).forEach(function(k) { if (isScalarForTable(flat[k]) && allParsedKeys.indexOf(k) === -1) allParsedKeys.push(k); });
+      });
+      var parsedCols = (selectedParsedColumns.length ? selectedParsedColumns : allParsedKeys).filter(function(k) { return allParsedKeys.indexOf(k) !== -1 || data.some(function(r) { return isScalarForTable((r.parsed_flat || {})[k]); }); });
+      var columns = fixedCols.concat(parsedCols);
+      var rows = data.map(function(r) {
+        var err = getDeviceResultError(r);
+        if (err) {
+          return { hostname: (r.hostname != null && r.hostname !== "") ? String(r.hostname) : (r.ip || "?"), ip: (r.ip != null && r.ip !== "") ? String(r.ip) : "", vendor: (r.vendor != null && r.vendor !== "") ? String(r.vendor) : "", model: (r.model != null && r.model !== "") ? String(r.model) : "", error: err };
+        }
+        var row = { error: "" };
+        if (r.hostname != null && r.hostname !== "") row.hostname = r.hostname;
+        if (r.ip != null && r.ip !== "") row.ip = r.ip;
+        if (r.vendor != null && r.vendor !== "") row.vendor = r.vendor;
+        if (r.model != null && r.model !== "") row.model = r.model;
+        var flat = r.parsed_flat || {};
+        Object.keys(flat).forEach(function(k) { if (isScalarForTable(flat[k]) && flat[k] != null && flat[k] !== "") row[k] = flat[k]; });
+        return row;
+      });
+      return { columns: columns, rows: rows };
     }
     function renderSavedReportsList() {
-      var preSel = $("savedReportsPreSelect");
-      var postSel = $("savedReportsPostSelect");
-      var emptyEl = $("savedReportsEmpty");
-      if (!preSel || !postSel) return;
+      var preSel = document.getElementById("savedReportsPreSelect") || (typeof $ === "function" ? $("savedReportsPreSelect") : null);
+      var postSel = document.getElementById("savedReportsPostSelect") || (typeof $ === "function" ? $("savedReportsPostSelect") : null);
+      var emptyEl = document.getElementById("savedReportsEmpty") || (typeof $ === "function" ? $("savedReportsEmpty") : null);
+      var detailsEl = document.getElementById("savedReportsDetails");
       var list = getSavedReports();
-      preSel.innerHTML = "<option value=\"\">— Seçin —</option>" + list.map(function(r, idx) {
-        var label = (r.name || "Rapor") + " — " + (r.created_at || "");
-        return "<option value=\"" + idx + "\">" + escapeHtml(label) + "</option>";
-      }).join("");
-      var postReports = list.filter(function(r) { return r.post_created_at; });
-      postSel.innerHTML = "<option value=\"\">— Seçin —</option>" + list.map(function(r, idx) {
-        if (!r.post_created_at) return "";
-        var label = (r.name || "Rapor") + " — PRE: " + (r.created_at || "") + " / POST: " + (r.post_created_at || "");
-        return "<option value=\"" + idx + "\">" + escapeHtml(label) + "</option>";
-      }).filter(Boolean).join("");
+      if (list.length === 0 && typeof lastRunId !== "undefined" && lastRunId && typeof lastRunDevices !== "undefined" && lastRunDevices && lastRunDevices.length) {
+        var curName = typeof lastRunMeta !== "undefined" && lastRunMeta && lastRunMeta.run_created_at ? ("pre_" + (lastRunMeta.run_created_at || "")) : "Current report";
+        list = [{
+          run_id: lastRunId,
+          name: curName,
+          created_at: (typeof lastRunMeta !== "undefined" && lastRunMeta) ? lastRunMeta.run_created_at : null,
+          devices: lastRunDevices || [],
+          device_results: (typeof lastDeviceResults !== "undefined" ? lastDeviceResults : null) || [],
+          post_created_at: (typeof lastRunMeta !== "undefined" && lastRunMeta) ? lastRunMeta.post_created_at : null,
+          post_device_results: null,
+          comparison: (typeof lastComparison !== "undefined" ? lastComparison : null) || null
+        }];
+      }
+      if (preSel) {
+        preSel.innerHTML = "<option value=\"\">— Seçin —</option>" + list.map(function(r, idx) {
+          var label = (r.name || "Rapor") + " — " + (r.created_at || "");
+          return "<option value=\"" + idx + "\">" + escapeHtml(label) + "</option>";
+        }).join("");
+      }
+      if (postSel) {
+        postSel.innerHTML = "<option value=\"\">— Seçin —</option>" + list.map(function(r, idx) {
+          if (!r.post_created_at) return "";
+          var label = (r.name || "Rapor") + " — PRE: " + (r.created_at || "") + " / POST: " + (r.post_created_at || "");
+          return "<option value=\"" + idx + "\">" + escapeHtml(label) + "</option>";
+        }).filter(Boolean).join("");
+      }
       if (emptyEl) emptyEl.style.display = list.length === 0 ? "block" : "none";
+      if (detailsEl && list.length > 0) detailsEl.setAttribute("open", "");
     }
     function bindSavedReportsOpen() {
       var preOpen = $("savedReportsPreOpen");
@@ -4619,31 +4839,51 @@
         });
       }
       if (preDelete && preSel) {
-        preDelete.addEventListener("click", function() {
+        preDelete.addEventListener("click", async function() {
           var idx = parseInt(preSel.value, 10);
           var list = getSavedReports();
           if (isNaN(idx) || idx < 0 || idx >= list.length) { alert("Select a report to delete."); return; }
           var r = list[idx];
           if (!confirm("Delete report \"" + (r.name || r.run_id) + "\"?")) return;
-          deleteSavedReport(r.run_id);
+          await deleteSavedReport(r.run_id);
         });
       }
       if (postDelete && postSel) {
-        postDelete.addEventListener("click", function() {
+        postDelete.addEventListener("click", async function() {
           var idx = parseInt(postSel.value, 10);
           var list = getSavedReports();
           if (isNaN(idx) || idx < 0 || idx >= list.length) { alert("Select a report to delete."); return; }
           var r = list[idx];
           if (!confirm("Delete report \"" + (r.name || r.run_id) + "\"?")) return;
-          deleteSavedReport(r.run_id);
+          await deleteSavedReport(r.run_id);
         });
       }
     }
     async function openSavedReport(report) {
+      if (!report.run_id) {
+        $("runStatus").textContent = "Report has no run_id.";
+        return;
+      }
       var devices = report.devices || [];
       var deviceResults = report.device_results || [];
-      if (!devices.length || !report.run_id) {
-        $("runStatus").textContent = "Report has no devices or run_id.";
+      if (!devices.length || !deviceResults.length) {
+        try {
+          var getRes = await fetch(API + "/api/reports/" + encodeURIComponent(report.run_id) + "?restore=1");
+          var fullReport = await getRes.json();
+          if (!getRes.ok) {
+            $("runStatus").textContent = "Could not load report: " + (fullReport.error || getRes.status);
+            return;
+          }
+          report = fullReport;
+          devices = report.devices || [];
+          deviceResults = report.device_results || [];
+        } catch (e) {
+          $("runStatus").textContent = "Error loading report: " + e.message;
+          return;
+        }
+      }
+      if (!devices.length) {
+        $("runStatus").textContent = "Report has no devices.";
         return;
       }
       try {
@@ -4686,8 +4926,11 @@
       renderResultsTable();
       renderShortfall(lastPreDeviceResults);
       renderConsistency(lastRunDevices, lastPreDeviceResults);
+      renderFlappedPorts24h(lastDeviceResults);
       $("runStatus").textContent = "Opened: " + (report.name || "report") + (report.post_created_at ? " (PRE+POST). Run POST again for these devices if needed." : ". Run POST for these devices when ready.");
       if (location.hash !== "#prepost" && location.hash !== "#prepost-results") location.hash = "prepost";
+      var mainReportNameInp = document.getElementById("mainReportNameInput");
+      if (mainReportNameInp) mainReportNameInp.value = report.name || "";
       var resultsProgressWrap = $("resultsProgressWrap");
       var resultsDoneWrap = $("resultsDoneWrap");
       if (resultsProgressWrap) resultsProgressWrap.style.display = "none";
@@ -4729,7 +4972,7 @@
         bindSavedReportsOpen();
         savedReportsOpenBound = true;
       }
-      renderSavedReportsList();
+      await refreshSavedReportsList();
       const raw = localStorage.getItem("pergen_pre_devices");
       try {
         localStorage.removeItem("pergen_pre_devices");
@@ -4795,11 +5038,14 @@
         $("resultsProgressText").textContent = (i + 1) + "/" + total + " devices checked";
         $("resultsProgressBar").style.width = ((i + 1) / total * 100) + "%";
       }
+      var reportFabric = (devices.length && devices[0].fabric) ? devices[0].fabric : "";
+      var reportRole = (devices.length && devices[0].role) ? devices[0].role : "";
+      resultsSavedName = preReportName(reportFabric, reportRole, devices.length);
       try {
         const cr = await fetch(API + "/api/run/pre/create", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ devices: devices, device_results: deviceResults }),
+          body: JSON.stringify({ devices: devices, device_results: deviceResults, name: resultsSavedName }),
         });
         const cj = await cr.json();
         if (!cr.ok) throw new Error(cj.error || "Run creation failed");
@@ -4811,9 +5057,6 @@
         $("resultsProgressText").textContent = "Error: " + e.message;
         return;
       }
-      var reportFabric = (devices.length && devices[0].fabric) ? devices[0].fabric : "";
-      var reportRole = (devices.length && devices[0].role) ? devices[0].role : "";
-      resultsSavedName = preReportName(reportFabric, reportRole, devices.length);
       try {
         localStorage.setItem("pergen_last_pre", JSON.stringify({
           name: resultsSavedName,
@@ -4834,11 +5077,12 @@
       $("resultsDoneWrap").style.display = "block";
       $("resultsSavedName").textContent = "Saved report: " + resultsSavedName;
       renderResultsTable2(deviceResults);
+      renderFlappedPorts24h(deviceResults);
       $("postCheckBtn").style.display = "block";
       $("postResultWrap").style.display = "none";
       var nameInp = document.getElementById("resultsReportNameInput");
       if (nameInp) nameInp.value = resultsSavedName || "";
-      renderSavedReportsList();
+      await refreshSavedReportsList();
     }
 
     function renderResultsTable2(data) {
@@ -5029,9 +5273,10 @@
           }
         } catch (e) {}
         renderResultsTable2(resultsDeviceResults);
+        renderFlappedPorts24h(resultsDeviceResults);
         $("postResultWrap").style.display = "block";
         $("postComparison").textContent = JSON.stringify(d.comparison || [], null, 2);
-        renderSavedReportsList();
+        refreshSavedReportsList();
       } catch (e) {
         alert("Error: " + e.message);
       }
@@ -5061,6 +5306,25 @@
         var a = document.createElement("a");
         a.href = URL.createObjectURL(blob);
         a.download = "report_" + name + ".zip";
+        a.click();
+        URL.revokeObjectURL(a.href);
+      }).catch(function(e) { alert("Export failed: " + (e && e.message)); });
+    });
+    var mainExportZipBtn = document.getElementById("mainExportZipBtn");
+    if (mainExportZipBtn) mainExportZipBtn.addEventListener("click", function() {
+      if (typeof JSZip === "undefined") { alert("JSZip not loaded."); return; }
+      var nameInp = document.getElementById("mainReportNameInput");
+      var reportName = (nameInp && nameInp.value && nameInp.value.trim()) ? nameInp.value.trim() : preReportName(($("fabric") && $("fabric").value) ? $("fabric").value.trim() : "", ($("role") && $("role").value) ? $("role").value.trim() : "", (lastRunDevices || []).length);
+      var safeName = (reportName || "report").replace(/[^\w\-_.]/g, "_");
+      var exportData = getMainPageExportData();
+      if (!exportData.rows.length) { alert("No results to export. Run PRE first."); return; }
+      var reportHtml = buildFullPageReportHtml(reportName, lastRunMeta && lastRunMeta.run_created_at ? lastRunMeta.run_created_at : "");
+      var zip = new JSZip();
+      zip.file("report.html", reportHtml);
+      zip.generateAsync({ type: "blob" }).then(function(blob) {
+        var a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = "report_" + safeName + ".zip";
         a.click();
         URL.revokeObjectURL(a.href);
       }).catch(function(e) { alert("Export failed: " + (e && e.message)); });

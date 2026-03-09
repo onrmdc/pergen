@@ -163,6 +163,11 @@ cisco_nxos_show_interface_status:
   custom_parser: cisco_interface_status
   fields: []
 
+cisco_nxos_show_interface:
+  description: "Cisco NX-OS show interface (eth_link_flapped HH:MM:SS, eth_reset_cntr)"
+  custom_parser: cisco_interface_detailed
+  fields: []
+
 arista_show_interface_description:
   description: "Arista EOS interface descriptions"
   custom_parser: arista_interface_description
