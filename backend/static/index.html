@@ -516,6 +516,7 @@
         <a href="#inventory">Inventory</a>
         <a href="#notepad">Live Notepad</a>
         <a href="#diff">Diff Checker</a>
+        <a href="#subnet">Subnet Divide Calculator</a>
         <a href="#help">Help</a>
       </nav>
     </div>
@@ -535,6 +536,7 @@
     <a href="#inventory" class="home-card"><img src="/static/assets/inventory-525bb8c4-58e9-4240-97e9-df5491bb9268.png" alt=""><span class="home-card-title">Inventory</span><span class="home-card-desc">Manage fabric, site, and device list.</span></a>
     <a href="#notepad" class="home-card"><img src="/static/assets/notepad.png" alt=""><span class="home-card-title">Live Notepad</span><span class="home-card-desc">Shared plain-text notepad; everyone sees and edits the same content in real time.</span></a>
     <a href="#diff" class="home-card"><img src="/static/assets/diff-checker.png" alt=""><span class="home-card-title">Diff Checker</span><span class="home-card-desc">Compare two texts line by line; differences shown as green (+), red (-), yellow (≠).</span></a>
+    <a href="#subnet" class="home-card"><img src="/static/assets/subnet-calc.png" alt=""><span class="home-card-title">Subnet Divide Calculator</span><span class="home-card-desc">Visual divide: split subnets with Divide; merge with Join cells. Update and Reset.</span></a>
   </div>
   </section>
 
@@ -1067,6 +1069,35 @@
   </div>
   </section>
 
+  <section id="page-subnet" class="page">
+  <h1>Subnet Divide Calculator</h1>
+  <p class="muted" style="margin-bottom:0.5rem;">Enter a network; the table shows one row per subnet. Click <strong>Divide</strong> to split a row into two subnets (one level deeper). Click a grey <strong>Join</strong> cell to merge subnets back into one.</p>
+  <p class="muted" style="margin-bottom:1rem; font-size:0.85em;">Visual subnet calculator inspired by <a href="https://github.com/davidc/subnets" target="_blank" rel="noopener noreferrer" style="color:var(--accent);">davidc/subnets</a> (thank you).</p>
+  <div style="display:flex; flex-wrap:wrap; gap:1rem; align-items:flex-end; margin-bottom:1rem;">
+    <div>
+      <label style="display:block; font-size:0.9em; margin-bottom:0.25rem;">Network address</label>
+      <input type="text" id="subnetNetwork" placeholder="192.168.0.0" value="192.168.0.0" style="width:140px; padding:0.5rem; background:var(--card); color:var(--text); border:1px solid var(--border); border-radius:6px; font-family:monospace;" />
+    </div>
+    <div>
+      <label style="display:block; font-size:0.9em; margin-bottom:0.25rem;">Mask bits</label>
+      <input type="number" id="subnetMask" min="0" max="32" value="16" style="width:50px; padding:0.5rem; background:var(--card); color:var(--text); border:1px solid var(--border); border-radius:6px;" />
+    </div>
+    <button type="button" id="subnetUpdateBtn" style="padding:0.5rem 1rem; background:var(--accent); color:#fff; border:none; border-radius:6px; cursor:pointer;">Update</button>
+    <button type="button" id="subnetResetBtn" style="padding:0.5rem 1rem; background:var(--card); color:var(--text); border:1px solid var(--border); border-radius:6px; cursor:pointer;">Reset</button>
+  </div>
+  <p class="muted" style="font-size:0.85em; margin-bottom:1rem;" id="subnetStatus">Enter network and mask, then click Update.</p>
+  <div id="subnetResultWrap" style="display:none;">
+    <div class="results-table-wrap" style="max-height:60vh; overflow:auto;">
+      <table class="results-table calc" id="subnetCalcTable" style="width:100%; border-collapse:collapse;">
+        <thead><tr>
+          <th>Subnet address</th><th>Range of addresses</th><th>Useable IPs</th><th>Hosts</th><th>Divide</th><th id="subnetJoinHeader" style="min-width:80px;">Join</th>
+        </tr></thead>
+        <tbody id="subnetCalcBody"></tbody>
+      </table>
+    </div>
+  </div>
+  </section>
+
   <section id="page-help" class="page">
   <h1>Help</h1>
   <p class="muted" style="margin-bottom: 1.5rem;">This panel helps you run pre/post checks, look up NAT and BGP, find leaves, and manage inventory. All tables support sorting and export (CSV/Excel) where indicated.</p>
@@ -1142,6 +1173,9 @@
 
   <h2>Diff Checker</h2>
   <p>Compare two texts like Git/GitHub diff. Paste in <strong>Left (before)</strong> and <strong>Right (after)</strong>, then click <strong>Diff check</strong>. Matching lines are found automatically (LCS), so deleting one line does not mark everything below as changed. Table: <span style="color:#f43f5e;">−</span> removed (red, left column only), <span style="color:#10b981;">+</span> added (green, right column only). Left # and Right # are line numbers in each file.</p>
+
+  <h2>Subnet Divide Calculator</h2>
+  <p>Enter network and mask, click <strong>Update</strong>. Table shows one row per subnet. <strong>Divide</strong> splits a row into two (prefix+1). <strong>Join</strong> column: grey cells merge subnets back; <strong>Reset</strong> clears divisions.</p>
 
   <h2>Tables and export</h2>
   <p>Tables use DataTables.net: sort by column, paginate, and use CSV/Excel export where the buttons are shown. Pre/Post diff tables use green for added, red for removed, and amber for modified values.</p>
@@ -2803,7 +2837,7 @@
     $("selectAll").addEventListener("click", selectAll);
     $("selectNone").addEventListener("click", selectNone);
 
-    var PAGE_TITLES = { home: "Home", prepost: "Pre/Post Check", "prepost-results": "Pre Check — Results", nat: "NAT Lookup", findleaf: "Find Leaf", bgp: "BGP / Looking Glass", custom: "Send Custom Command", transceiver: "Transceiver Check", credential: "Credential", routemap: "DCI / WAN Routers", inventory: "Inventory", notepad: "Live Notepad", diff: "Diff Checker", restapi: "REST API" };
+    var PAGE_TITLES = { home: "Home", prepost: "Pre/Post Check", "prepost-results": "Pre Check — Results", nat: "NAT Lookup", findleaf: "Find Leaf", bgp: "BGP / Looking Glass", custom: "Send Custom Command", transceiver: "Transceiver Check", credential: "Credential", routemap: "DCI / WAN Routers", inventory: "Inventory", notepad: "Live Notepad", diff: "Diff Checker", subnet: "Subnet Divide Calculator", restapi: "REST API" };
     function setHeaderPageTitle(pageName) {
       var el = document.getElementById("headerPageTitle");
       if (el) el.textContent = PAGE_TITLES[pageName] || pageName || "Home";
@@ -2860,6 +2894,7 @@
       if (hash === "prepost-results") initResultsPage();
       if (hash === "notepad") initNotepadPage();
       if (hash === "diff") initDiffPage();
+      if (hash === "subnet") initSubnetPage();
       if (hash === "routemap") initRouterPage();
       if (hash === "transceiver") initTransceiverPage();
       if (hash === "restapi") initRestApiPage();
@@ -3940,6 +3975,173 @@
         }
         if (resultWrap) resultWrap.style.display = "block";
       });
+    }
+
+    function ipToLong(ip) {
+      var parts = (ip || "").trim().split(".");
+      if (parts.length !== 4) return null;
+      var n = 0;
+      for (var i = 0; i < 4; i++) {
+        var p = parseInt(parts[i], 10);
+        if (isNaN(p) || p < 0 || p > 255) return null;
+        n = (n << 8) | p;
+      }
+      return n >>> 0;
+    }
+    function longToIp(n) {
+      n = n >>> 0;
+      return ((n >>> 24) & 0xff) + "." + ((n >>> 16) & 0xff) + "." + ((n >>> 8) & 0xff) + "." + (n & 0xff);
+    }
+    function parseCidr(str) {
+      str = (str || "").trim();
+      var idx = str.indexOf("/");
+      if (idx < 0) return null;
+      var ip = str.slice(0, idx);
+      var plen = parseInt(str.slice(idx + 1), 10);
+      if (isNaN(plen) || plen < 0 || plen > 32) return null;
+      var long = ipToLong(ip);
+      if (long === null) return null;
+      var mask = plen === 0 ? 0 : (0xffffffff << (32 - plen)) >>> 0;
+      var base = (long & mask) >>> 0;
+      return { base: base, prefixLen: plen };
+    }
+    function networkAddress(ipLong, mask) {
+      var m = mask === 0 ? 0 : (0xffffffff << (32 - mask)) >>> 0;
+      return (ipLong & m) >>> 0;
+    }
+    function subnetAddresses(mask) { return 1 << (32 - mask); }
+    function subnetLastAddress(subnet, mask) { return (subnet + subnetAddresses(mask) - 1) >>> 0; }
+    var subnetCurNetwork = 0;
+    var subnetCurMask = 0;
+    var subnetRoot = null;
+    var subnetPageInited = false;
+    function subnetUpdateNumChildren(node) {
+      if (!node[2]) { node[1] = 1; node[0] = 1; return 1; }
+      node[1] = subnetUpdateNumChildren(node[2][0]) + subnetUpdateNumChildren(node[2][1]);
+      node[0] = node[1];
+      return node[1];
+    }
+    function subnetDivide(node) { node[2] = [[0, 0, null], [0, 0, null]]; subnetRecreateTables(); }
+    function subnetJoin(node) { node[2] = null; subnetRecreateTables(); }
+    function newSubnetJoin(joinnode) { return function() { subnetJoin(joinnode); }; }
+    function subnetCreateRow(calcbody, node, address, mask, labels, depth) {
+      if (node[2]) {
+        var newlabels = labels.slice();
+        newlabels.push(mask + 1, node[2][0][1], node[2][0]);
+        subnetCreateRow(calcbody, node[2][0], address, mask + 1, newlabels, depth);
+        subnetCreateRow(calcbody, node[2][1], (address + subnetAddresses(mask + 1)) >>> 0, mask + 1, [mask + 1, node[2][1][1], node[2][1]], depth);
+      } else {
+        var tr = document.createElement("tr");
+        var addrFirst = address;
+        var addrLast = subnetLastAddress(address, mask);
+        var useableFirst = mask <= 30 ? address + 1 : address;
+        var useableLast = mask <= 30 ? addrLast - 1 : addrLast;
+        var numHosts = mask >= 31 ? (mask === 32 ? 1 : 2) : (addrLast - addrFirst - 1);
+        var rangeStr = mask === 32 ? longToIp(addrFirst) : longToIp(addrFirst) + " - " + longToIp(addrLast);
+        var useableStr = mask >= 31 ? rangeStr : longToIp(useableFirst) + " - " + longToIp(useableLast);
+        tr.appendChild(document.createElement("td")).appendChild(document.createTextNode(longToIp(address) + "/" + mask));
+        tr.appendChild(document.createElement("td")).appendChild(document.createTextNode(rangeStr));
+        tr.appendChild(document.createElement("td")).appendChild(document.createTextNode(useableStr));
+        tr.appendChild(document.createElement("td")).appendChild(document.createTextNode(String(numHosts)));
+        var divCell = tr.appendChild(document.createElement("td"));
+        if (mask >= 32) {
+          var span = document.createElement("span");
+          span.style.color = "var(--muted)";
+          span.textContent = "Divide";
+          divCell.appendChild(span);
+        } else {
+          var a = document.createElement("a");
+          a.href = "#";
+          a.textContent = "Divide";
+          a.style.color = "var(--accent)";
+          a.addEventListener("click", function(e) { e.preventDefault(); subnetDivide(node); });
+          divCell.appendChild(a);
+        }
+        var colspan = depth - node[0];
+        if (colspan < 1) colspan = 1;
+        var n = Math.floor(labels.length / 3);
+        for (var i = n - 1; i >= 0; i--) {
+          var maskVal = labels[i * 3];
+          var rowspan = labels[i * 3 + 1];
+          var joinnode = labels[i * 3 + 2];
+          var td = document.createElement("td");
+          td.rowSpan = rowspan > 1 ? rowspan : 1;
+          td.colSpan = (i === n - 1) ? colspan : 1;
+          td.style.background = "rgba(128,128,128,0.2)";
+          td.style.textAlign = "right";
+          td.style.padding = "0.35rem 0.5rem";
+          td.style.borderBottom = "1px solid rgba(128,128,128,0.3)";
+          td.style.verticalAlign = "middle";
+          td.textContent = "/" + maskVal;
+          if (i === n - 1) {
+            td.style.color = "var(--muted)";
+          } else {
+            td.style.cursor = "pointer";
+            td.title = "Join subnets back to /" + maskVal;
+            td.addEventListener("click", newSubnetJoin(joinnode));
+          }
+          tr.appendChild(td);
+        }
+        calcbody.appendChild(tr);
+      }
+    }
+    function subnetRecreateTables() {
+      var calcbody = document.getElementById("subnetCalcBody");
+      var joinHeader = document.getElementById("subnetJoinHeader");
+      if (!calcbody) return;
+      while (calcbody.firstChild) calcbody.removeChild(calcbody.firstChild);
+      if (!subnetRoot) return;
+      subnetUpdateNumChildren(subnetRoot);
+      subnetCreateRow(calcbody, subnetRoot, subnetCurNetwork, subnetCurMask, [subnetCurMask, subnetRoot[1], subnetRoot], subnetRoot[0]);
+      if (joinHeader) joinHeader.colSpan = subnetRoot[0] > 0 ? subnetRoot[0] : 1;
+    }
+    function subnetStartOver() {
+      subnetRoot = [0, 0, null];
+      subnetRecreateTables();
+    }
+    function subnetUpdateNetwork() {
+      var netStr = (document.getElementById("subnetNetwork") && document.getElementById("subnetNetwork").value) ? document.getElementById("subnetNetwork").value.trim() : "";
+      var maskVal = parseInt((document.getElementById("subnetMask") && document.getElementById("subnetMask").value) ? document.getElementById("subnetMask").value : "16", 10);
+      var long = ipToLong(netStr);
+      if (long === null) { if (document.getElementById("subnetStatus")) document.getElementById("subnetStatus").textContent = "Invalid network address."; return; }
+      if (maskVal < 0 || maskVal > 32) { if (document.getElementById("subnetStatus")) document.getElementById("subnetStatus").textContent = "Mask must be 0–32."; return; }
+      var netAddr = networkAddress(long, maskVal);
+      if (netAddr !== long && document.getElementById("subnetNetwork")) {
+        document.getElementById("subnetNetwork").value = longToIp(netAddr);
+      }
+      if (subnetCurMask === 0) {
+        subnetCurMask = maskVal;
+        subnetCurNetwork = netAddr;
+        subnetRoot = [0, 0, null];
+        subnetStartOver();
+      } else if (subnetCurMask !== maskVal) {
+        if (confirm("Changing the base network from /" + subnetCurMask + " to /" + maskVal + " will reset all divisions. Proceed?")) {
+          subnetCurMask = maskVal;
+          subnetCurNetwork = netAddr;
+          subnetStartOver();
+        } else {
+          if (document.getElementById("subnetMask")) document.getElementById("subnetMask").value = subnetCurMask;
+          return;
+        }
+      } else {
+        subnetCurNetwork = netAddr;
+        subnetRecreateTables();
+      }
+      var wrap = document.getElementById("subnetResultWrap");
+      if (wrap) wrap.style.display = "block";
+      if (document.getElementById("subnetStatus")) document.getElementById("subnetStatus").textContent = "Click Divide to split a subnet; click a Join cell to merge.";
+    }
+    function initSubnetPage() {
+      if (subnetPageInited) return;
+      subnetPageInited = true;
+      var updateBtn = document.getElementById("subnetUpdateBtn");
+      var resetBtn = document.getElementById("subnetResetBtn");
+      if (updateBtn) updateBtn.addEventListener("click", subnetUpdateNetwork);
+      if (resetBtn) resetBtn.addEventListener("click", function() { if (confirm("Reset all subnet divisions?")) { subnetStartOver(); } });
+      subnetCurMask = 0;
+      subnetCurNetwork = 0;
+      subnetRoot = [0, 0, null];
+      subnetUpdateNetwork();
     }
 
     var restApiInited = false;
