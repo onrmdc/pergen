@@ -17,6 +17,7 @@ A web panel for pre/post checks, NAT lookup, Find Leaf, BGP Looking Glass, route
 | **Transceiver Check** | SFP/optics DOM (temp, power) per interface on Arista and Cisco NX-OS. |
 | **Credential** | Store and manage login credentials (encrypted); reference by name in inventory. |
 | **DCI / WAN Routers** | Compare route-maps on Arista DCI/WAN routers; search by prefix. |
+| **Subnet Divide Calculator** | Visual subnet calculator: network + mask, divide/join subnets in a table. Inspired by [davidc/subnets](https://github.com/davidc/subnets) — thank you. |
 | **Inventory** | Manage devices: hostname, IP, fabric, site, hall, vendor, model, role, tag. |
 
 ## Screenshots
@@ -81,18 +82,26 @@ Order: Home → Navigation (event popups) → Pre/Post Check → Pre/Post consis
 
 ![Inventory](backend/static/screenshots/inventory.png)
 
-## Backend (Flask)
+## Run locally
+
+Clone the repo and start the app:
 
 ```bash
+git clone https://github.com/onrmdc/pergen.git
 cd pergen
 python3 -m venv venv
-source venv/bin/activate   # Windows: venv\Scripts\activate
+source venv/bin/activate
 pip install -r requirements.txt
 export FLASK_APP=backend.app
 flask run
 ```
 
-Default port **5000**. The UI is served from `backend/static/index.html` at `/`. Inventory: `backend/inventory/inventory.csv` (or `example_inventory.csv` if present, else `inventory_sample.csv`). Override with `PERGEN_INVENTORY_PATH`.
+Open http://127.0.0.1:5000 in your browser. Default port is **5000**.
+
+## Backend (Flask)
+
+Same steps if you already have the repo: `cd pergen`, create/activate venv, `pip install -r requirements.txt`, `export FLASK_APP=backend.app`, `flask run`.  
+UI: `backend/static/index.html` at `/`. Inventory: `backend/inventory/inventory.csv` (or `example_inventory.csv` if present, else `inventory_sample.csv`). Override with `PERGEN_INVENTORY_PATH`.
 
 ### API overview
 
