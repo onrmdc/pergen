@@ -65,6 +65,15 @@ commands:
       path: /ins
       commands: ["show interface status"]
 
+  - id: cisco_nxos_show_interface
+    vendor: Cisco
+    model: NX-OS
+    roles: [Leaf, Spine, Wan-Edge, Border-Leaf, Border-Gateway]
+    method: api
+    api:
+      path: /ins
+      commands: ["show interface"]
+
   - id: cisco_nxos_show_isis_adjacency
     vendor: Cisco
     model: NX-OS

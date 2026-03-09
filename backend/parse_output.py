@@ -480,32 +480,84 @@ def _parse_arista_interface_status(raw_output: Any) -> dict[str, Any]:
     ifaces = inner.get("interfaces")
     if not isinstance(ifaces, dict):
         return {"interface_status_rows": out_rows}
+    now_epoch = time.time()
     for iface_name, info in ifaces.items():
         if not isinstance(info, dict):
             continue
         status = (info.get("interfaceStatus") or info.get("lineProtocolStatus") or "").strip() or "-"
         ts = info.get("lastStatusChangeTimestamp")
         last_flap = ""
+        last_epoch: float | None = None
         if ts is not None:
             try:
                 ts_float = float(ts)
+                last_epoch = ts_float
                 last_flap = datetime.fromtimestamp(ts_float).strftime("%H:%M:%S")
             except (TypeError, ValueError):
                 last_flap = str(ts).strip() if ts else ""
         counters = info.get("interfaceCounters") or {}
         in_err = counters.get("inErrors") if isinstance(counters, dict) else None
         in_errors = str(in_err).strip() if in_err is not None else "-"
-        out_rows.append({
+        row: dict[str, Any] = {
             "interface": str(iface_name).strip(),
             "state": status,
             "last_link_flapped": last_flap or "-",
             "in_errors": in_errors,
-        })
+        }
+        if last_epoch is not None:
+            row["last_status_change_epoch"] = last_epoch
+        out_rows.append(row)
     return {"interface_status_rows": out_rows}
 
 
+def _parse_relative_seconds_ago(s: str) -> float | None:
+    """Parse Cisco-style relative time like '1d02h', '23h', '30m', 'never'. Returns seconds ago or None."""
+    if not s or not isinstance(s, str):
+        return None
+    s = s.strip().lower()
+    if s == "never" or s == "-" or s == "":
+        return None
+    total = 0.0
+    # Match optional days (d), hours (h), minutes (m), seconds (s)
+    for part in re.findall(r"(\d+)\s*([dhms])", s):
+        try:
+            n = float(part[0])
+        except (TypeError, ValueError):
+            continue
+        unit = part[1]
+        if unit == "d":
+            total += n * 86400
+        elif unit == "h":
+            total += n * 3600
+        elif unit == "m":
+            total += n * 60
+        elif unit == "s":
+            total += n
+    if total <= 0:
+        return None
+    return total
+
+
+def _parse_hhmmss_to_seconds(s: str) -> float | None:
+    """Parse duration HH:MM:SS (e.g. '00:41:55' = 41 min 55 sec ago). Returns seconds or None."""
+    if not s or not isinstance(s, str):
+        return None
+    s = s.strip()
+    if not s or s.lower() in ("never", "-", "n/a"):
+        return None
+    # HH:MM:SS or H:MM:SS
+    m = re.match(r"^(\d+):(\d{1,2}):(\d{1,2})$", s)
+    if m:
+        try:
+            h, mn, sec = int(m.group(1)), int(m.group(2)), int(m.group(3))
+            return h * 3600 + mn * 60 + sec
+        except (ValueError, TypeError):
+            return None
+    return None
+
+
 def _parse_cisco_interface_status(raw_output: Any) -> dict[str, Any]:
-    """Parse Cisco NX-API 'show interface status'. Returns interface_status_rows: list of { interface, state, last_link_flapped }."""
+    """Parse Cisco NX-API 'show interface status'. Returns interface_status_rows: list of { interface, state, last_link_flapped, in_errors, last_status_change_epoch }."""
     out_rows: list[dict[str, Any]] = []
     data = raw_output
     if isinstance(raw_output, dict) and "result" in raw_output:
@@ -523,11 +575,24 @@ def _parse_cisco_interface_status(raw_output: Any) -> dict[str, Any]:
         data = body
     if not isinstance(data, dict):
         return {"interface_status_rows": out_rows}
-    rows = _find_list(data, "ROW_inter")
+    rows = _find_list(data, "ROW_interface") or _find_list(data, "ROW_inter")
     if not rows:
-        tbl = data.get("TABLE_interface") or data.get("table_interface")
+        tbl = data.get("TABLE_interface") or data.get("table_interface") or _find_key_containing(data, "TABLE_intf")
         if isinstance(tbl, dict):
-            rows = tbl.get("ROW_interface") or tbl.get("row_interface")
+            rows = (
+                tbl.get("ROW_interface")
+                or tbl.get("row_interface")
+                or tbl.get("ROW_intf")
+                or tbl.get("row_intf")
+                or _find_list(tbl, "ROW")
+            )
+    if not rows:
+        # Fallback: any list of dicts with "interface" in first item's keys
+        for v in data.values() if isinstance(data, dict) else []:
+            if isinstance(v, list) and v and isinstance(v[0], dict):
+                if any("interface" in str(x).lower() for x in v[0].keys()):
+                    rows = v
+                    break
     if not rows:
         return {"interface_status_rows": out_rows}
     if isinstance(rows, dict):
@@ -539,17 +604,106 @@ def _parse_cisco_interface_status(raw_output: Any) -> dict[str, Any]:
         if not intf:
             continue
         state = (_find_key(r, "state") or "").strip() or "-"
-        last_flap = _find_key(r, "last_link_flapped") or _find_key(r, "last_status_change") or ""
-        last_flap = str(last_flap).strip() if last_flap else "-"
+        # NX-API can use different key names: last_link_flapped, smt_if_last_link_flapped, last_status_change, etc.
+        last_flap_candidates = [
+            _find_key(r, "last_link_flapped"),
+            _find_key(r, "last_status_change"),
+            _find_key(r, "smt_if_last_link_flapped"),
+            _find_key(r, "last_stated_change"),
+            _find_key(r, "last_link_stated"),
+            _find_key_containing(r, "flapped"),
+            _find_key_containing(r, "last_link"),
+        ]
+        last_flap = ""
+        for c in last_flap_candidates:
+            if c is not None and not isinstance(c, (dict, list)) and str(c).strip():
+                last_flap = str(c).strip()
+                break
+        last_flap = last_flap or "-"
         in_err = _find_key(r, "input_errors") or _find_key(r, "in_errors") or _find_key(r, "input_err")
         in_errors = str(in_err).strip() if in_err is not None else "-"
-        out_rows.append({
+        row_c: dict[str, Any] = {
             "interface": str(intf).strip(),
             "state": state,
             "last_link_flapped": last_flap,
             "in_errors": in_errors,
-        })
+        }
+        seconds_ago = _parse_relative_seconds_ago(last_flap)
+        if seconds_ago is not None:
+            row_c["last_status_change_epoch"] = time.time() - seconds_ago
+        out_rows.append(row_c)
     return {"interface_status_rows": out_rows}
+
+
+def _parse_cisco_interface_detailed(raw_output: Any) -> dict[str, Any]:
+    """
+    Parse Cisco NX-API 'show interface' (detailed) with eth_link_flapped (HH:MM:SS) and eth_reset_cntr.
+    Only includes rows that have both eth_link_flapped and eth_reset_cntr.
+    Output: interface_flapped_rows (for Cisco flapped table) with interface, description, last_link_flapped, flap_counter, last_status_change_epoch.
+    """
+    out_rows: list[dict[str, Any]] = []
+    data = raw_output
+    if isinstance(raw_output, dict) and "result" in raw_output:
+        r = raw_output["result"]
+        data = r[0] if isinstance(r, list) and r else r
+    if isinstance(raw_output, list) and raw_output and isinstance(raw_output[0], dict):
+        data = raw_output[0]
+    body = data.get("body") if isinstance(data, dict) else None
+    if isinstance(body, str):
+        try:
+            body = json.loads(body)
+        except Exception:
+            body = None
+    if body is not None and isinstance(body, dict):
+        data = body
+    if not isinstance(data, dict):
+        return {"interface_flapped_rows": out_rows}
+    rows = _find_list(data, "ROW_interface") or _find_list(data, "ROW_inter")
+    if not rows:
+        tbl = data.get("TABLE_interface") or data.get("table_interface")
+        if isinstance(tbl, dict):
+            rows = tbl.get("ROW_interface") or tbl.get("row_interface")
+    if not rows:
+        return {"interface_flapped_rows": out_rows}
+    if isinstance(rows, dict):
+        rows = [rows]
+    now_epoch = time.time()
+    for r in rows:
+        if not isinstance(r, dict):
+            continue
+        intf = _find_key(r, "interface")
+        if not intf:
+            continue
+        eth_flap = (
+            _find_key(r, "eth_link_flapped")
+            or _find_key_containing(r, "link_flapped")
+        )
+        eth_reset = (
+            _find_key(r, "eth_reset_cntr")
+            or _find_key_containing(r, "reset_cntr")
+        )
+        if eth_flap is None or eth_reset is None:
+            continue
+        last_flap_str = str(eth_flap).strip() if eth_flap is not None else "-"
+        flap_cnt = str(eth_reset).strip() if eth_reset is not None else "-"
+        desc = _find_key(r, "desc") or _find_key(r, "description") or ""
+        desc = str(desc).strip() if desc else "-"
+        state = (_find_key(r, "state") or "").strip() or "-"
+        seconds_ago = _parse_hhmmss_to_seconds(last_flap_str) if last_flap_str and last_flap_str != "-" else None
+        if seconds_ago is None and last_flap_str and last_flap_str != "-":
+            seconds_ago = _parse_relative_seconds_ago(last_flap_str)
+        row_out: dict[str, Any] = {
+            "interface": str(intf).strip(),
+            "state": state,
+            "description": desc,
+            "last_link_flapped": last_flap_str or "-",
+            "flap_counter": flap_cnt,
+            "in_errors": flap_cnt,
+        }
+        if seconds_ago is not None:
+            row_out["last_status_change_epoch"] = now_epoch - seconds_ago
+        out_rows.append(row_out)
+    return {"interface_flapped_rows": out_rows}
 
 
 def _parse_arista_interface_description(raw_output: Any) -> dict[str, Any]:
@@ -728,6 +882,28 @@ def _find_key(data: Any, key: str) -> Any:
         found = _find_key(v, key)
         if found is not None:
             return found
+    return None
+
+
+def _find_key_containing(data: Any, key_substr: str) -> Any:
+    """Recursively find first value whose key contains key_substr (case-insensitive). Used for NX-API keys like smt_if_last_link_flapped."""
+    if not isinstance(data, dict):
+        return None
+    sub = key_substr.lower()
+    for k, v in data.items():
+        if sub in str(k).lower():
+            if v is not None and v != "" and (not isinstance(v, dict) or v):
+                return v
+        if isinstance(v, dict):
+            found = _find_key_containing(v, key_substr)
+            if found is not None:
+                return found
+        elif isinstance(v, list) and v:
+            for item in v:
+                if isinstance(item, dict):
+                    found = _find_key_containing(item, key_substr)
+                    if found is not None:
+                        return found
     return None
 
 
@@ -1085,6 +1261,8 @@ def parse_output(command_id: str, raw_output: Any, parser_config: dict) -> dict[
         result = _parse_arista_interface_description(raw_output)
     elif custom_parser == "cisco_interface_description":
         result = _parse_cisco_interface_description(raw_output)
+    elif custom_parser == "cisco_interface_detailed":
+        result = _parse_cisco_interface_detailed(raw_output)
     else:
         for f in fields:
             name = (f.get("name") or "").strip()
