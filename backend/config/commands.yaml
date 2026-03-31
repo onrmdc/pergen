@@ -231,3 +231,12 @@ commands:
     api:
       path: /ins
       commands: ["show interface description"]
+
+  - id: cisco_nxos_show_interface_mtu
+    vendor: Cisco
+    model: NX-OS
+    roles: [Leaf, Spine, Wan-Edge, Border-Leaf, Border-Gateway]
+    method: api
+    api:
+      path: /ins
+      commands: ["show interface"]

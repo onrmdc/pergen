@@ -567,6 +567,7 @@ def api_transceiver():
                         "state": s.get("state") or "-",
                         "last_link_flapped": s.get("last_link_flapped") or "-",
                         "in_errors": s.get("in_errors") or "-",
+                        "mtu": s.get("mtu") or "-",
                     }
         description_by_interface = {}
         desc_result = run_device_commands(
@@ -577,6 +578,17 @@ def api_transceiver():
             description_by_interface = desc_flat.get("interface_descriptions") or {}
             if not isinstance(description_by_interface, dict):
                 description_by_interface = {}
+        cisco_mtu_map: dict[str, str] = {}
+        vendor_l = (device.get("vendor") or "").strip().lower()
+        if "cisco" in vendor_l:
+            mtu_result = run_device_commands(
+                device, app.config["SECRET_KEY"], creds, command_id_filter="interface_mtu"
+            )
+            if not mtu_result.get("error"):
+                mtu_flat = mtu_result.get("parsed_flat") or {}
+                cisco_mtu_map = mtu_flat.get("interface_mtu_map") or {}
+                if not isinstance(cisco_mtu_map, dict):
+                    cisco_mtu_map = {}
         if isinstance(transceiver_rows, list):
             for row in transceiver_rows:
                 if not isinstance(row, dict):
@@ -584,11 +596,17 @@ def api_transceiver():
                 iface = str(row.get("interface") or "").strip()
                 st = status_by_interface.get(iface) or {}
                 desc = description_by_interface.get(iface) if isinstance(description_by_interface, dict) else ""
+                mtu_val = cisco_mtu_map.get(iface) if cisco_mtu_map else None
+                if mtu_val is None and cisco_mtu_map:
+                    mtu_val = cisco_mtu_map.get(iface.replace(" ", ""))
+                if mtu_val is None:
+                    mtu_val = st.get("mtu") or "-"
                 all_rows.append({
                     "hostname": result.get("hostname") or hostname,
                     "ip": result.get("ip") or device.get("ip") or "",
                     "interface": iface,
                     "description": desc if desc else "-",
+                    "mtu": mtu_val,
                     "serial": row.get("serial") or "",
                     "type": row.get("type") or "",
                     "manufacturer": row.get("manufacturer") or "",

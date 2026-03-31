@@ -904,6 +904,7 @@
           <label><input type="checkbox" data-col="ip" /> IP</label>
           <label><input type="checkbox" data-col="interface" /> Interface</label>
           <label><input type="checkbox" data-col="description" /> Description</label>
+          <label><input type="checkbox" data-col="mtu" /> MTU</label>
           <label><input type="checkbox" data-col="serial" /> Serial</label>
           <label><input type="checkbox" data-col="type" /> Type</label>
           <label><input type="checkbox" data-col="manufacturer" /> Manufacturer</label>
@@ -1540,8 +1541,8 @@
     var transceiverTableFilters = {};
     var transceiverTableSortCol = "hostname";
     var transceiverTableSortDir = "asc";
-    var TRANSCEIVER_COLUMNS = ["hostname", "ip", "interface", "description", "serial", "type", "manufacturer", "temp", "tx_power", "rx_power", "status", "last_flap", "in_errors"];
-    var TRANSCEIVER_HEADERS = { hostname: "Hostname", ip: "IP", interface: "Interface", description: "Description", serial: "Serial", type: "Type", manufacturer: "Manufacturer", temp: "Temp", tx_power: "TX power", rx_power: "RX power", status: "Status", last_flap: "Last Flap Time", in_errors: "Input Error Count" };
+    var TRANSCEIVER_COLUMNS = ["hostname", "ip", "interface", "description", "mtu", "serial", "type", "manufacturer", "temp", "tx_power", "rx_power", "status", "last_flap", "in_errors"];
+    var TRANSCEIVER_HEADERS = { hostname: "Hostname", ip: "IP", interface: "Interface", description: "Description", mtu: "MTU", serial: "Serial", type: "Type", manufacturer: "Manufacturer", temp: "Temp", tx_power: "TX power", rx_power: "RX power", status: "Status", last_flap: "Last Flap Time", in_errors: "Input Error Count" };
     var transceiverTableVisibleCols = {};
     TRANSCEIVER_COLUMNS.forEach(function(c) { transceiverTableVisibleCols[c] = true; });
     var TRANSCEIVER_TX_RX_OK_LO = -8, TRANSCEIVER_TX_RX_OK_HI = 8, TRANSCEIVER_TX_RX_WARN_LO = -15, TRANSCEIVER_TX_RX_WARN_HI = 15;

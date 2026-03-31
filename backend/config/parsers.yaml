@@ -177,3 +177,8 @@ cisco_nxos_show_interface_description:
   description: "Cisco NX-OS interface description"
   custom_parser: cisco_interface_description
   fields: []
+
+cisco_nxos_show_interface_mtu:
+  description: "Cisco NX-OS show interface (eth_mtu per interface)"
+  custom_parser: cisco_interface_show_mtu
+  fields: []
