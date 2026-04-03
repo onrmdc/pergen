@@ -39,6 +39,7 @@ def run_device_commands(
     secret_key: str,
     cred_store_module,
     command_id_filter: str | None = None,
+    command_id_exact: str | None = None,
 ) -> dict[str, Any]:
     """
     Run all applicable commands for the device. Returns:
@@ -80,7 +81,12 @@ def run_device_commands(
     commands = cmd_loader.get_commands_for_device(vendor, model, role)
     if not commands:
         return out
-    if command_id_filter:
+    if command_id_exact:
+        exact = (command_id_exact or "").strip()
+        commands = [c for c in commands if (c.get("id") or "").strip() == exact]
+        if not commands:
+            return out
+    elif command_id_filter:
         commands = [c for c in commands if (c.get("id") or "").lower().find(command_id_filter.lower()) >= 0]
         if not commands:
             return out

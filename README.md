@@ -91,16 +91,27 @@ git clone https://github.com/onrmdc/pergen.git
 cd pergen
 python3 -m venv venv
 source venv/bin/activate
-pip install -r requirements.txt
+python -m pip install -r requirements.txt
 export FLASK_APP=backend.app
-flask run
+python -m flask run
 ```
 
 Open http://127.0.0.1:5000 in your browser. Default port is **5000**.
 
+**Alternative (same directory as `run.sh`):** after creating `venv` and installing deps once, `chmod +x run.sh && ./run.sh`
+
+### venv / “cannot run the app” checklist
+
+1. **Working directory** — Commands must run from the **repository root** (the folder that contains `backend/` and `requirements.txt`). If you `cd backend` first, imports like `backend.app` will fail.
+2. **Activate the venv** — You should see `(venv)` in your shell prompt after `source venv/bin/activate` (macOS/Linux). Every new terminal needs `source venv/bin/activate` again.
+3. **Install into the venv** — Use `python -m pip install -r requirements.txt` so packages go into `venv`, not the system Python.
+4. **`flask` not found** — Use `python -m flask run` instead of `flask run` (avoids a different `flask` on your PATH).
+5. **`FLASK_APP`** — Must be set: `export FLASK_APP=backend.app` (or use `./run.sh`, which sets it).
+6. **Listen on all interfaces** — `export FLASK_RUN_HOST=0.0.0.0` then run again (or `./run.sh` after exporting).
+
 ## Backend (Flask)
 
-Same steps if you already have the repo: `cd pergen`, create/activate venv, `pip install -r requirements.txt`, `export FLASK_APP=backend.app`, `flask run`.  
+Same steps if you already have the repo: `cd pergen`, create/activate venv, `python -m pip install -r requirements.txt`, `export FLASK_APP=backend.app`, `python -m flask run` (or `./run.sh`).  
 UI: `backend/static/index.html` at `/`. Inventory: `backend/inventory/inventory.csv` (or `example_inventory.csv` if present, else `inventory_sample.csv`). Override with `PERGEN_INVENTORY_PATH`.
 
 ### API overview

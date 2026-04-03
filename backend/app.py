@@ -5,6 +5,7 @@ Run from repo root: FLASK_APP=backend.app flask run
 import gzip
 import json
 import os
+import re
 import sys
 import uuid
 import subprocess
@@ -12,6 +13,8 @@ import platform
 
 # Ensure project root is on path when running as flask run
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from datetime import datetime
 
 from flask import Flask, jsonify, request, send_from_directory
 
@@ -33,6 +36,175 @@ from backend import route_map_analysis as route_map_analysis_module
 from backend import bgp_looking_glass as bgp_lg
 from backend import credential_store as creds
 from backend.config import commands_loader as cmd_loader
+from backend.transceiver_recovery_policy import is_transceiver_recovery_allowed
+
+
+def _interface_status_trace(status_result: dict) -> list:
+    """Explain which interface_status commands ran, parser, and parse outcome (for UI / troubleshooting)."""
+    out = []
+    for entry in status_result.get("commands") or []:
+        cid = (entry.get("command_id") or "").strip()
+        if "interface_status" not in cid.lower():
+            continue
+        pcfg = cmd_loader.get_parser(cid) or {}
+        parser_name = pcfg.get("custom_parser") or "(yaml fields only)"
+        parsed = entry.get("parsed") or {}
+        rows = parsed.get("interface_status_rows") or []
+        sample_ifaces = [str(r.get("interface") or "").strip() for r in rows[:12] if isinstance(r, dict)]
+        raw = entry.get("raw")
+        raw_keys = []
+        if isinstance(raw, dict):
+            raw_keys = list(raw.keys())[:16]
+        elif isinstance(raw, list) and raw and isinstance(raw[0], dict):
+            raw_keys = list(raw[0].keys())[:16]
+        sample_flap = []
+        for r in rows[:8]:
+            if not isinstance(r, dict):
+                continue
+            sample_flap.append(
+                {
+                    "interface": str(r.get("interface") or "").strip(),
+                    "flap_count": r.get("flap_count"),
+                    "last_link_flapped": r.get("last_link_flapped"),
+                }
+            )
+        out.append(
+            {
+                "command_id": cid,
+                "cli_commands": cmd_loader.get_command_cli_commands(cid),
+                "parser": parser_name,
+                "command_error": entry.get("error"),
+                "parsed_row_count": len(rows),
+                "sample_interfaces": sample_ifaces,
+                "sample_flap_fields": sample_flap,
+                "raw_top_level_keys": raw_keys,
+            }
+        )
+    return out
+
+
+def _cisco_interface_detailed_trace(detailed_result: dict) -> list:
+    """Trace for cisco_nxos_show_interface (flap/reset from detailed JSON)."""
+    out = []
+    for entry in detailed_result.get("commands") or []:
+        cid = (entry.get("command_id") or "").strip()
+        if cid != "cisco_nxos_show_interface":
+            continue
+        pcfg = cmd_loader.get_parser(cid) or {}
+        parser_name = pcfg.get("custom_parser") or "(yaml fields only)"
+        parsed = entry.get("parsed") or {}
+        rows = parsed.get("interface_flapped_rows") or []
+        raw = entry.get("raw")
+        raw_keys = []
+        if isinstance(raw, dict):
+            raw_keys = list(raw.keys())[:16]
+        elif isinstance(raw, list) and raw and isinstance(raw[0], dict):
+            raw_keys = list(raw[0].keys())[:16]
+        sample = []
+        for r in rows[:8]:
+            if not isinstance(r, dict):
+                continue
+            sample.append(
+                {
+                    "interface": str(r.get("interface") or "").strip(),
+                    "flap_counter": r.get("flap_counter"),
+                    "last_link_flapped": r.get("last_link_flapped"),
+                    "crc_count": r.get("crc_count"),
+                    "in_errors": r.get("in_errors"),
+                }
+            )
+        out.append(
+            {
+                "command_id": cid,
+                "cli_commands": cmd_loader.get_command_cli_commands(cid),
+                "parser": parser_name,
+                "command_error": entry.get("error"),
+                "parsed_flap_row_count": len(rows),
+                "sample_flap_from_detailed": sample,
+                "raw_top_level_keys": raw_keys,
+            }
+        )
+    return out
+
+
+def _transceiver_errors_display(st: dict) -> str:
+    """CRC / input error counts as <crc>/<in> only."""
+
+    def _n(key: str) -> int:
+        v = str(st.get(key) or "").strip()
+        if v in ("", "-"):
+            return 0
+        try:
+            return int(float(v))
+        except (ValueError, TypeError):
+            m = re.search(r"-?\d+", v)
+            return int(m.group(0)) if m else 0
+
+    return f"{_n('crc_count')}/{_n('in_errors')}"
+
+
+def _transceiver_last_flap_display(st: dict) -> str:
+    """Last flap as DDMMYYYY-HHMM (24h) when epoch is known."""
+    ep = st.get("last_status_change_epoch")
+    if isinstance(ep, (int, float)) and ep > 0:
+        try:
+            return datetime.fromtimestamp(float(ep)).strftime("%d%m%Y-%H%M")
+        except (ValueError, OSError, OverflowError):
+            pass
+    raw = str(st.get("last_link_flapped") or "").strip()
+    if raw and re.match(r"^\d{8}-\d{4}$", raw):
+        return raw
+    return "-"
+
+
+def _iface_status_lookup(status_by_interface: dict, iface: str) -> dict:
+    """Return status dict for interface name; match case-insensitively if needed."""
+    if iface in status_by_interface:
+        return status_by_interface[iface]
+    i_low = iface.lower()
+    i_compact = iface.replace(" ", "")
+    for k, v in status_by_interface.items():
+        if k.lower() == i_low or k.replace(" ", "") == i_compact:
+            return v if isinstance(v, dict) else {}
+    return {}
+
+
+def _merge_cisco_detailed_flap(status_by_interface: dict, flap_rows: list) -> None:
+    """Merge interface_flapped_rows from 'show interface' into per-interface status (flap time, reset counter)."""
+    for fr in flap_rows:
+        if not isinstance(fr, dict):
+            continue
+        iface = str(fr.get("interface") or "").strip()
+        if not iface:
+            continue
+        canon = None
+        if iface in status_by_interface:
+            canon = iface
+        else:
+            for k in list(status_by_interface.keys()):
+                if k.lower() == iface.lower() or k.replace(" ", "") == iface.replace(" ", ""):
+                    canon = k
+                    break
+        if canon is None:
+            canon = iface
+        b = status_by_interface.setdefault(canon, {})
+        lf = fr.get("last_link_flapped")
+        if lf is not None and str(lf).strip() not in ("", "-"):
+            b["last_link_flapped"] = str(lf).strip()
+        fc = fr.get("flap_counter")
+        if fc is not None and str(fc).strip() not in ("", "-"):
+            b["flap_count"] = str(fc).strip()
+        crc = fr.get("crc_count")
+        if crc is not None and str(crc).strip() not in ("", "-"):
+            b["crc_count"] = str(crc).strip()
+        ine = fr.get("in_errors")
+        if ine is not None and str(ine).strip() not in ("", "-"):
+            b["in_errors"] = str(ine).strip()
+        ep = fr.get("last_status_change_epoch")
+        if isinstance(ep, (int, float)) and ep > 0:
+            b["last_status_change_epoch"] = ep
+
+
 from backend.runners.runner import run_device_commands, _get_credentials
 
 _static = os.path.join(os.path.dirname(__file__), "static")
@@ -545,8 +717,10 @@ def api_transceiver():
         return jsonify({"error": "devices array required"}), 400
     all_rows = []
     errors = []
+    interface_status_trace = []
     for device in devices:
         hostname = (device.get("hostname") or device.get("ip") or "unknown").strip()
+        vendor_l = (device.get("vendor") or "").strip().lower()
         result = run_device_commands(
             device, app.config["SECRET_KEY"], creds, command_id_filter="transceiver"
         )
@@ -566,8 +740,11 @@ def api_transceiver():
                     status_by_interface[str(s["interface"]).strip()] = {
                         "state": s.get("state") or "-",
                         "last_link_flapped": s.get("last_link_flapped") or "-",
+                        "last_status_change_epoch": s.get("last_status_change_epoch"),
                         "in_errors": s.get("in_errors") or "-",
+                        "crc_count": s.get("crc_count") or "-",
                         "mtu": s.get("mtu") or "-",
+                        "flap_count": s.get("flap_count") or "-",
                     }
         description_by_interface = {}
         desc_result = run_device_commands(
@@ -579,7 +756,6 @@ def api_transceiver():
             if not isinstance(description_by_interface, dict):
                 description_by_interface = {}
         cisco_mtu_map: dict[str, str] = {}
-        vendor_l = (device.get("vendor") or "").strip().lower()
         if "cisco" in vendor_l:
             mtu_result = run_device_commands(
                 device, app.config["SECRET_KEY"], creds, command_id_filter="interface_mtu"
@@ -589,12 +765,33 @@ def api_transceiver():
                 cisco_mtu_map = mtu_flat.get("interface_mtu_map") or {}
                 if not isinstance(cisco_mtu_map, dict):
                     cisco_mtu_map = {}
+        detailed_result = None
+        if "cisco" in vendor_l and not status_result.get("error"):
+            detailed_result = run_device_commands(
+                device, app.config["SECRET_KEY"], creds, command_id_exact="cisco_nxos_show_interface"
+            )
+            if not detailed_result.get("error"):
+                dflat = detailed_result.get("parsed_flat") or {}
+                flap_rows = dflat.get("interface_flapped_rows") or []
+                _merge_cisco_detailed_flap(status_by_interface, flap_rows)
+        interface_status_trace.append(
+            {
+                "hostname": hostname,
+                "ip": (device.get("ip") or "").strip(),
+                "vendor": (device.get("vendor") or "").strip(),
+                "status_run_error": status_result.get("error"),
+                "entries": _interface_status_trace(status_result),
+                "cisco_show_interface_detailed": (
+                    _cisco_interface_detailed_trace(detailed_result) if detailed_result is not None else []
+                ),
+            }
+        )
         if isinstance(transceiver_rows, list):
             for row in transceiver_rows:
                 if not isinstance(row, dict):
                     continue
                 iface = str(row.get("interface") or "").strip()
-                st = status_by_interface.get(iface) or {}
+                st = _iface_status_lookup(status_by_interface, iface)
                 desc = description_by_interface.get(iface) if isinstance(description_by_interface, dict) else ""
                 mtu_val = cisco_mtu_map.get(iface) if cisco_mtu_map else None
                 if mtu_val is None and cisco_mtu_map:
@@ -604,6 +801,8 @@ def api_transceiver():
                 all_rows.append({
                     "hostname": result.get("hostname") or hostname,
                     "ip": result.get("ip") or device.get("ip") or "",
+                    "device_role": (device.get("role") or "").strip(),
+                    "vendor": (device.get("vendor") or "").strip(),
                     "interface": iface,
                     "description": desc if desc else "-",
                     "mtu": mtu_val,
@@ -614,12 +813,158 @@ def api_transceiver():
                     "tx_power": row.get("tx_power") or "",
                     "rx_power": row.get("rx_power") or "",
                     "status": st.get("state") or "-",
-                    "last_flap": st.get("last_link_flapped") or "-",
+                    "last_flap": _transceiver_last_flap_display(st),
                     "in_errors": st.get("in_errors") or "-",
+                    "crc_count": st.get("crc_count") or "-",
+                    "errors": _transceiver_errors_display(st),
+                    "flap_count": st.get("flap_count") or "-",
                 })
         if not transceiver_rows and not result.get("error"):
             errors.append({"hostname": hostname, "error": "no transceiver data (unsupported or no optics)"})
-    return jsonify({"rows": all_rows, "errors": errors})
+    return jsonify({"rows": all_rows, "errors": errors, "interface_status_trace": interface_status_trace})
+
+
+@app.route("/api/transceiver/recover", methods=["POST"])
+def api_transceiver_recover():
+    """
+    Bounce interfaces: configure terminal (or configure on Arista), interface X, shutdown, no shutdown.
+    Requires basic (username/password) credential. Body: { "device": {...}, "interfaces": ["Ethernet1/1", ...] }.
+    """
+    from backend.runners import interface_recovery
+
+    data = request.get_json() or {}
+    device = data.get("device")
+    interfaces = data.get("interfaces")
+    if not isinstance(device, dict):
+        return jsonify({"error": "device object required", "commands": []}), 400
+    ip = (device.get("ip") or "").strip()
+    if not ip:
+        return jsonify({"error": "device ip required", "commands": []}), 400
+    if not isinstance(interfaces, list):
+        return jsonify({"error": "interfaces array required", "commands": []}), 400
+    cred_name = (device.get("credential") or "").strip()
+    payload = creds.get_credential(cred_name, app.config["SECRET_KEY"])
+    if not payload or payload.get("method") != "basic":
+        return jsonify({"error": "recovery requires a username/password (basic) credential, not API key only", "commands": []}), 400
+    username = payload.get("username") or ""
+    password = payload.get("password") or ""
+    if not username:
+        return jsonify({"error": "credential username required", "commands": []}), 400
+    ok_names, verr = interface_recovery.validate_interface_names(interfaces)
+    if verr:
+        return jsonify({"error": verr, "commands": []}), 400
+    denied = [n for n in ok_names if not is_transceiver_recovery_allowed(device, n)]
+    if denied:
+        return jsonify(
+            {
+                "error": (
+                    "Recovery is only allowed for Leaf devices on host ports Ethernet1/1 through Ethernet1/48. "
+                    f"Not allowed: {denied!r}"
+                ),
+                "commands": [],
+            }
+        ), 400
+    vendor_l = (device.get("vendor") or "").strip().lower()
+    if "cisco" in vendor_l:
+        cmd_list = interface_recovery.build_cisco_nxos_recovery_lines(ok_names)
+    elif "arista" in vendor_l:
+        cmd_list = interface_recovery.build_arista_recovery_commands(ok_names)
+    else:
+        cmd_list = []
+    try:
+        if "cisco" in vendor_l:
+            out, err = interface_recovery.recover_interfaces_cisco_nxos(ip, username, password, ok_names)
+            if err:
+                return jsonify({"ok": False, "error": err, "output": out, "commands": cmd_list}), 500
+            status_text, st_err = interface_recovery.fetch_interface_status_summary_cisco_nxos(
+                ip, username, password, ok_names
+            )
+            payload: dict = {"ok": True, "commands": cmd_list, "interface_status_output": status_text or ""}
+            if st_err:
+                payload["interface_status_warning"] = st_err
+            return jsonify(payload)
+        if "arista" in vendor_l:
+            results, err = interface_recovery.recover_interfaces_arista_eos(ip, username, password, ok_names)
+            if err:
+                return jsonify({"ok": False, "error": err, "results": results, "commands": cmd_list}), 500
+            status_text, st_err = interface_recovery.fetch_interface_status_summary_arista_eos(
+                ip, username, password, ok_names
+            )
+            payload = {"ok": True, "commands": cmd_list, "interface_status_output": status_text or ""}
+            if st_err:
+                payload["interface_status_warning"] = st_err
+            return jsonify(payload)
+        return jsonify({"error": "unsupported vendor (use Arista or Cisco)", "commands": cmd_list}), 400
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e), "commands": cmd_list}), 500
+
+
+@app.route("/api/transceiver/clear-counters", methods=["POST"])
+def api_transceiver_clear_counters():
+    """
+    Clear interface counters only (privileged exec, not configure).
+    Body: { "device": {...}, "interface": "Ethernet8" }.
+    """
+    from backend.runners import interface_recovery
+
+    data = request.get_json() or {}
+    device = data.get("device")
+    interface = data.get("interface")
+    if not isinstance(device, dict):
+        return jsonify({"error": "device object required", "commands": []}), 400
+    ip = (device.get("ip") or "").strip()
+    if not ip:
+        return jsonify({"error": "device ip required", "commands": []}), 400
+    if not interface or not isinstance(interface, str):
+        return jsonify({"error": "interface string required", "commands": []}), 400
+    ok_names, verr = interface_recovery.validate_interface_names([interface])
+    if verr or not ok_names:
+        return jsonify({"error": verr or "invalid interface", "commands": []}), 400
+    iface_clean = ok_names[0]
+    if not is_transceiver_recovery_allowed(device, iface_clean):
+        return jsonify(
+            {
+                "error": (
+                    "Clear counters is only allowed for Leaf devices on host ports Ethernet1/1 through Ethernet1/48."
+                ),
+                "commands": [],
+            }
+        ), 400
+    cred_name = (device.get("credential") or "").strip()
+    payload = creds.get_credential(cred_name, app.config["SECRET_KEY"])
+    if not payload or payload.get("method") != "basic":
+        return jsonify({"error": "clear counters requires a username/password (basic) credential", "commands": []}), 400
+    username = payload.get("username") or ""
+    password = payload.get("password") or ""
+    if not username:
+        return jsonify({"error": "credential username required", "commands": []}), 400
+    vendor_l = (device.get("vendor") or "").strip().lower()
+    cmd_list = [interface_recovery.build_clear_counters_command(iface_clean)]
+    try:
+        if "cisco" in vendor_l:
+            out, err = interface_recovery.clear_counters_cisco_nxos(ip, username, password, iface_clean)
+            if err:
+                return jsonify({"ok": False, "error": err, "commands": cmd_list, "output": out}), 500
+            return jsonify({"ok": True, "commands": cmd_list, "output": out or ""})
+        if "arista" in vendor_l:
+            results, err = interface_recovery.clear_counters_arista_eos(ip, username, password, iface_clean)
+            if err:
+                return jsonify({"ok": False, "error": err, "results": results, "commands": cmd_list}), 500
+            lines_out: list[str] = []
+            if results:
+                for r in results:
+                    if isinstance(r, dict) and len(r) == 0:
+                        lines_out.append("(ok — no output from eAPI)")
+                    elif isinstance(r, dict):
+                        lines_out.append(json.dumps(r, indent=2))
+                    else:
+                        lines_out.append(str(r))
+            else:
+                lines_out.append("(no output)")
+            return jsonify({"ok": True, "commands": cmd_list, "output": "\n".join(lines_out)})
+        return jsonify({"error": "unsupported vendor (use Arista or Cisco)", "commands": cmd_list}), 400
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e), "commands": cmd_list}), 500
 
 
 # Intent-based blocklist: substrings that indicate config/write intent (read-only safeguard per .cursorrules §6)

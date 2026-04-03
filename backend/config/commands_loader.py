@@ -74,6 +74,24 @@ def get_parser(command_id: str) -> dict | None:
     return parsers.get((command_id or "").strip())
 
 
+def get_command_cli_commands(command_id: str) -> list[str]:
+    """Return CLI command strings from commands.yaml for this command id (api.commands or ssh.command)."""
+    cid = (command_id or "").strip()
+    if not cid:
+        return []
+    for cmd in get_commands_config():
+        if (cmd.get("id") or "").strip() != cid:
+            continue
+        api_spec = cmd.get("api") or {}
+        cmds = api_spec.get("commands") or []
+        if cmds:
+            return list(cmds)
+        ssh_spec = cmd.get("ssh") or {}
+        one = (ssh_spec.get("command") or "").strip()
+        return [one] if one else []
+    return []
+
+
 def get_all_parser_field_names() -> list[str]:
     """Return sorted unique field names across all parsers (for dynamic table columns)."""
     parsers = get_parsers_config()

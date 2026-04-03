@@ -156,6 +156,23 @@
     .header-progress-wrap .header-progress-fill {
       height: 100%; background: var(--accent); border-radius: 3px; transition: width 0.2s; width: 0%;
     }
+    .header-progress-wrap.header-progress-clickable { cursor: pointer; }
+    .header-progress-wrap.header-progress-clickable:hover { border-color: var(--accent); background: rgba(88, 166, 255, 0.08); }
+    .header-progress-detail-popup {
+      display: none; position: fixed; top: 3.5rem; right: 1rem; z-index: 1002;
+      width: min(520px, 94vw); max-height: 72vh; overflow: hidden;
+      background: var(--card); border-radius: 8px; border: 1px solid var(--accent);
+      box-shadow: 0 4px 24px rgba(0,0,0,0.35); font-size: 0.82rem;
+    }
+    .header-progress-detail-popup.open { display: flex; flex-direction: column; }
+    .header-progress-detail-popup .event-popup-header { border-bottom: 1px solid var(--border); }
+    .header-progress-detail-body { overflow: auto; max-height: 58vh; padding: 0.35rem 0.5rem; }
+    .header-progress-detail-body table { width: 100%; font-size: 0.8rem; }
+    .header-progress-detail-body td { padding: 0.25rem 0.35rem; vertical-align: top; }
+    .header-progress-detail-body .ph-queued { color: var(--muted); }
+    .header-progress-detail-body .ph-running { color: var(--accent); font-weight: 600; }
+    .header-progress-detail-body .ph-done { color: var(--success); }
+    .header-progress-detail-body .ph-error { color: var(--danger); }
     .device-error-icon { color: var(--danger); font-weight: bold; margin-right: 0.25rem; }
     .results-table tr.row-error { background: rgba(244, 63, 94, 0.12) !important; }
     .results-table .cell-error { color: var(--danger); font-size: 0.85em; max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -202,6 +219,30 @@
     .event-popup-list li.event-warn { color: var(--warn); }
     .event-popup-list li.event-fail { color: var(--danger); }
     .event-popup-list .event-time { color: var(--muted); font-size: 0.8em; font-weight: normal; margin-right: 0.35rem; }
+    .event-count-btn.command-logs-btn {
+      background: rgba(88, 166, 255, 0.12); color: var(--accent); border: 1px solid rgba(88, 166, 255, 0.45);
+    }
+    .event-count-btn.command-logs-btn:hover { background: rgba(88, 166, 255, 0.22); border-color: var(--accent); }
+    .command-logs-popup {
+      width: min(560px, 94vw); max-height: 76vh; z-index: 1003;
+      background: var(--card); border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+      border: 1px solid rgba(88, 166, 255, 0.45);
+    }
+    .command-logs-popup.open { display: flex; flex-direction: column; }
+    .command-logs-popup .command-logs-header-actions { display: flex; align-items: center; gap: 0.35rem; }
+    .command-logs-list { overflow: auto; max-height: 64vh; padding: 0.5rem 0.75rem; font-size: 0.8rem; }
+    .command-log-entry { margin-bottom: 1rem; padding-bottom: 0.75rem; border-bottom: 1px solid var(--border); }
+    .command-log-entry:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+    .command-log-entry h4 { margin: 0 0 0.35rem 0; font-size: 0.85rem; font-weight: 600; }
+    .command-log-entry.ok h4 { color: var(--success); }
+    .command-log-entry.fail h4 { color: var(--danger); }
+    .command-log-entry .cmd-log-meta { color: var(--muted); font-size: 0.78em; margin-bottom: 0.35rem; }
+    .command-log-entry .cmd-log-block-title { font-size: 0.75rem; font-weight: 600; margin: 0.35rem 0 0.2rem 0; color: var(--text); }
+    .command-log-entry pre {
+      margin: 0; white-space: pre-wrap; word-break: break-word; font-family: "Roboto Mono", Consolas, monospace;
+      font-size: 0.76rem; background: rgba(0,0,0,0.12); padding: 0.4rem 0.5rem; border-radius: 6px; border: 1px solid var(--border);
+    }
+    body.theme-light .command-log-entry pre { background: rgba(0,0,0,0.04); }
     .page { display: none; max-width: 1200px; margin-left: auto; margin-right: auto; padding: 1.5rem 1rem 0 1rem; box-sizing: border-box; }
     .page.active { display: block; }
     .page > * + * { margin-top: 1.5rem; }
@@ -240,6 +281,46 @@
       background: var(--card); border: 1px solid var(--border);
       border-radius: 10px; padding: 1rem 1.25rem;
       box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+    }
+    .transceiver-icon-btn {
+      padding: 0.4rem 0.5rem;
+      margin: 0 0.2rem;
+      border: 1px solid var(--border);
+      background: var(--card);
+      border-radius: 8px;
+      cursor: pointer;
+      vertical-align: middle;
+      line-height: 0;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+      transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease, transform 0.08s ease;
+    }
+    body.theme-light .transceiver-icon-btn {
+      box-shadow: 0 1px 2px rgba(15, 23, 42, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.85);
+    }
+    .transceiver-icon-btn:hover:not(:disabled) {
+      background: rgba(59, 130, 246, 0.18);
+      border-color: rgba(96, 165, 250, 0.55);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    }
+    body.theme-light .transceiver-icon-btn:hover:not(:disabled) {
+      background: rgba(59, 130, 246, 0.14);
+      border-color: rgba(59, 130, 246, 0.45);
+      box-shadow: 0 2px 6px rgba(15, 23, 42, 0.12);
+    }
+    .transceiver-icon-btn:active:not(:disabled) {
+      transform: translateY(1px);
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18), inset 0 1px 2px rgba(0, 0, 0, 0.12);
+    }
+    .transceiver-icon-btn:focus-visible {
+      outline: 2px solid rgba(96, 165, 250, 0.75);
+      outline-offset: 2px;
+    }
+    .transceiver-icon-btn img { display: block; width: 26px; height: 26px; object-fit: contain; }
+    .transceiver-icon-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      box-shadow: none;
+      background: rgba(148, 163, 184, 0.12);
     }
     #natLookupResult, #findLeafResult {
       background: var(--card); border: 1px solid var(--border);
@@ -479,13 +560,14 @@
       <button type="button" class="header-nav-btn" id="headerBackBtn">Back</button>
     </div>
     <div class="header-right event-bar-counters">
-      <div id="headerProgressWrap" class="header-progress-wrap" style="display: none;">
+      <div id="headerProgressWrap" class="header-progress-wrap" style="display: none;" title="">
         <span id="headerProgressText">0/0 devices</span>
         <div class="header-progress-bar"><div id="headerProgressBar" class="header-progress-fill"></div></div>
       </div>
       <button type="button" id="eventSuccessBtn" class="event-count-btn event-success-btn" style="display: none;" title="Successful operations — click to view" aria-label="Successful">🟢 <span id="eventSuccessCount">0</span></button>
       <button type="button" id="eventWarnBtn" class="event-count-btn event-warn-btn" style="display: none;" title="Warnings (e.g. missed credentials, rate limits) — click to view" aria-label="Warnings">🟠 <span id="eventWarnCount">0</span></button>
       <button type="button" id="eventFailBtn" class="event-count-btn event-fail-btn" style="display: none;" title="Errors (e.g. login failed, connection timeout) — click to view" aria-label="Errors">🔴 <span id="eventFailCount">0</span></button>
+      <button type="button" id="commandLogsBtn" class="event-count-btn command-logs-btn" style="display: none;" title="Command logs (recover CLI and output) — click to view" aria-label="Command logs">📋 <span id="commandLogsCount">0</span></button>
       <button type="button" class="theme-toggle" id="themeToggle" aria-label="Toggle theme" title="Dark / Light"><span id="themeIcon">🌙</span> <span id="themeLabel">Dark</span></button>
     </div>
   </header>
@@ -500,6 +582,23 @@
   <div id="eventFailPopup" class="event-popup event-fail-popup" aria-hidden="true">
     <div class="event-popup-header"><span id="eventFailPopupTitle">Errors</span><button type="button" class="event-popup-close" id="eventFailPopupClose" aria-label="Close">×</button></div>
     <ul class="event-popup-list" id="eventFailPopupList"></ul>
+  </div>
+  <div id="headerProgressDetailPopup" class="header-progress-detail-popup" aria-hidden="true">
+    <div class="event-popup-header">
+      <span id="headerProgressDetailTitle">Device progress</span>
+      <button type="button" class="event-popup-close" id="headerProgressDetailClose" aria-label="Close">×</button>
+    </div>
+    <div class="header-progress-detail-body" id="headerProgressDetailBody"></div>
+  </div>
+  <div id="commandLogsPopup" class="event-popup command-logs-popup" aria-hidden="true">
+    <div class="event-popup-header">
+      <span id="commandLogsPopupTitle">Command logs</span>
+      <div class="command-logs-header-actions">
+        <button type="button" class="header-nav-btn" id="commandLogsClearBtn" style="padding: 0.25rem 0.5rem; font-size: 0.8rem;">Clear</button>
+        <button type="button" class="event-popup-close" id="commandLogsPopupClose" aria-label="Close">×</button>
+      </div>
+    </div>
+    <div class="command-logs-list" id="commandLogsList"></div>
   </div>
   <div class="menu-overlay" id="menuOverlay">
     <div class="menu-sidebar">
@@ -894,14 +993,32 @@
     </div>
   </div>
   <p id="transceiverStatus" class="ping-status" style="margin-top:0.5rem;"></p>
+  <details id="transceiverInterfaceStatusTrace" style="display:none; margin-top:0.75rem;">
+    <summary style="cursor:pointer; font-size:0.9em; color:var(--muted);">Interface status — CLI command &amp; parser (debug)</summary>
+    <p style="font-size:0.82em; color:var(--muted); margin:0.35rem 0 0 0;">Shows which <code>interface_status</code> command ran, <code>parsers.yaml</code> custom parser name, row count, sample flap fields, and top-level keys of raw JSON from the device.</p>
+    <pre id="transceiverInterfaceStatusTracePre" style="font-size:0.78rem; max-height:42vh; overflow:auto; margin:0.5rem 0 0 0; padding:0.5rem; background:rgba(0,0,0,0.12); border-radius:8px; border:1px solid var(--border); white-space:pre-wrap; word-break:break-word;"></pre>
+  </details>
   <div class="device-list" id="transceiverDeviceList" style="max-height:280px;"></div>
+  <div id="transceiverErrWrap" style="display:none; margin-top:1.25rem;">
+    <h2 style="font-size:1rem; margin-bottom:0.35rem;">Interfaces with error in status</h2>
+    <p style="font-size:0.88em; color:var(--muted); margin-bottom:0.5rem;">Status contains <code>err</code> (case-insensitive), e.g. errdisabled, err-disable, Error. <strong>Recover</strong> and <strong>clear counters</strong> are only offered for <strong>Leaf</strong> devices on host ports <strong>Ethernet1/1</strong>–<strong>Ethernet1/48</strong> (or <code>1/1</code>–<code>1/48</code>); other interfaces (e.g. spine uplinks) show actions disabled. <strong>Recover</strong> runs configure, interface, shutdown, no shutdown. Clear counters runs <code>clear counters interface &lt;name&gt;</code> in privileged exec. Requires username/password credential (not API-key-only).</p>
+    <div style="margin-bottom:0.5rem;">
+      <button type="button" id="transceiverRecoverAllBtn" class="btn-run">Recovery all</button>
+      <span id="transceiverRecoverStatus" class="ping-status" style="margin-left:0.75rem;"></span>
+    </div>
+    <div id="transceiverErrTableOuter" class="results-table-wrap" style="max-height:40vh; overflow:auto; border-color:rgba(245,158,11,0.45);">
+      <table class="results-table" id="transceiverErrTable">
+        <thead><tr><th>Hostname</th><th>Interface</th><th>TX</th><th>RX</th><th>Flap</th><th>Last Flap</th><th>CRC/Input Err</th><th>Status</th><th>Action</th></tr></thead>
+        <tbody id="transceiverErrTbody"></tbody>
+      </table>
+    </div>
+  </div>
   <div id="transceiverTableWrap" style="display:none; margin-top:1.5rem;">
     <div style="display:flex; align-items:center; flex-wrap:wrap; gap:0.5rem; margin-bottom:0.5rem;">
       <span class="column-toggle-wrap">
         <button type="button" class="column-toggle-btn" id="transceiverColumnToggleBtn">Columns</button>
         <div class="column-toggle-dropdown" id="transceiverColumnToggleDropdown">
           <label><input type="checkbox" data-col="hostname" /> Hostname</label>
-          <label><input type="checkbox" data-col="ip" /> IP</label>
           <label><input type="checkbox" data-col="interface" /> Interface</label>
           <label><input type="checkbox" data-col="description" /> Description</label>
           <label><input type="checkbox" data-col="mtu" /> MTU</label>
@@ -912,8 +1029,9 @@
           <label><input type="checkbox" data-col="tx_power" /> TX power</label>
           <label><input type="checkbox" data-col="rx_power" /> RX power</label>
           <label><input type="checkbox" data-col="status" /> Status</label>
-          <label><input type="checkbox" data-col="last_flap" /> Last Flap Time</label>
-          <label><input type="checkbox" data-col="in_errors" /> Input Error Count</label>
+          <label><input type="checkbox" data-col="last_flap" /> Last Flap</label>
+          <label><input type="checkbox" data-col="flap_count" /> Flap</label>
+          <label><input type="checkbox" data-col="errors" /> CRC/Input Err</label>
         </div>
       </span>
     </div>
@@ -1234,6 +1352,8 @@
     var globalDeviceErrorsList = [];
     var globalDeviceEvents = [];
     var MAX_DEVICE_EVENTS = 300;
+    var globalCommandLogs = [];
+    var MAX_COMMAND_LOGS = 80;
     /** Device-level error only: top-level error, or all commands failed. Single-command failures are logged as warning and not returned here. */
     function getDeviceResultError(res) {
       if (!res) return null;
@@ -1257,9 +1377,89 @@
         if (c.error && c.command_id) addDeviceEvent("warn", host, "Could not get response for " + (c.command_id || "command") + ": " + (c.error || "").trim());
       });
     }
+    var headerProgressDetail = null;
+    function closeHeaderProgressDetailPopup() {
+      var pop = $("headerProgressDetailPopup");
+      if (pop) {
+        pop.classList.remove("open");
+        pop.setAttribute("aria-hidden", "true");
+      }
+    }
+    function renderHeaderProgressDetailBody() {
+      var body = $("headerProgressDetailBody");
+      var title = $("headerProgressDetailTitle");
+      if (!body || !headerProgressDetail || !headerProgressDetail.devices) return;
+      if (title) title.textContent = "Device progress (" + headerProgressDetail.devices.length + ")";
+      var rows = headerProgressDetail.devices.map(function(d) {
+        var phCls = d.phase === "queued" ? "ph-queued" : d.phase === "running" ? "ph-running" : d.phase === "done" ? "ph-done" : "ph-error";
+        var phLabel = d.phase === "queued" ? "Queued" : d.phase === "running" ? "Running" : d.phase === "done" ? "Done" : "Error";
+        return "<tr><td>" + escapeHtml(d.hostname) + "</td><td>" + escapeHtml(d.ip) + "</td><td class=\"" + phCls + "\">" + phLabel + "</td><td>" + escapeHtml(d.detail) + "</td></tr>";
+      }).join("");
+      body.innerHTML = "<table><thead><tr><th>Hostname</th><th>IP</th><th>Phase</th><th>Detail</th></tr></thead><tbody>" + rows + "</tbody></table>";
+    }
+    function openHeaderProgressDetailPopup() {
+      if (!headerProgressDetail) return;
+      renderHeaderProgressDetailBody();
+      var pop = $("headerProgressDetailPopup");
+      if (pop) {
+        pop.classList.add("open");
+        pop.setAttribute("aria-hidden", "false");
+      }
+    }
+    function initHeaderProgressDetail(devList) {
+      headerProgressDetail = {
+        devices: devList.map(function(d) {
+          var h = (d.hostname || "").trim();
+          var ip = (d.ip || "").trim();
+          var key = h || ip || "?";
+          return { key: key, hostname: h || "—", ip: ip || "—", phase: "queued", detail: "" };
+        })
+      };
+    }
+    function updateHeaderProgressDetailPhase(key, phase, detail) {
+      if (!headerProgressDetail || !headerProgressDetail.devices) return;
+      for (var i = 0; i < headerProgressDetail.devices.length; i++) {
+        if (headerProgressDetail.devices[i].key === key) {
+          headerProgressDetail.devices[i].phase = phase;
+          headerProgressDetail.devices[i].detail = detail || "";
+          break;
+        }
+      }
+      var pop = $("headerProgressDetailPopup");
+      if (pop && pop.classList.contains("open")) renderHeaderProgressDetailBody();
+    }
+    function initHeaderProgressDetailUi() {
+      var wrap = $("headerProgressWrap");
+      var pop = $("headerProgressDetailPopup");
+      var closeBtn = $("headerProgressDetailClose");
+      if (wrap) {
+        wrap.addEventListener("click", function(e) {
+          e.stopPropagation();
+          if (!headerProgressDetail) return;
+          if (wrap.style.display === "none") return;
+          openHeaderProgressDetailPopup();
+        });
+      }
+      if (closeBtn) closeBtn.addEventListener("click", function(e) { e.stopPropagation(); closeHeaderProgressDetailPopup(); });
+      document.addEventListener("click", function(e) {
+        if (!pop || !pop.classList.contains("open")) return;
+        if (pop.contains(e.target)) return;
+        if (wrap && wrap.contains(e.target)) return;
+        closeHeaderProgressDetailPopup();
+      });
+    }
     function showHeaderProgress(total) {
       var wrap = $("headerProgressWrap"); var text = $("headerProgressText"); var bar = $("headerProgressBar");
-      if (wrap) wrap.style.display = "flex";
+      if (wrap) {
+        wrap.style.display = "flex";
+        if (headerProgressDetail) {
+          wrap.classList.add("header-progress-clickable");
+          wrap.title = "Click for per-device status";
+        } else {
+          wrap.classList.remove("header-progress-clickable");
+          wrap.title = "";
+        }
+      }
       if (text) text.textContent = "0/" + total + " devices";
       if (bar) bar.style.width = "0%";
     }
@@ -1270,7 +1470,13 @@
     }
     function hideHeaderProgress() {
       var wrap = $("headerProgressWrap");
-      if (wrap) wrap.style.display = "none";
+      if (wrap) {
+        wrap.style.display = "none";
+        wrap.classList.remove("header-progress-clickable");
+        wrap.title = "";
+      }
+      headerProgressDetail = null;
+      closeHeaderProgressDetailPopup();
     }
     function addDeviceEvent(type, hostname, message) {
       var now = new Date();
@@ -1493,6 +1699,133 @@
       return div.innerHTML;
     }
 
+    function formatRecoverApiOutput(data) {
+      if (!data || typeof data !== "object") return "";
+      var parts = [];
+      if (data.interface_status_output != null && String(data.interface_status_output).trim() !== "") {
+        parts.push(String(data.interface_status_output).trim());
+      }
+      if (data.interface_status_warning && String(data.interface_status_warning).trim() !== "") {
+        parts.push("Note: " + String(data.interface_status_warning).trim());
+      }
+      if (parts.length) return parts.join("\n\n");
+      if (data.output != null && String(data.output).trim() !== "") return String(data.output);
+      if (Array.isArray(data.results)) {
+        var cmds = Array.isArray(data.commands) ? data.commands : [];
+        var results = data.results;
+        function formatOneRecoverResult(r) {
+          if (r == null) return "(null)";
+          if (typeof r === "string") {
+            var t = r.trim();
+            return t || "(empty string)";
+          }
+          if (typeof r === "object") {
+            try {
+              var keys = Object.keys(r);
+              if (keys.length === 0) {
+                return "(ok — no output from eAPI; normal for Arista configure / interface commands)";
+              }
+              return JSON.stringify(r, null, 2);
+            } catch (e0) {
+              return String(r);
+            }
+          }
+          return String(r);
+        }
+        try {
+          if (cmds.length === results.length && cmds.length > 0) {
+            return results.map(function(r, i) {
+              return cmds[i] + "\n  → " + formatOneRecoverResult(r);
+            }).join("\n\n");
+          }
+          return results.map(function(r, i) {
+            return "[result " + i + "]\n" + formatOneRecoverResult(r);
+          }).join("\n\n");
+        } catch (e2) {
+          return String(data.results);
+        }
+      }
+      return "";
+    }
+    function addCommandLogEntry(hostname, title, commandsText, outputText, ok) {
+      var now = new Date();
+      var time = now.toLocaleString(undefined, { dateStyle: "short", timeStyle: "medium" });
+      globalCommandLogs.push({
+        hostname: hostname || "?",
+        title: title || "Command",
+        commands: commandsText || "",
+        output: outputText || "",
+        ok: ok !== false,
+        time: time,
+        ts: now.getTime()
+      });
+      if (globalCommandLogs.length > MAX_COMMAND_LOGS) globalCommandLogs = globalCommandLogs.slice(-MAX_COMMAND_LOGS);
+      var cmdBtn = $("commandLogsBtn");
+      var cmdCount = $("commandLogsCount");
+      if (cmdCount) cmdCount.textContent = globalCommandLogs.length;
+      if (cmdBtn) cmdBtn.style.display = globalCommandLogs.length > 0 ? "inline-flex" : "none";
+    }
+    function renderCommandLogsList() {
+      var listEl = $("commandLogsList");
+      var titleEl = $("commandLogsPopupTitle");
+      if (!listEl) return;
+      if (titleEl) titleEl.textContent = "Command logs (" + globalCommandLogs.length + ")";
+      var sorted = globalCommandLogs.slice().sort(function(a, b) { return (b.ts || 0) - (a.ts || 0); });
+      listEl.innerHTML = sorted.map(function(e) {
+        var cls = e.ok ? "ok" : "fail";
+        var cmdBlock = escapeHtml(e.commands || "(none)");
+        var outBlock = escapeHtml(e.output || "");
+        return "<div class=\"command-log-entry " + cls + "\"><h4>" + escapeHtml(e.title) + " — " + escapeHtml(e.hostname) + "</h4>" +
+          "<div class=\"cmd-log-meta\"><span class=\"event-time\">" + escapeHtml(e.time) + "</span></div>" +
+          "<div class=\"cmd-log-block-title\">Commands</div><pre>" + cmdBlock + "</pre>" +
+          "<div class=\"cmd-log-block-title\">Output</div><pre>" + outBlock + "</pre></div>";
+      }).join("");
+    }
+    function closeCommandLogsPopup() {
+      var pop = $("commandLogsPopup");
+      if (pop) {
+        pop.classList.remove("open");
+        pop.setAttribute("aria-hidden", "true");
+      }
+    }
+    function openCommandLogsPopup() {
+      renderCommandLogsList();
+      var pop = $("commandLogsPopup");
+      if (pop) {
+        pop.classList.add("open");
+        pop.setAttribute("aria-hidden", "false");
+      }
+    }
+    function initCommandLogsUi() {
+      var btn = $("commandLogsBtn");
+      var pop = $("commandLogsPopup");
+      var closeBtn = $("commandLogsPopupClose");
+      var clearBtn = $("commandLogsClearBtn");
+      if (btn && pop) {
+        btn.addEventListener("click", function(e) {
+          e.stopPropagation();
+          if (globalCommandLogs.length === 0) return;
+          openCommandLogsPopup();
+        });
+      }
+      if (closeBtn) closeBtn.addEventListener("click", function(e) { e.stopPropagation(); closeCommandLogsPopup(); });
+      if (clearBtn) clearBtn.addEventListener("click", function(e) {
+        e.stopPropagation();
+        globalCommandLogs = [];
+        var cmdCount = $("commandLogsCount");
+        if (cmdCount) cmdCount.textContent = "0";
+        if (btn) btn.style.display = "none";
+        renderCommandLogsList();
+        closeCommandLogsPopup();
+      });
+      document.addEventListener("click", function(e) {
+        if (!pop || !pop.classList.contains("open")) return;
+        if (pop.contains(e.target)) return;
+        if (btn && btn.contains(e.target)) return;
+        closeCommandLogsPopup();
+      });
+    }
+
     async function doPing() {
       if (!devicesCache.length) { pingStatus.textContent = "Select Fabric, Site, and Role to load the device list."; return; }
       pingStatus.textContent = "Pinging…";
@@ -1541,12 +1874,146 @@
     var transceiverTableFilters = {};
     var transceiverTableSortCol = "hostname";
     var transceiverTableSortDir = "asc";
-    var TRANSCEIVER_COLUMNS = ["hostname", "ip", "interface", "description", "mtu", "serial", "type", "manufacturer", "temp", "tx_power", "rx_power", "status", "last_flap", "in_errors"];
-    var TRANSCEIVER_HEADERS = { hostname: "Hostname", ip: "IP", interface: "Interface", description: "Description", mtu: "MTU", serial: "Serial", type: "Type", manufacturer: "Manufacturer", temp: "Temp", tx_power: "TX power", rx_power: "RX power", status: "Status", last_flap: "Last Flap Time", in_errors: "Input Error Count" };
+    var TRANSCEIVER_COLUMNS = ["hostname", "interface", "description", "mtu", "serial", "type", "manufacturer", "temp", "tx_power", "rx_power", "status", "last_flap", "flap_count", "errors"];
+    var TRANSCEIVER_HEADERS = { hostname: "Hostname", interface: "Interface", description: "Description", mtu: "MTU", serial: "Serial", type: "Type", manufacturer: "Manufacturer", temp: "Temp", tx_power: "TX power", rx_power: "RX power", status: "Status", last_flap: "Last Flap", flap_count: "Flap", errors: "CRC/Input Err" };
     var transceiverTableVisibleCols = {};
     TRANSCEIVER_COLUMNS.forEach(function(c) { transceiverTableVisibleCols[c] = true; });
+    var transceiverDeviceMap = {};
     var TRANSCEIVER_TX_RX_OK_LO = -8, TRANSCEIVER_TX_RX_OK_HI = 8, TRANSCEIVER_TX_RX_WARN_LO = -15, TRANSCEIVER_TX_RX_WARN_HI = 15;
     var TRANSCEIVER_ERR_OK = 0, TRANSCEIVER_ERR_WARN_MAX = 10;
+
+    function transceiverStatusHasErr(status) {
+      return status != null && String(status).toLowerCase().indexOf("err") !== -1;
+    }
+    function transceiverIsHostPortEthernet1to48(iface) {
+      var s = String(iface || "").trim();
+      var m = s.match(/^(?:Ethernet|Eth|Et)(\d+)\/(\d+)$/i);
+      if (m) {
+        var mod = parseInt(m[1], 10), port = parseInt(m[2], 10);
+        return mod === 1 && port >= 1 && port <= 48;
+      }
+      m = s.match(/^(\d+)\/(\d+)$/);
+      if (m) {
+        var mod2 = parseInt(m[1], 10), port2 = parseInt(m[2], 10);
+        return mod2 === 1 && port2 >= 1 && port2 <= 48;
+      }
+      return false;
+    }
+    function transceiverIsLeafHostRecoverablePort(r) {
+      var role = String(r.device_role || "").trim().toLowerCase();
+      if (!role) {
+        var dev = null;
+        var h = (r.hostname || "").trim();
+        var ip = (r.ip || "").trim();
+        if (h && transceiverDeviceMap[h]) dev = transceiverDeviceMap[h];
+        else if (ip && transceiverDeviceMap["ip:" + ip]) dev = transceiverDeviceMap["ip:" + ip];
+        role = dev ? String(dev.role || "").trim().toLowerCase() : "";
+      }
+      if (role !== "leaf") return false;
+      return transceiverIsHostPortEthernet1to48(r.interface);
+    }
+    function transceiverFindDeviceFromTr(tr) {
+      var h = (tr.getAttribute("data-hostname") || "").trim();
+      var ip = (tr.getAttribute("data-ip") || "").trim();
+      if (h && transceiverDeviceMap[h]) return transceiverDeviceMap[h];
+      if (ip && transceiverDeviceMap["ip:" + ip]) return transceiverDeviceMap["ip:" + ip];
+      return null;
+    }
+    function renderTransceiverErrTableBody(errRows) {
+      var wrap = document.getElementById("transceiverErrWrap");
+      var tbody = document.getElementById("transceiverErrTbody");
+      var recoverAllBtn = document.getElementById("transceiverRecoverAllBtn");
+      if (!wrap || !tbody) return;
+      var hasRun = transceiverTableRows && transceiverTableRows.length > 0;
+      if (!hasRun) {
+        wrap.style.display = "none";
+        tbody.innerHTML = "";
+        if (recoverAllBtn) recoverAllBtn.disabled = true;
+        return;
+      }
+      wrap.style.display = "block";
+      if (!errRows || !errRows.length) {
+        tbody.innerHTML = "<tr class=\"transceiver-err-empty\"><td colspan=\"9\" style=\"text-align:center; color:var(--muted); padding:0.75rem 0.5rem;\">No ports in an error-disabled or other <code>err</code> status (no matching interfaces in this result set).</td></tr>";
+        if (recoverAllBtn) recoverAllBtn.disabled = true;
+        return;
+      }
+      var recoverableErr = errRows.filter(function(r) { return transceiverIsLeafHostRecoverablePort(r); });
+      if (recoverAllBtn) recoverAllBtn.disabled = recoverableErr.length === 0;
+      tbody.innerHTML = errRows.map(function(r) {
+        var canAct = transceiverIsLeafHostRecoverablePort(r);
+        var actionCell = canAct
+          ? "<button type=\"button\" class=\"btn-recover-one transceiver-icon-btn\" title=\"recover\" aria-label=\"recover\">" +
+            "<img src=\"/static/assets/transceiver-recover.png\" alt=\"\" width=\"28\" height=\"28\" /></button>" +
+            "<button type=\"button\" class=\"btn-clear-counters-one transceiver-icon-btn\" title=\"clear counters\" aria-label=\"clear counters\">" +
+            "<img src=\"/static/assets/transceiver-clear-counters.png\" alt=\"\" width=\"28\" height=\"28\" /></button>"
+          : "<span class=\"muted\" style=\"font-size:0.85em;\" title=\"Recovery only on Leaf, Ethernet1/1-1/48 host ports.\">&mdash;</span>";
+        return "<tr data-hostname=\"" + escapeHtml(r.hostname || "") + "\" data-ip=\"" + escapeHtml(r.ip || "") + "\" data-interface=\"" + escapeHtml(r.interface || "") + "\">" +
+          "<td>" + escapeHtml(r.hostname || "") + "</td><td>" + escapeHtml(r.interface || "") + "</td>" +
+          "<td>" + escapeHtml(r.tx_power != null ? String(r.tx_power) : "") + "</td><td>" + escapeHtml(r.rx_power != null ? String(r.rx_power) : "") + "</td>" +
+          "<td>" + escapeHtml(r.flap_count != null ? String(r.flap_count) : "") + "</td><td>" + escapeHtml(r.last_flap != null ? String(r.last_flap) : "") + "</td>" +
+          "<td>" + escapeHtml(r.errors != null ? String(r.errors) : "") + "</td>" +
+          "<td>" + escapeHtml(r.status || "") + "</td>" +
+          "<td>" + actionCell + "</td></tr>";
+      }).join("");
+    }
+    async function transceiverCallRecover(device, interfaces) {
+      var host = (device.hostname || device.ip || "?").trim();
+      var res;
+      try {
+        res = await fetch(API + "/api/transceiver/recover", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ device: device, interfaces: interfaces }),
+        });
+      } catch (e) {
+        addCommandLogEntry(host, "Interface recovery", "", "Request failed: " + (e.message || String(e)), false);
+        throw e;
+      }
+      var data = await res.json().catch(function() { return {}; });
+      var cmds = Array.isArray(data.commands) ? data.commands : [];
+      var cmdText = cmds.join("\n");
+      var outText = formatRecoverApiOutput(data);
+      var ok = res.ok && data.ok !== false;
+      if (!ok) {
+        var errMsg = (data && data.error) ? data.error : (res.statusText || "Recovery failed");
+        if (!outText) outText = errMsg;
+        else if (errMsg) outText = outText + "\n\n---\nError: " + errMsg;
+        addCommandLogEntry(host, "Interface recovery", cmdText, outText, false);
+        throw new Error(errMsg);
+      }
+      if (!outText) outText = "(no output)";
+      addCommandLogEntry(host, "Interface recovery", cmdText, outText, true);
+      return data;
+    }
+    async function transceiverCallClearCounters(device, iface) {
+      var host = (device.hostname || device.ip || "?").trim();
+      var res;
+      try {
+        res = await fetch(API + "/api/transceiver/clear-counters", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ device: device, interface: iface }),
+        });
+      } catch (e) {
+        addCommandLogEntry(host, "Clear counters", "", "Request failed: " + (e.message || String(e)), false);
+        throw e;
+      }
+      var data = await res.json().catch(function() { return {}; });
+      var cmds = Array.isArray(data.commands) ? data.commands : [];
+      var cmdText = cmds.join("\n");
+      var outText = formatRecoverApiOutput(data);
+      var ok = res.ok && data.ok !== false;
+      if (!ok) {
+        var errMsg = (data && data.error) ? data.error : (res.statusText || "Clear counters failed");
+        if (!outText) outText = errMsg;
+        else if (errMsg) outText = outText + "\n\n---\nError: " + errMsg;
+        addCommandLogEntry(host, "Clear counters", cmdText, outText, false);
+        throw new Error(errMsg);
+      }
+      if (!outText) outText = "(no output)";
+      addCommandLogEntry(host, "Clear counters", cmdText, outText, true);
+      return data;
+    }
 
     function transceiverRowThresholdClass(r) {
       var bad = false, warn = false;
@@ -1556,9 +2023,11 @@
       else if (!isNaN(tx) && (tx < TRANSCEIVER_TX_RX_OK_LO || tx > TRANSCEIVER_TX_RX_OK_HI)) warn = true;
       if (!isNaN(rx) && (rx < TRANSCEIVER_TX_RX_WARN_LO || rx > TRANSCEIVER_TX_RX_WARN_HI)) bad = true;
       else if (!isNaN(rx) && (rx < TRANSCEIVER_TX_RX_OK_LO || rx > TRANSCEIVER_TX_RX_OK_HI)) warn = true;
-      var err = parseInt(String(r.in_errors || "0").replace(/\D/g, ""), 10);
-      if (!isNaN(err) && err > TRANSCEIVER_ERR_WARN_MAX) bad = true;
-      else if (!isNaN(err) && err > TRANSCEIVER_ERR_OK) warn = true;
+      var crcN = parseInt(String(r.crc_count || "0").replace(/\D/g, ""), 10);
+      var inN = parseInt(String(r.in_errors || "0").replace(/\D/g, ""), 10);
+      var errSum = (isNaN(crcN) ? 0 : crcN) + (isNaN(inN) ? 0 : inN);
+      if (errSum > TRANSCEIVER_ERR_WARN_MAX) bad = true;
+      else if (errSum > TRANSCEIVER_ERR_OK) warn = true;
       if (bad) return "row-threshold-bad";
       if (warn) return "row-threshold-warn";
       return "row-threshold-ok";
@@ -1655,7 +2124,10 @@
       thead.innerHTML = "";
       thead.appendChild(tr1);
       thead.appendChild(tr2);
-      tbody.innerHTML = rows.map(function(r) {
+      var errRows = rows.filter(function(r) { return transceiverStatusHasErr(r.status); });
+      var mainRows = rows.filter(function(r) { return !transceiverStatusHasErr(r.status); });
+      renderTransceiverErrTableBody(errRows);
+      tbody.innerHTML = mainRows.map(function(r) {
         var trClass = transceiverRowThresholdClass(r);
         return "<tr class=\"" + trClass + "\">" + visibleCols.map(function(col) {
           var val = (r[col] != null && r[col] !== "") ? String(r[col]) : "";
@@ -1783,23 +2255,170 @@
       var statusEl = document.getElementById("transceiverStatus");
       var tableWrap = document.getElementById("transceiverTableWrap");
       var tbody = document.getElementById("transceiverTbody");
+      var recoverStatusEl = document.getElementById("transceiverRecoverStatus");
+      var errTbody = document.getElementById("transceiverErrTbody");
+      if (errTbody) {
+        errTbody.addEventListener("click", async function(e) {
+          var recoverBtn = e.target && e.target.closest && e.target.closest(".btn-recover-one");
+          var clearBtn = e.target && e.target.closest && e.target.closest(".btn-clear-counters-one");
+          if (!recoverBtn && !clearBtn) return;
+          var tr = (recoverBtn || clearBtn).closest("tr");
+          if (!tr) return;
+          var dev = transceiverFindDeviceFromTr(tr);
+          var iface = (tr.getAttribute("data-interface") || "").trim();
+          if (!dev) { if (recoverStatusEl) recoverStatusEl.textContent = "Device not in map; run transceiver check again."; return; }
+          if (!iface) return;
+          var btn = recoverBtn || clearBtn;
+          btn.disabled = true;
+          if (recoverBtn) {
+            if (recoverStatusEl) recoverStatusEl.textContent = "Recovering " + iface + "\u2026";
+            try {
+              await transceiverCallRecover(dev, [iface]);
+              if (recoverStatusEl) recoverStatusEl.textContent = "OK: " + iface;
+            } catch (err) {
+              if (recoverStatusEl) recoverStatusEl.textContent = "Error: " + (err.message || String(err));
+            }
+          } else {
+            if (recoverStatusEl) recoverStatusEl.textContent = "Clear counters " + iface + "\u2026";
+            try {
+              await transceiverCallClearCounters(dev, iface);
+              if (recoverStatusEl) recoverStatusEl.textContent = "OK: clear counters " + iface;
+            } catch (err) {
+              if (recoverStatusEl) recoverStatusEl.textContent = "Error: " + (err.message || String(err));
+            }
+          }
+          btn.disabled = false;
+        });
+      }
+      var recoverAllBtn = document.getElementById("transceiverRecoverAllBtn");
+      if (recoverAllBtn) recoverAllBtn.addEventListener("click", async function() {
+        var errRows = transceiverTableRows.filter(function(r) { return transceiverStatusHasErr(r.status); });
+        var recoverableRows = errRows.filter(function(r) { return transceiverIsLeafHostRecoverablePort(r); });
+        if (!recoverableRows.length) {
+          if (recoverStatusEl) recoverStatusEl.textContent = errRows.length ? "No Leaf host ports (Ethernet1/1-1/48) in error state to recover." : "No error interfaces.";
+          return;
+        }
+        var groups = {};
+        recoverableRows.forEach(function(r) {
+          var dev = null;
+          var h = (r.hostname || "").trim();
+          var ip = (r.ip || "").trim();
+          if (h && transceiverDeviceMap[h]) dev = transceiverDeviceMap[h];
+          else if (ip && transceiverDeviceMap["ip:" + ip]) dev = transceiverDeviceMap["ip:" + ip];
+          if (!dev) return;
+          var k = (dev.hostname || dev.ip || "").trim();
+          if (!groups[k]) groups[k] = { device: dev, interfaces: [] };
+          var ifn = (r.interface || "").trim();
+          if (ifn && groups[k].interfaces.indexOf(ifn) === -1) groups[k].interfaces.push(ifn);
+        });
+        var keys = Object.keys(groups);
+        if (!keys.length) { if (recoverStatusEl) recoverStatusEl.textContent = "No devices mapped; run transceiver check again."; return; }
+        recoverAllBtn.disabled = true;
+        if (recoverStatusEl) recoverStatusEl.textContent = "Running recovery\u2026";
+        try {
+          for (var i = 0; i < keys.length; i++) {
+            var g = groups[keys[i]];
+            await transceiverCallRecover(g.device, g.interfaces);
+          }
+          if (recoverStatusEl) recoverStatusEl.textContent = "Recovery all completed.";
+        } catch (err) {
+          if (recoverStatusEl) recoverStatusEl.textContent = "Error: " + (err.message || String(err));
+        }
+        recoverAllBtn.disabled = false;
+      });
       if (runBtn && tbody) runBtn.addEventListener("click", async function() {
         var devices = getSelectedTransceiverDevices();
         if (!devices.length) { statusEl.textContent = "Select one or more devices."; return; }
         statusEl.textContent = "";
+        transceiverDeviceMap = {};
+        devices.forEach(function(d) {
+          var h = (d.hostname || "").trim();
+          var ip = (d.ip || "").trim();
+          if (h) transceiverDeviceMap[h] = d;
+          if (ip) transceiverDeviceMap["ip:" + ip] = d;
+        });
+        var TRANSCEIVER_PARALLEL = 20;
+        function transceiverDeviceKey(d) {
+          return ((d.hostname || "").trim() || (d.ip || "").trim() || "?");
+        }
+        function errMatchesDevice(err, device, key) {
+          var eh = (err && err.hostname ? String(err.hostname) : "").trim();
+          if (!eh) return false;
+          var h = (device.hostname || "").trim();
+          var ip = (device.ip || "").trim();
+          return eh === h || eh === ip || eh === key;
+        }
+        initHeaderProgressDetail(devices);
         showHeaderProgress(devices.length);
         runBtn.disabled = true;
+        var allRows = [];
+        var allErrs = [];
+        var allInterfaceStatusTraces = [];
+        var doneCount = 0;
         try {
-          var res = await fetch(API + "/api/transceiver", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ devices: devices }) });
-          var data = await res.json();
-          updateHeaderProgress(devices.length, devices.length);
-          var rows = data.rows || [];
-          var errs = data.errors || [];
-          if (errs.length) statusEl.textContent = errs.length + " device(s) had errors.";
-          transceiverTableRows = rows;
+          for (var bi = 0; bi < devices.length; bi += TRANSCEIVER_PARALLEL) {
+            var batch = devices.slice(bi, bi + TRANSCEIVER_PARALLEL);
+            await Promise.all(batch.map(function(device) {
+              return (async function() {
+                var key = transceiverDeviceKey(device);
+                updateHeaderProgressDetailPhase(key, "running", "Transceiver API…");
+                try {
+                  var res = await fetch(API + "/api/transceiver", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ devices: [device] }) });
+                  var data;
+                  try {
+                    data = await res.json();
+                  } catch (parseErr) {
+                    throw new Error("Invalid JSON response");
+                  }
+                  if (!res.ok) {
+                    var msg = (data && data.error) ? data.error : (res.statusText || "HTTP " + res.status);
+                    allErrs.push({ hostname: key, error: msg });
+                    updateHeaderProgressDetailPhase(key, "error", msg);
+                  } else {
+                    var rows = data.rows || [];
+                    var errs = data.errors || [];
+                    allRows = allRows.concat(rows);
+                    allErrs = allErrs.concat(errs);
+                    if (data.interface_status_trace && data.interface_status_trace.length) {
+                      allInterfaceStatusTraces = allInterfaceStatusTraces.concat(data.interface_status_trace);
+                    }
+                    var hostErr = null;
+                    for (var ei = 0; ei < errs.length; ei++) {
+                      if (errMatchesDevice(errs[ei], device, key)) { hostErr = errs[ei]; break; }
+                    }
+                    if (hostErr) {
+                      updateHeaderProgressDetailPhase(key, "error", (hostErr.error || "Error").trim());
+                    } else if (rows.length) {
+                      updateHeaderProgressDetailPhase(key, "done", "OK (" + rows.length + " row" + (rows.length === 1 ? "" : "s") + ")");
+                    } else {
+                      updateHeaderProgressDetailPhase(key, "done", "No transceiver rows");
+                    }
+                  }
+                } catch (e) {
+                  allErrs.push({ hostname: key, error: e.message || String(e) });
+                  updateHeaderProgressDetailPhase(key, "error", e.message || "Request failed");
+                }
+                doneCount++;
+                updateHeaderProgress(doneCount, devices.length);
+              })();
+            }));
+          }
+          if (allErrs.length) statusEl.textContent = allErrs.length + " device(s) had errors.";
+          transceiverTableRows = allRows;
           renderTransceiverTable();
-          tableWrap.style.display = rows.length ? "block" : "none";
-          if (!rows.length && !errs.length) statusEl.textContent = "No transceiver data returned.";
+          tableWrap.style.display = allRows.length ? "block" : "none";
+          if (!allRows.length && !allErrs.length) statusEl.textContent = "No transceiver data returned.";
+          var traceDet = document.getElementById("transceiverInterfaceStatusTrace");
+          var tracePre = document.getElementById("transceiverInterfaceStatusTracePre");
+          if (traceDet && tracePre) {
+            if (allInterfaceStatusTraces.length) {
+              tracePre.textContent = JSON.stringify(allInterfaceStatusTraces, null, 2);
+              traceDet.style.display = "block";
+            } else {
+              traceDet.style.display = "none";
+              tracePre.textContent = "";
+            }
+          }
         } catch (e) {
           statusEl.textContent = "Error: " + (e.message || "Request failed");
         }
@@ -2451,7 +3070,7 @@
             description: (row.description != null ? String(row.description) : "").trim() || "-",
             state: (row.state != null ? String(row.state) : "").trim() || "-",
             last_link_flapped: (row.last_link_flapped != null ? String(row.last_link_flapped) : "").trim() || "-",
-            flap_counter: (row.flap_counter != null ? String(row.flap_counter) : row.in_errors != null ? String(row.in_errors) : "").trim() || "-"
+            flap_counter: (row.flap_counter != null ? String(row.flap_counter) : row.flap_count != null ? String(row.flap_count) : "").trim() || "-"
           });
         });
       });
@@ -2912,7 +3531,7 @@
       }
     }
     window.addEventListener("hashchange", onHashChange);
-    window.addEventListener("load", function() { initErrorCountBtn(); onHashChange(); });
+    window.addEventListener("load", function() { initErrorCountBtn(); initHeaderProgressDetailUi(); initCommandLogsUi(); onHashChange(); });
     const hamburgerBtn = document.getElementById("hamburgerBtn");
     const menuOverlay = document.getElementById("menuOverlay");
     const menuSidebar = document.querySelector(".menu-sidebar");

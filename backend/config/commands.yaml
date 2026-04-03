@@ -32,7 +32,7 @@ commands:
   - id: arista_show_interfaces_status
     vendor: Arista
     model: EOS
-    roles: [Leaf, Spine, Wan-Edge, Border-Leaf, Border-Gateway]
+    roles: [Leaf, Spine, Wan-Edge, Border-Leaf, Border-Gateway, Wan-Router, DCI-Router]
     method: api
     api:
       path: /command-api
@@ -59,7 +59,7 @@ commands:
   - id: cisco_nxos_show_interface_status
     vendor: Cisco
     model: NX-OS
-    roles: [Leaf, Spine, Wan-Edge, Border-Leaf, Border-Gateway]
+    roles: [Leaf, Spine, Wan-Edge, Border-Leaf, Border-Gateway, Wan-Router, DCI-Router]
     method: api
     api:
       path: /ins
@@ -68,7 +68,7 @@ commands:
   - id: cisco_nxos_show_interface
     vendor: Cisco
     model: NX-OS
-    roles: [Leaf, Spine, Wan-Edge, Border-Leaf, Border-Gateway]
+    roles: [Leaf, Spine, Wan-Edge, Border-Leaf, Border-Gateway, Wan-Router, DCI-Router]
     method: api
     api:
       path: /ins
@@ -190,7 +190,7 @@ commands:
   - id: cisco_nxos_show_interface_transceiver
     vendor: Cisco
     model: NX-OS
-    roles: [Leaf, Spine, Wan-Edge, Border-Leaf, Border-Gateway]
+    roles: [Leaf, Spine, Wan-Edge, Border-Leaf, Border-Gateway, Wan-Router, DCI-Router]
     method: api
     api:
       path: /ins
@@ -205,15 +205,6 @@ commands:
       path: /command-api
       commands: ["show interfaces | json"]
 
-  - id: cisco_nxos_show_interface_status
-    vendor: Cisco
-    model: NX-OS
-    roles: [Leaf, Spine, Wan-Edge, Border-Leaf, Border-Gateway]
-    method: api
-    api:
-      path: /ins
-      commands: ["show interface status"]
-
   - id: arista_show_interface_description
     vendor: Arista
     model: EOS
@@ -226,7 +217,7 @@ commands:
   - id: cisco_nxos_show_interface_description
     vendor: Cisco
     model: NX-OS
-    roles: [Leaf, Spine, Wan-Edge, Border-Leaf, Border-Gateway]
+    roles: [Leaf, Spine, Wan-Edge, Border-Leaf, Border-Gateway, Wan-Router, DCI-Router]
     method: api
     api:
       path: /ins
@@ -235,7 +226,7 @@ commands:
   - id: cisco_nxos_show_interface_mtu
     vendor: Cisco
     model: NX-OS
-    roles: [Leaf, Spine, Wan-Edge, Border-Leaf, Border-Gateway]
+    roles: [Leaf, Spine, Wan-Edge, Border-Leaf, Border-Gateway, Wan-Router, DCI-Router]
     method: api
     api:
       path: /ins
