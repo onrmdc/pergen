@@ -14,7 +14,7 @@ A web panel for pre/post checks, NAT lookup, Find Leaf, BGP Looking Glass, route
 | **Find Leaf** | Locate which leaf switch has a given IP in the fabric (uses devices with tag `leaf-search`). |
 | **BGP / Looking Glass** | Prefix or AS lookup via RIPEStat: status, RPKI, visibility, history diff. Per-prefix best two AS paths from one router (with router icon viz). WAN RTR search: which WAN routers have `router bgp <AS>` in config. |
 | **REST API** | Run single or multi eAPI (Arista) requests on selected devices. |
-| **Transceiver Check** | SFP/optics DOM (temp, power) per interface on Arista and Cisco NX-OS. |
+| **Transceiver Check** | SFP/optics DOM (temp, TX/RX power) per interface on **Arista EOS** and **Cisco NX-OS** (NX-API). Merges interface status for status, flap count, **CRC / input errors** (`errors` column as `crc/in`), and **Last Flap** as `DDMMYYYY-HHMM` when a timestamp is available. Cisco uses `show interface` detail where needed for flap/CRC counters. **Interfaces with error in status** lists err-disabled-style ports; **Recover** (bounce) and **clear counters** use icon buttons with tooltips. Recovery and clear-counters are **only allowed for inventory role `Leaf`** on host ports **Ethernet1/1–Ethernet1/48** (or `1/1`–`1/48`); enforced in the API. Requires a **basic** (username/password) credential, not API-key-only. |
 | **Credential** | Store and manage login credentials (encrypted); reference by name in inventory. |
 | **DCI / WAN Routers** | Compare route-maps on Arista DCI/WAN routers; search by prefix. |
 | **Subnet Divide Calculator** | Visual subnet calculator: network + mask, divide/join subnets in a table. Inspired by [davidc/subnets](https://github.com/davidc/subnets) — thank you. |
@@ -66,7 +66,7 @@ Order: Home → Navigation (event popups) → Pre/Post Check → Pre/Post consis
 
 ![BGP WAN paths](backend/static/screenshots/bgp-wan-paths.png)
 
-**Transceiver Check** — Device selection and DOM results (TX/RX power)
+**Transceiver Check** — Fabric/site/hall/role filters, device multi-select, main table (hostname, interface, description, optics, status, Last Flap, Flap, CRC/Input Err), and optional error-status table with recover/clear actions for eligible Leaf host ports.
 
 ![Transceiver](backend/static/screenshots/transceiver.png)
 
@@ -139,6 +139,16 @@ UI: `backend/static/index.html` at `/`. Inventory: `backend/inventory/inventory.
 | `GET /api/bgp/status?prefix=&asn=` | BGP status (RIPEStat) |
 | `GET /api/bgp/looking-glass?prefix=&asn=` | Looking Glass peers |
 | `GET /api/bgp/wan-rtr-match?asn=` | WAN routers with `router bgp <AS>` |
+| `POST /api/transceiver` | Transceiver + interface status; body `{"devices": [<inventory device dict>, ...]}`; returns `rows`, `errors`, `interface_status_trace` |
+| `POST /api/transceiver/recover` | Bounce interfaces (configure + shutdown / no shutdown); body `{"device": {...}, "interfaces": ["Ethernet1/1", ...]}`; **Leaf + Ethernet1/1–1/48 only**; basic credential |
+| `POST /api/transceiver/clear-counters` | `clear counters interface <name>`; body `{"device": {...}, "interface": "..."}`; same Leaf/host-port rules |
+
+### Transceiver implementation notes
+
+- **Commands** are defined in `backend/config/commands.yaml`; parsers in `backend/config/parsers.yaml` with custom logic in `backend/parse_output.py`.
+- **Runner** supports `command_id_filter` (substring) and `command_id_exact` for a single command id (e.g. Cisco `show interface` without matching `show interface status` twice).
+- **Policy**: `backend/transceiver_recovery_policy.py` (`Leaf` role + `Ethernet1/1`–`Ethernet1/48` / short `1/x` form).
+- **Recovery**: `backend/runners/interface_recovery.py` (Arista eAPI configure, Cisco NX-OS SSH PTY for config lines).
 
 ## Security and Git (no credentials in repo)
 
@@ -166,7 +176,9 @@ If you already committed `inventory.csv`, `example_inventory.csv`, or `.env` in 
 - **Connection refused (HTTPS to device)** — Device unreachable on port 443 or eAPI not enabled. Check firewall and device config.
 - **“Only Arista EOS supported”** — The operation (e.g. route-map compare, WAN RTR config check) is implemented for Arista EOS. Other vendors (e.g. Cisco NX-OS) are not supported for that feature yet.
 - **Event bar** — Top bar shows success (green), warnings (amber), and errors (red). Click a counter to open the event list and see timestamps and messages.
+- **Transceiver recovery “not allowed”** — Device must have **role** `Leaf` in inventory, and the interface must match **Ethernet1/1** through **Ethernet1/48** (first module, ports 1–48). Spine or uplink interfaces are blocked by policy.
+- **Recovery requires basic credential** — API-key-only credentials cannot run SSH recover or clear-counters; configure a username/password credential in the app and reference it in inventory.
 
 ## Help
 
-In the app, open **Help** from the menu for a short guide to each page (navigation, Pre/Post, NAT, Find Leaf, BGP, REST API, Transceiver, Credential, DCI/WAN Routers, Inventory, tables, theme).
+In the app, open **Help** from the menu for a short guide to each page (navigation, Pre/Post, NAT, Find Leaf, BGP, REST API, Transceiver—including optics columns and error recovery—Credential, DCI/WAN Routers, Inventory, tables, theme).
