@@ -309,7 +309,12 @@ def api_run_post_complete():
     run_id = (data.get("run_id") or "").strip()
     device_results = data.get("device_results") or []
     store = _state_store()
-    pre_run = store.get(run_id)
+    # Wave-4 W4-H-01: pass actor= so cross-actor reads are refused.
+    # Pre-wave-4 this call was missing the actor argument — a forgotten
+    # site from the wave-3 Phase 4 sweep. Bob could otherwise complete
+    # alice's PRE run and persist tampered POST results to disk under
+    # her run_id. See docs/security/audit_2026-04-22-wave4.md.
+    pre_run = store.get(run_id, actor=_current_actor())
     if not run_id or pre_run is None:
         return jsonify({"error": "run_id not found or expired"}), 404
     if pre_run.get("phase") != "PRE":
