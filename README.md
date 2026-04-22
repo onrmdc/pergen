@@ -25,13 +25,18 @@
 > tests (+16 tests), and the Playwright harness fix that prevents flow
 > specs from polluting the operator's real `instance/` dir.
 >
-> Every existing API still ships unchanged — **1,368 pytest tests +
-> 16 Vitest + 69 Playwright** lock the response shapes byte-for-byte
+ > Every existing API still ships unchanged — **1,394 pytest tests +
+> 37 Vitest + 85 Playwright** lock the response shapes byte-for-byte
 > across all 28 golden parser snapshots.
 >
-> **Coverage:** **87 %** on the parser surface (was 67 % pre-wave-2);
-> **78.33 %** whole-project (line 82.47 %, branch 68.13 %); 94 % on
+> **Coverage:** **87 %** on the parser surface; **84.17 %**
+> whole-project (was 78.33 % at wave-3 start; +5.84 pp); 94 % on
 > the new OOD layer.
+>
+> **Wave-3 closed every audit-tracker `xfail`**: 24 → 0. All 4 god
+> modules (find_leaf, nat_lookup, bgp_looking_glass, route_map_analysis)
+> split into packages following the parse_output playbook. See
+> [`docs/refactor/wave3_roadmap.md`](docs/refactor/wave3_roadmap.md).
 >
 > **Recent UI/Boot work** (post-batch-4): the Phase-13 CSP
 > (`script-src 'self'`) was silently blocking the SPA. Inline `<script>`

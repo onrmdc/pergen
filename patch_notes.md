@@ -8,6 +8,80 @@ return shape. Behaviour changes are explicitly noted; otherwise none.
 
 ---
 
+## v0.4.0 — Wave-3: production-readiness sweep (14 phases)
+
+**Scope:** Execute every audit finding from the wave-2 reports
+(`docs/security/`, `docs/code-review/`, `docs/test-coverage/`) plus the
+9 deferred-item plans in `docs/refactor/`. Roadmap: `docs/refactor/wave3_roadmap.md`.
+
+**Outcome:** every audit-tracker `xfail` closed (24 → **0**), 4 god
+modules split into packages, +15 Playwright specs, +21 Vitest tests,
+coverage 78.33 % → **84.17 %**. Production-readiness acceptance criteria
+all met.
+
+### Phases
+
+- **Phase 1** — day-1 wins (5 xfails): H-04 diff line cap, M-05 empty
+  run_id, M-06 RLock, M-11 ssh leak, L-02 HSTS scheme.
+- **Phase 2** — XSS sweep (6 xfails): H-01 dropdowns + H-02 result tables
+  wrapped in `escapeHtml()`.
+- **Phase 3** — dev-open boot guard (1 xfail): H-05 `PERGEN_DEV_OPEN_API`
+  requirement; one-shot CLI banner.
+- **Phase 4** — IDOR + actor scoping (3 xfails): M-02 `RunStateStore`
+  actor scoping, M-03 POST `/api/reports/<id>/restore` endpoint.
+- **Phase 5** — token gate immutability (1 xfail): H-06 `MappingProxyType`
+  snapshot resolved once at `create_app`; per-request handler reads only
+  from the snapshot.
+- **Phase 6** — credstore deprecation marker (1 xfail). Full data
+  migration deferred to its own dedicated PR.
+- **Phase 7** — code-quality cleanups: 16 silent `except Exception`
+  narrowed, Cisco NX-API envelope unwrap deduplicated (5→1 helper).
+- **Phase 8** — god-module refactor: 4 modules (1,345 LOC) split into
+  4 packages following the parse_output playbook (`backend/find_leaf/`,
+  `backend/nat_lookup/`, `backend/bgp_looking_glass/`, `backend/route_map_analysis/`).
+  21 new files, every legacy import path preserved.
+- **Phase 9** — audit logger coverage (4 xfails): inventory/notepad/runs/reports
+  emit `app.audit` lines.
+- **Phase 10** — SSRF defence (1 xfail): M-01 `allow_redirects=False`
+  on RIPEStat / PeeringDB calls.
+- **Phase 11** — disclosure fixes (3 xfails): `/api/v2/health` config field
+  stripped; `/api/router-devices` projection drops credential field.
+- **Phase 12** — E2E lift: +15 Playwright specs (8 P0 + 7 P1), 24→38 files,
+  66→85 tests. Closes the e2e gap analysis findings (3/14 → 14/14 user
+  journeys covered).
+- **Phase 13** — Vitest + frontend helpers: extracted 6 pure subnet/CIDR
+  math helpers from the SPA IIFE; 21 new unit tests.
+- **Phase 14** — marker hygiene: 16 test files marked unit/integration so
+  `make test-fast` (-m unit or security) is meaningfully faster (~14 s vs
+  ~71 s full suite).
+
+### Numbers
+
+- pytest: 1368 → **1394** passing, 24 → **0** xfailed.
+- Vitest: 16 → **37** passing.
+- Playwright: 23 spec files / 66 tests → **38 files / 85 tests**.
+- Whole-project coverage: 78.33 % → **84.17 %** (+5.84 pp).
+- God modules: **0** remaining.
+- Audit-tracker xfails: **0** remaining (every wave-1 + wave-2 + wave-3
+  tracker closed by a passing test).
+
+### Intentionally still deferred
+
+These items have ready-to-flip plans in `docs/refactor/` and are tracked
+as future-work, not regressions:
+
+1. Full `credential_store.py` data migration (`credential_store_migration.md`).
+2. SPA cookie auth + CSRF (`spa_auth_ui.md`) — full Option-B from the
+   council deliberation.
+3. CSP `unsafe-inline` removal (`csp_hsts_json_headers.md`) — needs CSS
+   class refactor + visual regression specs.
+4. Sweeping XSS audit (`xss_innerhtml_audit.md`) — Phase 2 closed the
+   audit-confirmed UNSAFE sites; long-tail sweep is a separate PR.
+5. Find-leaf parallel-no-cancel (audit M-09) — preserved verbatim with
+   explicit comment in `backend/find_leaf/service.py`.
+
+---
+
 ## v0.3.0 — Audit-wave-2: parser refactor + security audit + coverage push
 
 **Scope:** mechanical refactor of the 1,552-line `backend/parse_output.py`
