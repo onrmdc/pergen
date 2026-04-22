@@ -1084,8 +1084,8 @@ def test_credentials_create_invalid_name_400(client):
 # =========================================================================== #
 
 
-def test_report_get_restore_pushes_into_run_state(client):
-    """?restore=1 must push the saved report back into run state."""
+def test_report_post_restore_pushes_into_run_state(client):
+    """Audit M-03: POST /api/reports/<id>/restore pushes back to run state."""
     devices = [{"hostname": "leaf-1", "ip": "10.0.0.1"}]
     pre_results = [{"hostname": "leaf-1", "parsed_flat": {}}]
     create = client.post(
@@ -1093,7 +1093,7 @@ def test_report_get_restore_pushes_into_run_state(client):
         json={"devices": devices, "device_results": pre_results, "name": "audit"},
     )
     rid = create.get_json()["run_id"]
-    r = client.get(f"/api/reports/{rid}?restore=1")
+    r = client.post(f"/api/reports/{rid}/restore")
     assert r.status_code == 200
     # Verify it landed in the run-state store
     flask_app = client.application
@@ -1101,6 +1101,12 @@ def test_report_get_restore_pushes_into_run_state(client):
     state = store.get(rid)
     assert state is not None
     assert state["phase"] == "PRE"
+
+
+def test_legacy_get_restore_returns_405(client):
+    """Audit M-03: legacy GET ?restore=1 must be rejected with 405."""
+    r = client.get("/api/reports/anything?restore=1")
+    assert r.status_code == 405
 
 
 def test_reports_list_returns_empty_on_storage_error(client):

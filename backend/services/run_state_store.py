@@ -47,8 +47,15 @@ class RunStateStore:
     # ------------------------------------------------------------------ #
     # Public API                                                         #
     # ------------------------------------------------------------------ #
-    def get(self, run_id: str) -> dict | None:
-        """Return a *deep copy* of the stored value, or ``None`` if expired/missing."""
+    def get(self, run_id: str, actor: str | None = None) -> dict | None:
+        """Return a *deep copy* of the stored value, or ``None`` if expired/missing.
+
+        Audit M-02: when ``actor`` is supplied, the call returns ``None`` for
+        runs created by a different actor (treats IDOR mismatch identically
+        to "not found" so the response cannot disclose run-id existence).
+        ``actor=None`` retains the legacy permissive behaviour for callers
+        that have not yet adopted scoping (e.g. internal admin paths).
+        """
         with self._lock:
             entry = self._state.get(run_id)
             if entry is None:
@@ -58,15 +65,27 @@ class RunStateStore:
                 # Lazy expiry — pop on read.
                 self._state.pop(run_id, None)
                 return None
+            # Audit M-02 actor scoping: refuse cross-actor reads.
+            owner = value.get("_created_by_actor")
+            if actor is not None and owner is not None and owner != actor:
+                return None
             # Move to end (LRU touch) so accessed runs survive eviction.
             self._state.move_to_end(run_id)
             return copy.deepcopy(value)
 
-    def set(self, run_id: str, value: dict) -> None:
-        """Store a *deep copy* of ``value`` under ``run_id``."""
+    def set(self, run_id: str, value: dict, *, actor: str | None = None) -> None:
+        """Store a *deep copy* of ``value`` under ``run_id``.
+
+        Audit M-02: ``actor`` (when supplied) is recorded under the
+        reserved key ``_created_by_actor`` so a later ``get(actor=...)``
+        can refuse cross-actor reads.
+        """
         with self._lock:
             self._evict_expired()
-            self._state[run_id] = (time.monotonic(), copy.deepcopy(value))
+            stored = copy.deepcopy(value)
+            if actor is not None:
+                stored["_created_by_actor"] = actor
+            self._state[run_id] = (time.monotonic(), stored)
             self._state.move_to_end(run_id)
             # FIFO cap (oldest entry first).
             while len(self._state) > self._max:

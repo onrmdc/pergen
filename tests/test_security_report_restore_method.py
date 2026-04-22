@@ -16,10 +16,6 @@ import pytest
 pytestmark = [pytest.mark.security]
 
 
-@pytest.mark.xfail(
-    reason="audit M-03 — restore is reachable via GET; should require POST",
-    strict=True,
-)
 def test_restore_via_get_is_method_not_allowed(client) -> None:
     """A GET to /api/reports/<id>?restore=1 must return 405."""
     # Use any string id; the method check should reject before lookup.
@@ -29,16 +25,11 @@ def test_restore_via_get_is_method_not_allowed(client) -> None:
     )
 
 
-@pytest.mark.xfail(
-    reason="audit M-03 — POST verb for restore is not yet implemented (currently 405)",
-    strict=True,
-)
 def test_restore_via_post_is_supported(client) -> None:
-    """Once M-03 lands, POST must be the supported verb for restore."""
-    # Today returns 405 because /api/reports/<id> only accepts GET.
-    # When the fix lands, POST should return 200/204/404 (depending on id).
-    r = client.post("/api/reports/nonexistent?restore=1")
+    """M-03 fix: POST /api/reports/<id>/restore is the new restore verb."""
+    # 404 for unknown id is fine; 405 would mean POST isn't supported.
+    r = client.post("/api/reports/nonexistent/restore")
     assert r.status_code in (200, 204, 404), (
-        f"POST /api/reports/<id>?restore=1 returned {r.status_code}; "
+        f"POST /api/reports/<id>/restore returned {r.status_code}; "
         f"M-03 fix requires POST support for restore"
     )

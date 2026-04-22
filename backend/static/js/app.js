@@ -4608,12 +4608,18 @@
       var deviceResults = report.device_results || [];
       if (!devices.length || !deviceResults.length) {
         try {
-          var getRes = await fetch(API + "/api/reports/" + encodeURIComponent(report.run_id) + "?restore=1");
+          // Audit M-03: restore is now POST /api/reports/<id>/restore
+          // (the legacy GET ?restore=1 is rejected with 405). The fetch
+          // does both the read and the run-state write atomically.
+          var getRes = await fetch(API + "/api/reports/" + encodeURIComponent(report.run_id));
           var fullReport = await getRes.json();
           if (!getRes.ok) {
             $("runStatus").textContent = "Could not load report: " + (fullReport.error || getRes.status);
             return;
           }
+          // Push the report back into the in-memory run-state store so the
+          // POST run path can pick it up.
+          await fetch(API + "/api/reports/" + encodeURIComponent(report.run_id) + "/restore", { method: "POST" });
           report = fullReport;
           devices = report.devices || [];
           deviceResults = report.device_results || [];

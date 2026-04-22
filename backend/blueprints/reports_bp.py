@@ -44,7 +44,43 @@ def api_reports_list():
 
 @reports_bp.route("/api/reports/<run_id>", methods=["GET"])
 def api_report_get(run_id: str):
-    """Fetch saved report. ``?restore=1`` also pushes it back to run state."""
+    """Fetch saved report.
+
+    Audit M-03: ``?restore=1`` previously triggered a side-effect (write
+    to the run-state store) via a GET request — semantically incorrect
+    and would dodge any future POST-only CSRF guard. The restore branch
+    is now served by ``POST /api/reports/<run_id>/restore``; this GET
+    route only reads.
+    """
+    run_id = (run_id or "").strip()
+    if not run_id:
+        return jsonify({"error": "run_id required"}), 400
+    if request.args.get("restore") == "1":
+        # Refuse the legacy GET-side-effect form. Operators must use the
+        # explicit POST /restore endpoint.
+        return (
+            jsonify(
+                {
+                    "error": (
+                        "restore via GET is no longer supported — use "
+                        "POST /api/reports/<run_id>/restore"
+                    )
+                }
+            ),
+            405,
+        )
+    try:
+        report = _service().load(run_id)
+    except Exception:  # noqa: BLE001
+        return jsonify({"error": "failed to load report"}), 500
+    if report is None:
+        return jsonify({"error": "report not found"}), 404
+    return jsonify(report)
+
+
+@reports_bp.route("/api/reports/<run_id>/restore", methods=["POST"])
+def api_report_restore(run_id: str):
+    """Restore a saved report into the run-state store (audit M-03)."""
     run_id = (run_id or "").strip()
     if not run_id:
         return jsonify({"error": "run_id required"}), 400
@@ -54,20 +90,30 @@ def api_report_get(run_id: str):
         return jsonify({"error": "failed to load report"}), 500
     if report is None:
         return jsonify({"error": "report not found"}), 404
-    if request.args.get("restore") == "1":
-        _state_store().set(
-            run_id,
-            {
-                "phase": "POST" if report.get("post_created_at") else "PRE",
-                "devices": report.get("devices") or [],
-                "device_results": report.get("device_results") or [],
-                "created_at": report.get("created_at"),
-                "post_device_results": report.get("post_device_results"),
-                "post_created_at": report.get("post_created_at"),
-                "comparison": report.get("comparison"),
-            },
-        )
-    return jsonify(report)
+    # Use the wave-3 actor scoping so subsequent reads honour M-02.
+    actor = None
+    try:
+        from flask import g as _g
+
+        actor = getattr(_g, "actor", None)
+        if not actor or actor == "anonymous":
+            actor = None
+    except Exception:  # pragma: no cover — defensive
+        actor = None
+    _state_store().set(
+        run_id,
+        {
+            "phase": "POST" if report.get("post_created_at") else "PRE",
+            "devices": report.get("devices") or [],
+            "device_results": report.get("device_results") or [],
+            "created_at": report.get("created_at"),
+            "post_device_results": report.get("post_device_results"),
+            "post_created_at": report.get("post_created_at"),
+            "comparison": report.get("comparison"),
+        },
+        actor=actor,
+    )
+    return jsonify({"ok": True, "run_id": run_id})
 
 
 @reports_bp.route("/api/reports/<run_id>", methods=["DELETE"])

@@ -25,7 +25,23 @@ import difflib
 import uuid
 from datetime import UTC, datetime
 
-from flask import Blueprint, current_app, jsonify, request
+from flask import Blueprint, current_app, g, jsonify, request
+
+
+def _current_actor() -> str | None:
+    """Return the authenticated actor name (or None when gate is disabled).
+
+    Audit M-02: routes that store per-run state record this actor so a
+    later read by a different actor returns 404 (treats IDOR mismatch
+    identically to "not found" so the response cannot disclose the
+    existence of another operator's run).
+    """
+    actor = getattr(g, "actor", None)
+    # The gate sets g.actor = "anonymous" when no token is configured; that
+    # mode is opt-in (audit H-05) so we treat it as "scoping disabled".
+    if not actor or actor == "anonymous":
+        return None
+    return str(actor)
 
 from backend import credential_store as creds
 from backend.runners.runner import run_device_commands
@@ -158,6 +174,7 @@ def api_run_pre():
             "device_results": device_results,
             "created_at": created_at,
         },
+        actor=_current_actor(),
     )
     return jsonify(
         {
@@ -190,6 +207,7 @@ def api_run_pre_create():
             "device_results": device_results,
             "created_at": created_at,
         },
+        actor=_current_actor(),
     )
     with contextlib.suppress(Exception):  # persistence is best-effort
         _report_service().save(
@@ -224,6 +242,7 @@ def api_run_pre_restore():
             "device_results": device_results,
             "created_at": created_at,
         },
+        actor=_current_actor(),
     )
     return jsonify({"ok": True})
 
@@ -239,7 +258,8 @@ def api_run_post():
     data = request.get_json(silent=True) or {}
     run_id = (data.get("run_id") or "").strip()
     store = _state_store()
-    pre_run = store.get(run_id)
+    # Audit M-02: actor scoping — bob cannot run POST against alice's PRE.
+    pre_run = store.get(run_id, actor=_current_actor())
     if not run_id or pre_run is None:
         return jsonify({"error": "run_id not found or expired"}), 404
     if pre_run.get("phase") != "PRE":
@@ -382,7 +402,12 @@ def api_diff():
 
 @runs_bp.route("/api/run/result/<run_id>", methods=["GET"])
 def api_run_result(run_id: str):
-    state = _state_store().get(run_id)
+    # Audit M-02: pass the authenticated actor so the store can refuse
+    # cross-actor reads. None (gate disabled) preserves legacy permissive
+    # behaviour.
+    state = _state_store().get(run_id, actor=_current_actor())
     if state is None:
         return jsonify({"error": "not found"}), 404
+    # Strip the internal scoping marker from the externally-visible payload.
+    state.pop("_created_by_actor", None)
     return jsonify(state)
