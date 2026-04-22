@@ -21,9 +21,12 @@
 10. [Tooling & Developer Experience](#10-tooling--developer-experience)
 11. [Documentation](#11-documentation)
 12. [What Upstream Has That Was Restructured](#12-what-upstream-has-that-was-restructured)
-13. [Risks & Trade-offs](#13-risks--trade-offs)
-14. [Recommended Path Forward](#14-recommended-path-forward)
-15. [Appendix: Full File Inventory](#15-appendix-full-file-inventory)
+13. [Architectural Differences (Pattern-Level)](#13-architectural-differences-pattern-level)
+14. [Business-Logic Differences](#14-business-logic-differences)
+15. [Usage Differences (Operator-Facing)](#15-usage-differences-operator-facing)
+16. [Risks & Trade-offs](#16-risks--trade-offs)
+17. [Recommended Path Forward](#17-recommended-path-forward)
+18. [Appendix: Full File Inventory](#18-appendix-full-file-inventory)
 
 ---
 
@@ -80,7 +83,7 @@ $ git diff origin/main..HEAD --diff-filter=D --name-only | wc -l
 **Top-level files added:** `ARCHITECTURE.md`, `FUNCTIONS_EXPLANATIONS.md`, `HOWTOUSE.md`, `TEST_RESULTS.md`,
 `patch_notes.md`, `Makefile`, `pyproject.toml`, `pytest.ini`, `requirements-dev.txt`.
 
-**Backend modules added (47):** see [§15 Appendix](#15-appendix-full-file-inventory).
+**Backend modules added (47):** see [§18 Appendix](#18-appendix-full-file-inventory).
 
 **Test files added:** 72 new files under `tests/` (44 top-level test modules + golden + helpers).
 
@@ -526,7 +529,186 @@ layers wrap the legacy code rather than replacing it.
 
 ---
 
-## 13. Risks & Trade-offs
+## 13. Architectural Differences (Pattern-Level)
+
+Sections §3–§7 walked through *what* changed file-by-file. This section consolidates the pattern-level differences in
+one place so a reviewer can see the design shift without scrolling through the structural narrative.
+
+### 13.1 Side-by-side pattern table
+
+| Concern | Upstream `main` (pattern) | `refactor/ood-tdd` (pattern) | Why it matters |
+|---|---|---|---|
+| **App bootstrap** | Side-effect import — `from backend.app import app` builds the global Flask instance and registers routes as a side effect | **Application Factory** — `backend.app_factory.create_app(config_name)` builds and configures `app` explicitly | Multiple app instances per test, env-aware config selection, no hidden global state |
+| **HTTP layer** | God-object — 53 `@app.route` handlers in one 1,727-line module | **Per-domain Flask Blueprints** — 12 modules, 54 routes, registered through the factory | Per-domain ownership, smaller diff blast radius, parallel development |
+| **Business logic** | Inline inside route handlers (DB calls, runner calls, parsing all live next to `request.get_json()`) | **Service Layer** (7 classes) sits between blueprints and storage; blueprints call `service.method(...)` and return the result | Routes become thin (parse → call service → format response); logic is testable without a Flask test client |
+| **Data access** | Direct `sqlite3` / file I/O scattered across handlers | **Repository pattern** (4 classes) wraps storage; services depend on `Repository` interface | Storage swap is a one-class change; tests inject in-memory repositories |
+| **Runners** | Procedural — `run_device_commands(...)` switches on vendor/method strings and calls free functions in `arista_eapi.py` / `cisco_nxapi.py` / `ssh_runner.py` | **`BaseRunner` ABC + `RunnerFactory` singleton cache** — concrete `CiscoNxapiRunner`, `AristaEapiRunner`, `SshRunner` implementing a uniform `run_commands(...)` contract | Adding a vendor is a new subclass + a factory entry; no `if vendor == "..."` cascades |
+| **Parsing** | `parse_output(...)` free function + module-level dict | **`ParserEngine` class** wrapping the legacy dispatcher; unknown command IDs return `{}` (not raise); test doubles inject in-memory registry | Routes / services depend on a single injectable engine object instead of a free function + module dict |
+| **Config** | Module-level constants in `backend/config/settings.py`; `SECRET_KEY` set inline in `app.py` | **Config-class hierarchy** — `BaseConfig` → `DevelopmentConfig` / `TestingConfig` / `ProductionConfig` with `validate()` methods | Per-env validation, fail-fast in production, testable config |
+| **Logging** | `print()` + default Flask logger | **`LoggingConfig`** with text + JSON formatters per env; **`RequestLogger`** middleware adds request-ID + timing on every request | Production logs ship cleanly to ELK / Loki / CloudWatch; cross-request tracing |
+| **Security** | None as a layer — input validation, command guarding, and encryption were ad-hoc inside handlers; credential store had a base64 fallback | **Dedicated `backend/security/` package** with `InputSanitizer`, `CommandValidator`, `EncryptionService`; mandatory `cryptography` and `defusedxml` (no fallbacks) | Single audit surface; reusable across blueprints; fails-closed by design |
+| **Helpers** | ~30 free functions scattered in `app.py` | Extracted to `backend/utils/{bgp_helpers, interface_status, ping, transceiver_display}.py`; re-exported under legacy `_*` names from `app.py` | Small, focused modules; legacy callers still work |
+| **Dependency wiring** | Implicit — modules import each other directly at the top | **Constructor-injected dependencies** in services / repositories; blueprints instantiate the chain at module load | Tests construct a service with mocks; production constructs it with real implementations |
+| **Bootstrap order** | Implicit (whatever import order Python happened to pick) | **Explicit 8-step sequence** documented in `app_factory.py:36-50` — load config → validate → import legacy app → apply config → configure logging → mount middleware → re-init credentials → return app | Reproducible startup; no ordering surprises |
+| **Default behaviour for unknowns** | Mostly raises (KeyError on missing parser, ValueError on bad vendor, no fallback for missing SECRET_KEY) | **Fails closed** with logged WARNING and structured `(False, reason)` envelopes for input; raises `ValueError` only for programmer error (unknown vendor/method in factory) | Predictable, observable failure modes |
+
+### 13.2 Architectural-pattern catalog
+
+| Pattern | Where it appears in the refactor | Reference |
+|---|---|---|
+| Application Factory | `backend/app_factory.py::create_app` | `app_factory.py:53` |
+| Abstract Base Class | `BaseRunner(ABC)` | `backend/runners/base_runner.py:23` |
+| Factory + singleton cache | `RunnerFactory` | `backend/runners/factory.py:34` |
+| Repository | `*Repository` classes | `backend/repositories/*.py` |
+| Service Layer | `*Service` classes | `backend/services/*.py` |
+| Strategy (via runners) | `BaseRunner` subclasses selected by `(vendor, method)` | `backend/runners/factory.py:9-15` |
+| Middleware | `RequestLogger.init_app(app)` | `backend/request_logging.py` |
+| Configuration hierarchy | `BaseConfig` → `Development` / `Testing` / `Production` | `backend/config/app_config.py` |
+| Encrypt-then-MAC | `EncryptionService` (Fernet or AES-128-CBC + HMAC-SHA256) | `backend/security/encryption.py` |
+| Pure-function validators | `InputSanitizer`, `CommandValidator` (static methods, no state) | `backend/security/sanitizer.py`, `validator.py` |
+| Adapter / wrapper | `app_factory.create_app` wraps the legacy `backend.app` module | `app_factory.py:13-35` (documented rationale) |
+
+### 13.3 What this means for a reviewer
+
+- The legacy code is **wrapped, not rewritten** — every legacy module still exists and is still imported by the factory.
+  This is intentional: the 107 golden tests in `tests/golden/` lock the upstream route behaviour, so the refactor
+  cannot silently change a response shape without a test failing.
+- Adding a new feature in the refactor branch: write a service test → write the service method → add a blueprint route
+  that calls it → register the blueprint in the factory. No changes to a 1,700-line `app.py` required.
+- Adding a new feature in upstream: edit `backend/app.py` and hope it stays under 2,000 lines.
+
+---
+
+## 14. Business-Logic Differences
+
+Despite the doc earlier saying "nothing visible to operators was removed", several **observable behaviours** changed.
+These are the deltas a caller would actually notice in a request/response or in the credential database itself.
+
+### 14.1 Behaviour delta table
+
+| Area | Upstream behaviour | Refactor behaviour | Caller-visible change |
+|---|---|---|---|
+| **Credential encryption** | If `cryptography` was missing, `credential_store._encrypt` silently fell back to **base64** (i.e. plaintext-equivalent) | `cryptography` is a hard import; `ImportError` propagates at module load. Audit C-3. | Misconfigured venv now **fails to start** instead of silently downgrading credential storage |
+| **Credential DB file mode** | OS default umask | `_db_path()` chmods `instance/credentials.db` to `0o600` on POSIX every time it's touched. Audit M-6. | DB file is no longer world-readable on a default-umask install |
+| **XML parsing in `nat_lookup`** | Stdlib `xml.etree.ElementTree` (vulnerable to billion-laughs / XXE) wrapped in `try/except` | `defusedxml.ElementTree` is a hard import (declared in `requirements.txt`). Audit H-1. | Crafted firewall responses can no longer DoS the parser; install **fails fast** if `defusedxml` is missing |
+| **`SECRET_KEY` in production** | Inline default; no validation | `ProductionConfig.validate()` rejects the sentinel `pergen-default-secret-CHANGE-ME` AND the historic `dev-secret-change-in-prod`; enforces `len >= 16` | Production deploy with default secret **refuses to start** |
+| **API auth gate** | None | When `PERGEN_API_TOKEN` (or `PERGEN_API_TOKENS=actor1:tok1,...`) is set on the app, every API route requires a matching token. Minimum length **32 chars** (`_MIN_API_TOKEN_LENGTH`). | Endpoints can be locked behind a token without code changes; tokens shorter than 32 chars are rejected at startup |
+| **`/api/ping` SSRF guard** | Direct ICMP based on user-supplied address | `network_ops_bp` validates the address through `InputSanitizer.sanitize_ip` before invoking `single_ping`; rejects loopback / link-local / metadata-service ranges | Pings to `169.254.169.254` etc. now return `400` instead of executing |
+| **Custom command execution** | Any string accepted | `CommandValidator.validate(cmd)` enforces: `isinstance(cmd, str)`, `len <= 512`, NFKC-normalised, must start with `show ` or `dir ` (case-insensitive), and must NOT contain any of: `;`, `&&`, `\|\|`, `` ` ``, `$(`, `conf t`, `configure terminal`, `\| write`, `write mem`, `copy run start`, `copy running-config startup-config` | Calls like `show version; reload` now return `(False, reason)` with HTTP `400` instead of being forwarded to the device |
+| **Input rejection envelope** | Raised exceptions or returned ad-hoc error strings | All new sanitisers / validators return a uniform `(ok: bool, value_or_reason: str)` 2-tuple; never raise; reject null bytes (`\x00`) in every string input; log every rejection at WARNING for SIEM | Error responses are predictable and logged; null-byte injection attempts are detectable |
+| **Unknown parser command ID** | `parse_output(...)` legacy behaviour: typically raised KeyError | `ParserEngine.parse(cmd_id, ...)` returns `{}` for unknown command IDs | A device returning an unmapped command no longer crashes the run loop |
+| **Unknown runner vendor / method** | Implicit fallthrough or KeyError deep inside the runner | `RunnerFactory.get_runner(vendor, model, method)` raises `ValueError` immediately; `_ALLOWED_METHODS = frozenset({"api", "ssh"})` | Misconfigured inventory rows fail with a clear, early error instead of an opaque traceback |
+| **Saved reports storage** | Raw JSON on disk | gzip-compressed JSON via `ReportRepository` (preserved upstream behaviour, but encapsulated) | None functionally; same on-disk format |
+| **Notepad CRUD** | Inline in `app.py` | `NotepadService` + `NotepadRepository` (JSON file backend); same wire format | None functionally; cleaner internal seams |
+| **Transceiver merge (Cisco/Arista)** | Inline merge in `app.py` | `TransceiverService` encapsulates merge + recovery-policy application | None functionally; logic now testable in isolation |
+| **Logging format in prod** | Default Flask text logs | `ProductionConfig` selects JSON formatter via `LoggingConfig`; every request gets a UUID threaded through every line | Log shippers see structured JSON with `request_id` instead of free-text |
+| **Coverage / lint expectations** | None | `ruff check` clean on all new code; `make cov-new` enforces ≥ 90 % on the new OOD layer; `make cov` enforces ≥ 45 % global (legacy code drags average) | New contributions to the refactored layers must keep the gates green |
+
+### 14.2 Things that did NOT change
+
+The following upstream behaviours were intentionally preserved bit-for-bit so operator workflows keep working:
+
+- The Flask global `backend.app:app` still exists; `FLASK_APP=backend.app flask run` still boots the app.
+- All 53 upstream routes still resolve at the same URLs with the same response shapes (golden tests lock this).
+- The `_*` helper functions historically resolvable as `backend.app._foo` are re-exported from `app.py` — see
+  `backend/app.py:38-55`.
+- `backend/credential_store.py` still uses single SHA-256 → Fernet for **legacy credentials** (no PBKDF2 migration);
+  the new `EncryptionService` is for new code paths only, so old credential blobs continue to decrypt.
+- `run.sh` is unchanged; `Makefile run` is an additional alias, not a replacement.
+- Inventory CSV format (`hostname,ip,fabric,site,hall,vendor,model,role,tag,credential`) is identical.
+
+### 14.3 Where to find the regression tests
+
+Every behaviour delta in §14.1 has at least one regression test:
+
+| Delta | Test file |
+|---|---|
+| Credential encryption is mandatory | `tests/test_security_audit_findings.py` (Audit C-3 cluster) |
+| `0o600` on credentials.db | `tests/test_security_audit_batch3.py` (Audit M-6) |
+| `defusedxml` mandatory | `tests/test_security_audit_findings.py` (Audit H-1) |
+| `SECRET_KEY` placeholder rejection | `tests/test_app_factory.py` |
+| API token min length / actor map | `tests/test_app_factory.py` |
+| `/api/ping` SSRF guard | `tests/test_security_owasp.py` |
+| `CommandValidator` blocklist | `tests/test_security_phase13.py` |
+| Sanitiser null-byte rejection | `tests/test_security_phase13.py`, `tests/test_security_owasp.py` |
+| `ParserEngine` returns `{}` for unknown IDs | `tests/test_parsers_engine.py` (or equivalent) |
+| `RunnerFactory.ValueError` for unknown vendor/method | `tests/test_runners_factory.py`, `tests/test_runner_dispatch_coverage.py` |
+| Route-shape preservation | `tests/golden/test_routes_baseline.py` |
+
+---
+
+## 15. Usage Differences (Operator-Facing)
+
+This section is the **upgrade guide for someone running upstream today** who pulls the refactor branch tomorrow.
+
+### 15.1 Boot & dev loop
+
+| Task | Upstream `main` | `refactor/ood-tdd` | Notes |
+|---|---|---|---|
+| Start the app | `./run.sh` | `./run.sh` (unchanged) **or** `make run` | Both paths still set `FLASK_APP=backend.app` |
+| Install runtime deps | `pip install -r requirements.txt` | `pip install -r requirements.txt` **or** `make install` | `defusedxml` is now mandatory (added in `requirements.txt`) |
+| Install dev deps | n/a | `pip install -r requirements-dev.txt` **or** `make install-dev` | Adds `pytest`, `pytest-cov`, `pytest-mock`, `responses`, `freezegun`, `ruff` |
+| Run tests | `pytest` (no markers, no coverage) | `make test` (full) / `make test-fast` (only `-m unit`) | Markers: `unit`, `integration`, `security`, `golden` |
+| Coverage | n/a | `make cov` (global gate 45 %) / `make cov-new` (new-layer gate 85 %) | Two gates so legacy modules don't drag the new code's bar down |
+| Lint | n/a | `make lint` (check) / `make lint-fix` (auto-fix) | `ruff` configured via `pyproject.toml` |
+| Clean caches | n/a | `make clean` | Removes `.pytest_cache`, `.ruff_cache`, `__pycache__` |
+
+### 15.2 Environment variables (new or newly-enforced)
+
+| Variable | Upstream | Refactor | Effect |
+|---|---|---|---|
+| `FLASK_APP` | `backend.app` (set by `run.sh`) | `backend.app` (unchanged) | — |
+| `FLASK_RUN_HOST` | `127.0.0.1` default in `run.sh` | unchanged | — |
+| `FLASK_RUN_PORT` | `5000` default in `run.sh` | unchanged | — |
+| `SECRET_KEY` | Optional; inline default | **Required in production**; rejected if it equals the sentinel placeholder OR the historic `dev-secret-change-in-prod` OR is shorter than 16 chars | `ProductionConfig.validate()` raises at startup |
+| `FLASK_CONFIG` (or `config_name` arg) | n/a | Selects `default` / `development` / `testing` / `production` from `CONFIG_MAP` in `backend/config/app_config.py` | Different log format, different validation, different defaults |
+| `PERGEN_INVENTORY_PATH` | Implicit (`backend/inventory/inventory.csv`) | Honoured explicitly; falls back to `inventory.csv` then `example_inventory.csv` | Operator can point production at an inventory outside the repo |
+| `PERGEN_API_TOKEN` | n/a | Single shared bearer token; minimum 32 chars; required if API auth gate is active | When set, every API endpoint requires `Authorization: Bearer <token>` |
+| `PERGEN_API_TOKENS` | n/a | Multi-actor format `actor1:token1,actor2:token2`; minimum 32 chars per token | Per-actor attribution in audit logs |
+| `LOG_LEVEL`, `LOG_FORMAT`, `LOG_FILE` | n/a | Honoured by `LoggingConfig` after the factory mounts it | Operator-tunable logging without code changes |
+
+### 15.3 Production deploy contract (new)
+
+To deploy the refactor branch to production, the operator MUST:
+
+1. Set `FLASK_CONFIG=production` (or call `create_app("production")`).
+2. Set `SECRET_KEY` to a 16+ char value that is NOT one of the rejected placeholders.
+3. Set either `PERGEN_API_TOKEN` (≥ 32 chars) or `PERGEN_API_TOKENS=actor:token,...` if the auth gate should be active.
+4. Ensure `cryptography` and `defusedxml` are installed (`pip install -r requirements.txt`).
+5. Ensure the process can chmod `backend/instance/credentials.db` to `0o600`.
+
+If any of (2)–(4) fails, the app **refuses to start** instead of silently degrading.
+
+### 15.4 Log-line shape change (prod)
+
+Upstream prod logs:
+
+```
+INFO:werkzeug:127.0.0.1 - - [22/Apr/2026 12:59:56] "GET /api/inventory HTTP/1.1" 200 -
+```
+
+Refactor prod logs (`ProductionConfig` selects the JSON formatter):
+
+```json
+{"timestamp":"2026-04-22T12:59:56Z","level":"INFO","logger":"app.request","request_id":"6a1c9f...","method":"GET","path":"/api/inventory","status":200,"duration_ms":12}
+```
+
+Existing log shippers may need a parser update.
+
+### 15.5 What stays exactly the same
+
+- All HTTP routes resolve at the same URLs with the same payload shapes — frontend code (`backend/static/`) is
+  untouched.
+- The inventory CSV header is unchanged.
+- The credential DB schema is unchanged; old credential blobs still decrypt.
+- `FLASK_APP=backend.app flask run` still works (the legacy module is wrapped, not removed).
+- `run.sh` still works.
+- The Subnet Calculator, Live Notepad, Diff Checker, Saved Reports, Transceiver merge, and Recovery Policy features
+  all behave the same way for the user.
+
+---
+
+## 16. Risks & Trade-offs
 
 | Risk | Severity | Mitigation in branch |
 |---|---|---|
@@ -534,13 +716,13 @@ layers wrap the legacy code rather than replacing it.
 | **Wrapping factory** still imports the legacy module for its side-effects | MEDIUM | Documented in `app_factory.py:13-35`; 107 golden tests catch route drift |
 | **Coverage gate split** (45 % global vs 85 % new code) hides legacy gaps | LOW | Explicit two-gate `Makefile cov` / `Makefile cov-new` makes the split visible |
 | **Legacy files kept as shims** (`backend/runners/runner.py`, `arista_eapi.py`, `cisco_nxapi.py`, `ssh_runner.py`) | LOW | Documented as "kept — used by the new class wrappers" |
-| **Large diff** (147 files / +21 k LOC) is hard to review as a single PR | HIGH (review effort) | Recommend slicing into phase PRs against upstream — see [§14](#14-recommended-path-forward) |
+| **Large diff** (147 files / +21 k LOC) is hard to review as a single PR | HIGH (review effort) | Recommend slicing into phase PRs against upstream — see [§17](#17-recommended-path-forward) |
 | **Coverage 74.8 %** is below the 80 % project target in `AGENTS.md` | MEDIUM | New code is at 94 %; remaining gap is in legacy modules slated for further extraction |
 | **Branch was force-pushed** with purged history | LOW | Intentional and confirmed by user; this document is the historical record |
 
 ---
 
-## 14. Recommended Path Forward
+## 17. Recommended Path Forward
 
 ### If the goal is to upstream this work to `onrmdc/pergen`
 
@@ -568,7 +750,7 @@ Each step can be reviewed in isolation against `onrmdc/pergen@main`.
 
 ---
 
-## 15. Appendix: Full File Inventory
+## 18. Appendix: Full File Inventory
 
 ### Added backend modules (47)
 
@@ -673,7 +855,8 @@ tests/test_utils_phase2.py
 ## Document metadata
 
 - **Generated:** Wed Apr 22 2026
-- **Branch:** `refactor/ood-tdd` @ `7a3a888`
+- **Last updated:** Wed Apr 22 2026 (added §13 Architectural Differences, §14 Business-Logic Differences, §15 Usage Differences)
+- **Branch:** `refactor/ood-tdd` @ `c75e286` (initial doc commit) → updated in-place
 - **Compared against:** `origin/main` (`onrmdc/pergen`) @ `eaf6d29`
-- **Method:** `git diff origin/main..HEAD` plus tree inspection (`git ls-tree -r origin/main`)
+- **Method:** `git diff origin/main..HEAD` plus tree inspection (`git ls-tree -r origin/main`) plus targeted source reads of `app_factory.py`, `security/*`, `runners/factory.py`, `parsers/engine.py`, `Makefile`, `run.sh`, `requirements.txt`
 - **Author:** Generated via OpenCode (`anthropic/claude-opus-4-7`) at user request
