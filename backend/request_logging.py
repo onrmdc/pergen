@@ -86,10 +86,17 @@ class RequestLogger:
             # Audit M8: HSTS + CSP. The CSP is intentionally restrictive
             # (self-only with a small inline-style allowance for the SPA);
             # operators with stricter SPAs can override per-route.
-            response.headers.setdefault(
-                "Strict-Transport-Security",
-                "max-age=63072000; includeSubDomains",
-            )
+            #
+            # Audit L-02: only set HSTS on HTTPS requests. Browsers ignore
+            # HSTS over HTTP, so the header is harmless either way — but
+            # an HTTP-only operator who later proxies via a public hostname
+            # could be locked into HTTPS-only with a 2-year max-age. Be
+            # explicit instead of defensive-by-accident.
+            if request.is_secure:
+                response.headers.setdefault(
+                    "Strict-Transport-Security",
+                    "max-age=63072000; includeSubDomains",
+                )
             response.headers.setdefault(
                 "Content-Security-Policy",
                 (

@@ -21,10 +21,6 @@ import pytest
 pytestmark = [pytest.mark.security]
 
 
-@pytest.mark.xfail(
-    reason="audit M-11 — ssh_runner echoes paramiko exception text verbatim",
-    strict=True,
-)
 def test_ssh_runner_error_does_not_echo_credential_substring() -> None:
     """If paramiko leaks user/pass into its exception, the runner must scrub it."""
     import paramiko

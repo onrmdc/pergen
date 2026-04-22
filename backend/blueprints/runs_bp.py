@@ -331,6 +331,11 @@ def api_run_post_complete():
 # Audit M4: cap inputs at 256 KB per side. ``difflib.unified_diff`` is
 # O(n*m) so a 1 MB × 1 MB call ties up a worker for tens of seconds.
 _DIFF_MAX_BYTES = 256 * 1024
+# Audit H-04: even within the byte cap, pathological line counts (e.g.
+# 130 000 single-character lines on each side) push difflib to ~10^10
+# comparisons. Cap line counts independently — 8 192 lines per side is
+# well above any realistic config diff.
+_DIFF_MAX_LINES = 8_192
 
 
 @runs_bp.route("/api/diff", methods=["POST"])
@@ -349,11 +354,25 @@ def api_diff():
                     )
                 }
             ),
-            400,
+            413,
+        )
+    pre_lines = pre_text.splitlines(keepends=True)
+    post_lines = post_text.splitlines(keepends=True)
+    if len(pre_lines) > _DIFF_MAX_LINES or len(post_lines) > _DIFF_MAX_LINES:
+        return (
+            jsonify(
+                {
+                    "error": (
+                        f"diff inputs capped at {_DIFF_MAX_LINES} lines per side "
+                        f"(pre={len(pre_lines)}, post={len(post_lines)})"
+                    )
+                }
+            ),
+            413,
         )
     diff = difflib.unified_diff(
-        pre_text.splitlines(keepends=True),
-        post_text.splitlines(keepends=True),
+        pre_lines,
+        post_lines,
         fromfile="PRE",
         tofile="POST",
         lineterm="",

@@ -157,9 +157,21 @@ def test_response_carries_content_security_policy(client):
 
 
 def test_response_carries_strict_transport_security_header(client):
-    r = client.get("/api/v2/health")
+    # Audit L-02: HSTS is only set on HTTPS requests (browsers ignore HSTS
+    # over HTTP, and serving it over HTTP risks locking a future HTTPS
+    # proxy hostname into HTTPS-only with a 2-year max-age).
+    r = client.get("/api/v2/health", base_url="https://localhost")
     assert r.headers.get("Strict-Transport-Security"), (
-        "HSTS header missing — see audit M8"
+        "HSTS header missing on HTTPS response — see audit M8 / L-02"
+    )
+
+
+def test_strict_transport_security_not_set_on_http_request(client):
+    """Audit L-02 — HTTP responses must NOT carry HSTS."""
+    r = client.get("/api/v2/health", base_url="http://localhost")
+    assert "Strict-Transport-Security" not in r.headers, (
+        "HSTS header set on HTTP response — would lock future HTTPS proxy "
+        "hostname into HTTPS-only; see audit L-02"
     )
 
 

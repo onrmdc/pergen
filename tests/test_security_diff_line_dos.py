@@ -18,10 +18,6 @@ import pytest
 pytestmark = [pytest.mark.security]
 
 
-@pytest.mark.xfail(
-    reason="audit H-04 — /api/diff has no line-count cap; only byte cap",
-    strict=True,
-)
 def test_diff_rejects_pathological_line_count(client) -> None:
     """One-byte lines × 130 000 = ~256 KB but ~10^10 difflib comparisons."""
     pre = "a\n" * 130_000

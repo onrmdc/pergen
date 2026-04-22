@@ -19,10 +19,6 @@ import pytest
 pytestmark = [pytest.mark.security]
 
 
-@pytest.mark.xfail(
-    reason="audit M-05 — empty run_id silently coerces to literal 'default'",
-    strict=True,
-)
 def test_report_save_rejects_empty_run_id(tmp_path: Path) -> None:
     from backend.repositories.report_repository import ReportRepository
 
@@ -37,10 +33,6 @@ def test_report_save_rejects_empty_run_id(tmp_path: Path) -> None:
         )
 
 
-@pytest.mark.xfail(
-    reason="audit M-05 — whitespace run_id silently coerces to literal 'default'",
-    strict=True,
-)
 def test_report_save_rejects_whitespace_run_id(tmp_path: Path) -> None:
     from backend.repositories.report_repository import ReportRepository
 

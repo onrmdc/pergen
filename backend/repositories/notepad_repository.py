@@ -38,7 +38,11 @@ class NotepadRepository:
         sanitised here — sanitisation belongs at the route boundary.
         """
         self._dir = notepad_dir
-        self._lock = threading.Lock()
+        # Audit M-06: RLock (not Lock) lets a future contributor wire
+        # ``_save_unlocked`` back to ``save()`` without hard-deadlocking
+        # the worker. Re-entry on the same thread costs ~1 ns extra but
+        # eliminates a sharp edge nobody wants to debug at 3am.
+        self._lock = threading.RLock()
 
     # ------------------------------------------------------------------ #
     # paths

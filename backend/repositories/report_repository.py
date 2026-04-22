@@ -132,14 +132,23 @@ class ReportRepository:
         # NUL bytes, and leading dots so that even after URL-decoding the
         # resulting filename cannot escape ``self._reports_dir`` via
         # ``..`` traversal sequences.
+        #
+        # Audit M-05: refuse empty/whitespace ``run_id`` instead of
+        # silently coercing to literal "default" — two distinct callers
+        # passing an empty id would otherwise overwrite the same file.
+        if not (run_id or "").strip():
+            raise ValueError("run_id is required and must be non-empty")
         safe = (
-            (run_id or "")
-            .replace("/", "_")
+            run_id.replace("/", "_")
             .replace("\\", "_")
             .replace("\x00", "_")
             .lstrip(".")
         )
-        return safe or "default"
+        # If the entire id collapses to dots/separators after sanitisation,
+        # treat that as invalid too (e.g. ``run_id="..."`` → "" → reject).
+        if not safe:
+            raise ValueError(f"run_id sanitised to empty string (got {run_id!r})")
+        return safe
 
     def _report_path(self, run_id: str) -> str:
         from pathlib import Path

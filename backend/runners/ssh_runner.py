@@ -62,6 +62,32 @@ def _build_client():  # type: ignore[no-untyped-def]
     return client
 
 
+def _classify_ssh_error(exc: BaseException) -> str:
+    """Map a paramiko / network exception to a controlled vocabulary.
+
+    Audit M-11: returning ``str(exc)`` to the caller risked leaking
+    usernames, passwords, or environment details if a future paramiko
+    upgrade widened the exception text. Server-side log keeps the
+    original repr; the operator sees only the bucket name.
+    """
+    name = type(exc).__name__
+    if paramiko is not None and isinstance(exc, paramiko.AuthenticationException):
+        return "auth_failed"
+    if paramiko is not None and isinstance(exc, paramiko.BadHostKeyException):
+        return "host_key_mismatch"
+    if paramiko is not None and isinstance(exc, paramiko.ssh_exception.NoValidConnectionsError):
+        return "network"
+    # paramiko.SSHException covers banner, channel, protocol, etc.
+    if paramiko is not None and isinstance(exc, paramiko.SSHException):
+        return "ssh_protocol"
+    # Built-in network failures.
+    if isinstance(exc, (TimeoutError,)):
+        return "timeout"
+    if isinstance(exc, (OSError, ConnectionError)):
+        return "network"
+    return f"other:{name}"
+
+
 def run_command(
     ip: str,
     username: str,
@@ -91,8 +117,13 @@ def run_command(
         if err and not out:
             return None, err
         return out, None
-    except Exception as e:  # noqa: BLE001 — network errors must not crash routes
-        return None, str(e)
+    except Exception as exc:  # noqa: BLE001 — network errors must not crash routes
+        # Audit M-11: log the full repr server-side, return only the
+        # controlled label to the caller — never leak user/pass/host
+        # details that might be in the exception text.
+        bucket = _classify_ssh_error(exc)
+        _log.warning("ssh_runner.run_command failed (%s): %r", bucket, exc)
+        return None, bucket
 
 
 def run_config_lines_pty(
