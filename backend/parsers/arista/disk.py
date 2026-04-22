@@ -28,7 +28,7 @@ def _parse_arista_disk(raw_output: Any) -> dict[str, Any]:
                         return {"Disk": f"{pct} %"}
                 except (TypeError, ValueError):
                     pass
-    except Exception:
+    except (TypeError, ValueError, KeyError, AttributeError):  # narrow audit HIGH-1
         pass
     return {"Disk": ""}
 

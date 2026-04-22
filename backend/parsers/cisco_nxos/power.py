@@ -17,7 +17,7 @@ def _parse_cisco_power(raw_output: Any) -> dict[str, Any]:
     if isinstance(raw_output, str) and raw_output.strip().startswith("{"):
         try:
             data = json.loads(raw_output)
-        except Exception:
+        except (json.JSONDecodeError, ValueError, TypeError):  # narrow audit HIGH-1
             data = {}
     if not data:
         return {"Power supplies": ""}
@@ -28,7 +28,7 @@ def _parse_cisco_power(raw_output: Any) -> dict[str, Any]:
             if isinstance(body, str):
                 try:
                     body = json.loads(body)
-                except Exception:
+                except (json.JSONDecodeError, ValueError, TypeError):  # narrow audit HIGH-1
                     return {"Power supplies": ""}
             data = body if isinstance(body, dict) else data
             powersup = data.get("powersup") if isinstance(data, dict) else None
@@ -44,7 +44,7 @@ def _parse_cisco_power(raw_output: Any) -> dict[str, Any]:
             return {"Power supplies": ""}
         count = sum(1 for r in rows if isinstance(r, dict) and (str(r.get("ps_status") or "").strip() == "Ok"))
         return {"Power supplies": count}
-    except Exception:
+    except (TypeError, ValueError, KeyError, AttributeError):  # narrow audit HIGH-1
         return {"Power supplies": ""}
 
 

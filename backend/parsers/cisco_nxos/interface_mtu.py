@@ -5,10 +5,10 @@ Extracted verbatim from ``backend/parse_output.py``.
 
 from __future__ import annotations
 
-import json
 from typing import Any
 
 from backend.parsers.common.json_path import _find_key, _find_list
+from backend.parsers.common.cisco_envelope import cisco_unwrap_body
 
 
 def _parse_cisco_interface_show_mtu(raw_output: Any) -> dict[str, Any]:
@@ -16,20 +16,7 @@ def _parse_cisco_interface_show_mtu(raw_output: Any) -> dict[str, Any]:
     Parse Cisco NX-API 'show interface' JSON: TABLE_interface.ROW_interface[].eth_mtu per interface.
     """
     mtu_map: dict[str, str] = {}
-    data = raw_output
-    if isinstance(raw_output, dict) and "result" in raw_output:
-        r = raw_output["result"]
-        data = r[0] if isinstance(r, list) and r else r
-    if isinstance(raw_output, list) and raw_output and isinstance(raw_output[0], dict):
-        data = raw_output[0]
-    body = data.get("body") if isinstance(data, dict) else None
-    if isinstance(body, str):
-        try:
-            body = json.loads(body)
-        except Exception:
-            body = None
-    if body is not None and isinstance(body, dict):
-        data = body
+    data = cisco_unwrap_body(raw_output)
     if not isinstance(data, dict):
         return {"interface_mtu_map": {}}
     tbl = data.get("TABLE_interface") or data.get("table_interface")

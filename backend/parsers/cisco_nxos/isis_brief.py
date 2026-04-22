@@ -35,7 +35,7 @@ def _parse_cisco_isis_interface_brief(raw_output: Any) -> dict[str, Any]:
     if isinstance(raw_output, str) and raw_output.strip().startswith("{"):
         try:
             data = json.loads(raw_output)
-        except Exception:
+        except (json.JSONDecodeError, ValueError, TypeError):  # narrow audit HIGH-1
             data = {}
     rows = _find_isis_interface_brief_rows(data)
     ready_count = 0

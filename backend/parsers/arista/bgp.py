@@ -31,7 +31,7 @@ def parse_arista_bgp_evpn_next_hop(response: Any, index: int = 0) -> str | None:
                     nh = (p.get("nextHop") or "").strip()
                     if nh:
                         return nh
-    except Exception:
+    except (TypeError, ValueError, KeyError, AttributeError):  # narrow audit HIGH-1
         pass
     return None
 

@@ -28,7 +28,7 @@ def _parse_arista_cpu(raw_output: Any) -> dict[str, Any]:
                     return {"CPU usage": f"{used} %"}
                 except (TypeError, ValueError):
                     pass
-    except Exception:
+    except (TypeError, ValueError, KeyError, AttributeError):  # narrow audit HIGH-1
         pass
     return {"CPU usage": ""}
 

@@ -16,7 +16,7 @@ def _extract_regex(text: str, pattern: str) -> str | None:
     try:
         m = re.search(pattern, text, re.MULTILINE | re.DOTALL)
         return m.group(1).strip() if m and m.lastindex else None
-    except Exception:
+    except (re.error, AttributeError, TypeError):  # narrow audit HIGH-1
         return None
 
 
@@ -26,7 +26,7 @@ def _count_regex_lines(text: str, pattern: str) -> int:
         return 0
     try:
         return len(re.findall(pattern, text, re.MULTILINE))
-    except Exception:
+    except (re.error, AttributeError, TypeError):  # narrow audit HIGH-1
         return 0
 
 

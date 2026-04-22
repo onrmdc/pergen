@@ -39,7 +39,7 @@ def parse_arista_arp_interface_for_ip(response: Any, search_ip: str, index: int 
                 if not iface or "Vxlan" in iface or "Vxlan1" in iface:
                     continue
                 return iface
-    except Exception:
+    except (TypeError, ValueError, KeyError, AttributeError):  # narrow audit HIGH-1
         pass
     return None
 

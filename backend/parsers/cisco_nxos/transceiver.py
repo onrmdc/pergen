@@ -8,10 +8,10 @@ are co-located here because they are only consumed by
 
 from __future__ import annotations
 
-import json
 from typing import Any
 
 from backend.parsers.common.formatting import _format_power_two_decimals
+from backend.parsers.common.cisco_envelope import cisco_unwrap_body
 
 
 def _cisco_find_tx_rx_in_dict(obj: Any, seen: set | None = None) -> tuple[Any, Any]:
@@ -86,20 +86,7 @@ def _cisco_transceiver_tx_rx_from_row(row: dict) -> tuple[str, str]:
 def _parse_cisco_nxos_transceiver(raw_output: Any) -> dict[str, Any]:
     """Parse Cisco NX-OS 'show interface transceiver' (NX-API JSON). Returns transceiver_rows with tx/rx from TABLE_lane when present."""
     rows: list[dict[str, Any]] = []
-    data = raw_output
-    if isinstance(raw_output, list) and raw_output:
-        data = raw_output[0] if isinstance(raw_output[0], dict) else raw_output
-    if isinstance(raw_output, dict) and "result" in raw_output:
-        r = raw_output["result"]
-        data = r[0] if isinstance(r, list) and r else r
-    body = data.get("body") if isinstance(data, dict) else None
-    if isinstance(body, str):
-        try:
-            body = json.loads(body)
-        except Exception:
-            body = None
-    if body is not None and isinstance(body, dict):
-        data = body
+    data = cisco_unwrap_body(raw_output)
     if not isinstance(data, dict):
         return {"transceiver_rows": rows}
     table = data.get("TABLE_interface") or data.get("TABLE_transceiver")

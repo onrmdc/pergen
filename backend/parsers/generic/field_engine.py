@@ -57,7 +57,7 @@ class GenericFieldEngine:
         if isinstance(raw_output, str) and raw_output.strip().startswith("{"):
             try:
                 data = json.loads(raw_output)
-            except Exception:
+            except (json.JSONDecodeError, ValueError, TypeError):  # narrow audit HIGH-1
                 pass
 
         for f in fields:

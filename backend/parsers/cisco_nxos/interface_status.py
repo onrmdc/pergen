@@ -5,7 +5,6 @@ Extracted verbatim from ``backend/parse_output.py``.
 
 from __future__ import annotations
 
-import json
 import time
 from typing import Any
 
@@ -13,6 +12,7 @@ from backend.parsers.common.duration import (
     _parse_hhmmss_to_seconds,
     _parse_relative_seconds_ago,
 )
+from backend.parsers.common.cisco_envelope import cisco_unwrap_body
 from backend.parsers.common.json_path import (
     _find_key,
     _find_key_containing,
@@ -23,20 +23,7 @@ from backend.parsers.common.json_path import (
 def _parse_cisco_interface_status(raw_output: Any) -> dict[str, Any]:
     """Parse Cisco NX-API 'show interface status'. Returns interface_status_rows: list of { interface, state, last_link_flapped, in_errors, last_status_change_epoch }."""
     out_rows: list[dict[str, Any]] = []
-    data = raw_output
-    if isinstance(raw_output, dict) and "result" in raw_output:
-        r = raw_output["result"]
-        data = r[0] if isinstance(r, list) and r else r
-    if isinstance(raw_output, list) and raw_output and isinstance(raw_output[0], dict):
-        data = raw_output[0]
-    body = data.get("body") if isinstance(data, dict) else None
-    if isinstance(body, str):
-        try:
-            body = json.loads(body)
-        except Exception:
-            body = None
-    if body is not None and isinstance(body, dict):
-        data = body
+    data = cisco_unwrap_body(raw_output)
     if not isinstance(data, dict):
         return {"interface_status_rows": out_rows}
     rows = _find_list(data, "ROW_interface") or _find_list(data, "ROW_inter")

@@ -21,7 +21,7 @@ def _parse_arista_power(raw_output: Any) -> dict[str, Any]:
             return {"Power supplies": ""}
         count = sum(1 for v in supplies.values() if isinstance(v, dict) and (str(v.get("state") or "").strip().lower() == "ok"))
         return {"Power supplies": count}
-    except Exception:
+    except (TypeError, ValueError, KeyError, AttributeError):  # narrow audit HIGH-1
         return {"Power supplies": ""}
 
 
