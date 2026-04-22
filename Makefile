@@ -1,7 +1,7 @@
 PY ?= python3
 PIP ?= $(PY) -m pip
 
-.PHONY: help install install-dev test test-fast lint lint-fix cov cov-new clean run
+.PHONY: help install install-dev test test-fast lint lint-fix cov cov-new clean run e2e e2e-install
 
 help:
 	@echo "Pergen — make targets"
@@ -58,3 +58,17 @@ run:
 clean:
 	@find . -type d -name __pycache__ -not -path "./venv/*" -not -path "./.venv/*" -not -path "./vendor_pkgs/*" -exec rm -rf {} + 2>/dev/null || true
 	@rm -rf .pytest_cache .ruff_cache htmlcov .coverage coverage.xml
+
+# ----------------------------------------------------------------------
+# E2E tests (Playwright + real Flask server)
+#
+# `make e2e` boots the dev server via run.sh (through Playwright's
+# webServer config), runs the Playwright suite, and tears the server
+# down on exit. Reports land in ./playwright-report and ./test-results.
+# ----------------------------------------------------------------------
+e2e-install:
+	npm install
+	npx playwright install chromium
+
+e2e:
+	npx playwright test --reporter=list

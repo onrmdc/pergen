@@ -12,6 +12,11 @@ backend/inventory/example_inventory.csv
 frontend/dist/
 node_modules/
 
+# Playwright E2E artifacts
+playwright-report/
+test-results/
+playwright/.cache/
+
 
 # ECC (Everything Claude Code)
 .cursor/hooks/
