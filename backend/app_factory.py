@@ -193,9 +193,6 @@ def _install_api_token_gate(app: Flask) -> None:
     from flask import g, jsonify, request
 
     pergen_ext = app.extensions.setdefault("pergen", {})
-    if pergen_ext.get("token_gate_mounted"):
-        return
-
     _exempt = {"/api/health", "/api/v2/health", "/"}
     _min_len = _MIN_API_TOKEN_LENGTH
 
@@ -233,6 +230,58 @@ def _install_api_token_gate(app: Flask) -> None:
                     f"PERGEN API token for actor {actor!r} must be at least "
                     f"{_min_len} characters in production."
                 )
+
+    # Audit H-05: in non-production, refuse to boot with an open API
+    # unless the operator has explicitly opted in via PERGEN_DEV_OPEN_API=1.
+    # The historic dev-default (open + WARN log) was too easy to miss on
+    # a multi-tenant host where any process on 127.0.0.1 could rewrite
+    # the inventory. The "testing" config is exempt because pytest runs
+    # the Flask test client in-process.
+    #
+    # NB: this check must run BEFORE the ``token_gate_mounted`` short-
+    # circuit below — repeated ``create_app`` calls on the same Flask
+    # global (which the test harness does — see ``backend.app:app``)
+    # would otherwise skip the guard.
+    if app.config.get("CONFIG_NAME") not in ("production", "testing"):
+        dev_tokens = _resolve_tokens()
+        dev_open = (
+            _os.environ.get("PERGEN_DEV_OPEN_API")
+            or app.config.get("PERGEN_DEV_OPEN_API")
+            or ""
+        ).strip()
+        if not dev_tokens and dev_open != "1":
+            raise RuntimeError(
+                "Refusing to boot with an open API in development. "
+                "Either set PERGEN_API_TOKEN=<random> (≥ "
+                f"{_min_len} chars) / PERGEN_API_TOKENS=actor1:tok1,..., "
+                "or explicitly opt in to the open posture by setting "
+                "PERGEN_DEV_OPEN_API=1 in your shell. "
+                "See docs/security/audit_2026-04-22.md (H-05)."
+            )
+        if dev_open == "1" and not dev_tokens and not pergen_ext.get("dev_open_banner_logged"):
+            # One-shot CLI banner so the operator cannot miss the posture.
+            _log.warning(
+                "============================================================"
+            )
+            _log.warning(
+                " PERGEN OPEN API MODE — every /api/* route is unauthenticated."
+            )
+            _log.warning(
+                " To require authentication, unset PERGEN_DEV_OPEN_API and"
+            )
+            _log.warning(
+                " set PERGEN_API_TOKEN=<random> (≥ %d chars).", _min_len
+            )
+            _log.warning(
+                "============================================================"
+            )
+            pergen_ext["dev_open_banner_logged"] = True
+
+    # The Flask before_request handler is mounted exactly once per app.
+    # Subsequent create_app calls (test-harness pattern) re-evaluate the
+    # H-05 boot guard above but skip the registration.
+    if pergen_ext.get("token_gate_mounted"):
+        return
 
     @app.before_request
     def _enforce_api_token():

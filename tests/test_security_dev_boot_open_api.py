@@ -23,15 +23,20 @@ import pytest
 pytestmark = [pytest.mark.security]
 
 
-@pytest.mark.xfail(
-    reason="audit H-05 — dev/test does not refuse to boot without explicit open flag",
-    strict=True,
-)
 def test_dev_boot_without_token_and_without_open_flag_refuses(monkeypatch) -> None:
     """create_app('development') must raise without explicit override."""
+    import os as _os
+
     monkeypatch.delenv("PERGEN_API_TOKEN", raising=False)
     monkeypatch.delenv("PERGEN_API_TOKENS", raising=False)
     monkeypatch.delenv("PERGEN_DEV_OPEN_API", raising=False)
+
+    # Belt-and-suspenders: monkeypatch sometimes leaves env vars in place
+    # if a different test in the same session set them via os.environ
+    # directly. Force-clear in addition to the monkeypatch hook.
+    _os.environ.pop("PERGEN_API_TOKEN", None)
+    _os.environ.pop("PERGEN_API_TOKENS", None)
+    _os.environ.pop("PERGEN_DEV_OPEN_API", None)
 
     # Force a fresh import so the module-level config is re-read.
     for mod in list(sys.modules):

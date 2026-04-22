@@ -55,6 +55,10 @@ def test_create_app_testing_returns_flask_app(tmp_path, monkeypatch):
 def test_create_app_default_returns_development_config(tmp_path, monkeypatch):
     monkeypatch.setenv("PERGEN_INSTANCE_DIR", str(tmp_path))
     monkeypatch.setenv("SECRET_KEY", "dev-key")
+    # Audit H-05: dev config now refuses to boot open without an explicit
+    # opt-in env var. Set the flag so this regression test still exercises
+    # the development branch.
+    monkeypatch.setenv("PERGEN_DEV_OPEN_API", "1")
     factory = _fresh_factory()
     app = factory.create_app("default")
     assert app.config["DEBUG"] is True
