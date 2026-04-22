@@ -69,6 +69,11 @@ export default defineConfig({
       // Hermetic per-run state — see audit-fix block above.
       PERGEN_INSTANCE_DIR: _instanceDir,
       PERGEN_INVENTORY_PATH: _inventoryCsv,
+      // Wave-3 Phase 3 audit fix (boot guard H-05): explicitly opt in to
+      // the open-API posture so create_app() does not refuse to boot in
+      // development mode without a token. Tests mock backend endpoints
+      // via page.route() and never need real auth.
+      PERGEN_DEV_OPEN_API: "1",
     },
   },
 });
