@@ -2,13 +2,14 @@ import { expect, test } from "@playwright/test";
 import { AppShell } from "../pages/AppShell";
 
 /**
- * P0 — Custom command on the #restapi page.
+ * P0 — REST API page free-form-command run via /api/arista/run-cmds.
  *
- * The Wave-3 ticket asked for "/api/run/custom"; the actual REST API
- * page calls /api/arista/run-cmds for free-form commands. We follow the
- * code, not the ticket name. The Pre/Post page also has a Custom
- * Command phase that calls /api/custom-command — separate flow, covered
- * by the prepost-run spec at the SPA-shell level.
+ * Wave-4 rename: this file was originally `flow-custom-command.spec.ts`
+ * which was misleading because the Pre/Post page's Custom Command
+ * phase calls a different endpoint (/api/custom-command) — covered
+ * by `flow-prepost-custom-command.spec.ts`. Endpoint coverage:
+ *   /api/arista/run-cmds   — THIS FILE
+ *   /api/custom-command    — flow-prepost-custom-command.spec.ts
  */
 test("REST API page submit posts free-form command and renders response", async ({
   page,
