@@ -1,0 +1,73 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pergen"
+version = "0.0.0"
+description = "Pergen — network device panel (Pre/Post checks, BGP, NAT, Find Leaf, Transceiver)."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "Proprietary" }
+authors = [{ name = "Pergen contributors" }]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+extend-exclude = [
+    "vendor_pkgs",
+    "venv",
+    ".venv",
+    "backend/static",
+    "tests/fixtures",
+]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "F",   # pyflakes
+    "W",   # pycodestyle warnings
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "UP",  # pyupgrade
+    "SIM", # flake8-simplify
+    "S",   # flake8-bandit (security)
+]
+ignore = [
+    "E501",   # line length handled by formatter
+    "S101",   # asserts are fine in tests
+    "B008",   # default arg call (Flask uses request defaults)
+    "SIM108", # ternary preferred only when readable
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "S105", "S106", "S311"]
+"backend/parse_output.py" = ["B007", "SIM"]
+
+[tool.coverage.run]
+branch = true
+source = ["backend"]
+omit = [
+    "backend/static/*",
+    "backend/inventory/normalize_inventory.py",
+    "vendor_pkgs/*",
+]
+
+[tool.coverage.report]
+# Global threshold is intentionally low: the staged refactor (phases 0–11)
+# wrapped legacy modules without changing their business logic, so legacy
+# files such as ``backend/app.py``, ``backend/find_leaf.py``,
+# ``backend/nat_lookup.py`` and ``backend/route_map_analysis.py`` still
+# contain large untested bodies of code.  The new OOD layer
+# (``services``/``repositories``/``blueprints``/``runners.factory``/
+# ``security``/``parsers``/``config``/``app_factory``/``logging_config``/
+# ``request_logging``) is held to 85%+ via ``make cov-new`` — see Makefile.
+fail_under = 45
+show_missing = true
+skip_covered = false
+exclude_lines = [
+    "pragma: no cover",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+]

@@ -1,0 +1,7 @@
+{
+  "interface_descriptions": {
+    "Ethernet1/1": "uplink",
+    "Ethernet1/2": "downlink",
+    "Ethernet1/3": ""
+  }
+}

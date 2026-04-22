@@ -1,0 +1,42 @@
+.DS_Store
+venv/
+.venv/
+__pycache__/
+*.pyc
+.env
+.env.local
+instance/
+*.db
+backend/inventory/inventory.csv
+backend/inventory/example_inventory.csv
+frontend/dist/
+node_modules/
+
+
+# ECC (Everything Claude Code)
+.cursor/hooks/
+.cursor/hooks.json
+.cursor/scripts/
+.cursor/skills/
+.cursor/commands/
+.cursor/agents/
+.cursor/mcp.json
+
+# Test / coverage
+.pytest_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# Logs (created by LoggingConfig in later phases)
+logs/
+
+# Phase-12 noise (Cursor & local docs / coverage artifacts)
+.cursor/rules/
+AGENTS.md
+ECC_USAGE_GUIDE.md
+coverage.json
+
+# OpenCode workspace config (per-developer, not source-controlled)
+.opencode/

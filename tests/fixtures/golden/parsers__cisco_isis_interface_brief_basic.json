@@ -1,0 +1,13 @@
+{
+  "ISIS": "1/2",
+  "isis_interface_rows": [
+    {
+      "interface": "Ethernet1/1",
+      "state": "Up"
+    },
+    {
+      "interface": "Ethernet1/2",
+      "state": "Down"
+    }
+  ]
+}

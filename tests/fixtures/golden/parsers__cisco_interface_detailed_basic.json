@@ -1,0 +1,14 @@
+{
+  "interface_flapped_rows": [
+    {
+      "interface": "Ethernet1/1",
+      "state": "eth-up",
+      "description": "-",
+      "last_link_flapped": "00:01:00",
+      "flap_counter": "5",
+      "crc_count": "3",
+      "in_errors": "12",
+      "last_status_change_epoch": 1699999940.0
+    }
+  ]
+}

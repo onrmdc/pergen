@@ -1,0 +1,13 @@
+{
+  "transceiver_rows": [
+    {
+      "interface": "Ethernet1/1",
+      "serial": "ABC1234",
+      "type": "QSFP-100G-SR4",
+      "manufacturer": "",
+      "temp": "",
+      "tx_power": "-1.50",
+      "rx_power": "-2.00"
+    }
+  ]
+}

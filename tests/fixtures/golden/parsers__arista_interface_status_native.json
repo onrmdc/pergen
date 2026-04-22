@@ -1,0 +1,13 @@
+{
+  "interface_status_rows": [
+    {
+      "interface": "Ethernet1/1",
+      "state": "connected",
+      "last_link_flapped": "01:13:20",
+      "in_errors": "7",
+      "crc_count": "2",
+      "mtu": "9216",
+      "flap_count": "4"
+    }
+  ]
+}

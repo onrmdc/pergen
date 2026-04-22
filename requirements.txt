@@ -1,0 +1,10 @@
+Flask>=3.0
+cryptography>=41.0
+Werkzeug>=3.0
+PyYAML>=6.0
+paramiko>=3.0
+requests>=2.28
+# Audit H-1: defusedxml is a HARD requirement. nat_lookup parses untrusted
+# XML responses from network firewalls — the stdlib xml.etree parser is
+# vulnerable to billion-laughs / XXE attacks.
+defusedxml>=0.7.1

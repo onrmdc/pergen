@@ -1,0 +1,184 @@
+# Parse rules per command id. Each command id lists parsed field names and how to extract them.
+# Fields can be used as dynamic table columns (gear icon) in the UI.
+# json_path: JSONPath or dot path into API response (e.g. $.version, result.0.version).
+# regex: For SSH text output, regex with one capture group for the value.
+# count: If true, value is a count (e.g. for pre/post comparison).
+arista_show_version:
+  description: "Arista EOS show version"
+  fields:
+    - name: version
+      json_path: version
+    - name: modelName
+      json_path: modelName
+    - name: serialNumber
+      json_path: serialNumber
+
+arista_show_bgp_evpn_summary:
+  description: "Arista BGP EVPN summary (count peerState Established)"
+  fields:
+    - name: total_peers
+      json_path: vrfs.default.peers
+      count: true
+    - name: established_count
+      json_path: vrfs.default.peers
+      count: true
+      count_where:
+        peerState: Established
+    - name: BGP
+      format_template: "{established_count}/{total_peers}"
+      format_fields: [established_count, total_peers]
+
+arista_show_bgp_summary:
+  description: "Arista BGP summary (all VRFs)"
+  fields:
+    - name: total_peers
+      json_path: vrfs.default.peers
+      count: true
+    - name: established_count
+      json_path: vrfs.default.peers
+      count: true
+      count_where:
+        peerState: Established
+    - name: BGP
+      format_template: "{established_count}/{total_peers}"
+      format_fields: [established_count, total_peers]
+
+arista_show_isis_adjacency:
+  description: "Arista IS-IS adjacency count and per-interface"
+  custom_parser: arista_isis_adjacency
+  fields: []
+
+arista_show_interfaces_status:
+  description: "Arista interfaces status"
+  fields:
+    # Interfaces: connected count excluding Management
+    - name: Interfaces
+      json_path: interfaceStatuses
+      count: true
+      count_where:
+        linkStatus: connected
+      count_key_prefix_exclude: "Management"
+    # Mgmt Speed: Management interface speed with unit (e.g. "1 Gbps")
+    - name: Mgmt Speed
+      json_path: interfaceStatuses
+      key_prefix: "Management"
+      value_key: bandwidth
+      value_divide: 1000000000
+      value_suffix: " Gbps"
+
+cisco_nxos_show_version:
+  description: "Cisco NX-OS show version (JSON)"
+  fields:
+    - name: version
+      json_path: nxos_ver_str
+
+cisco_nxos_show_interface_status:
+  description: "Cisco NX-OS interface status (JSON)"
+  fields:
+    # Interfaces: count where state == 'connected'
+    - name: Interfaces
+      json_path: TABLE_interface.ROW_interface
+      count: true
+      count_where:
+        state: connected
+
+cisco_nxos_show_isis_adjacency:
+  description: "Cisco NX-OS IS-IS interface brief (up/ready)"
+  custom_parser: cisco_isis_interface_brief
+  fields: []
+
+cisco_nxos_show_system_resources:
+  description: "Cisco NX-OS system resources (CPU = 100 - idle %, memory)"
+  fields:
+    - name: CPU usage
+      json_path: TABLE_cpu_usage.ROW_cpu_usage.idle
+      value_subtract_from: 100
+      value_suffix: " %"
+    - name: Disk
+      json_path: bootflash_usage_percent
+
+cisco_nxos_show_system_uptime:
+  description: "Cisco NX-OS system uptime (sys_up_days/hrs/mins/secs)"
+  custom_parser: cisco_system_uptime
+  fields: []
+
+arista_show_uptime:
+  description: "Arista EOS uptime (upTime seconds -> Xd Xh Xm Xs)"
+  custom_parser: arista_uptime
+  fields: []
+
+arista_show_processes_top_once:
+  description: "Arista EOS CPU from show processes top once (100 - idle)%"
+  custom_parser: arista_cpu
+  fields: []
+
+arista_show_file_systems:
+  description: "Arista EOS flash usage from show file systems"
+  custom_parser: arista_disk
+  fields: []
+
+arista_show_environment_power:
+  description: "Arista EOS power supplies with state ok"
+  custom_parser: arista_power
+  fields: []
+
+cisco_nxos_show_environment_power:
+  description: "Cisco NX-OS power supplies with ps_status Ok"
+  custom_parser: cisco_power
+  fields: []
+
+cisco_ios_show_version:
+  description: "Cisco IOS show version"
+  fields:
+    - name: version
+      regex: "Version\\s+([^,\\n]+)"
+    - name: uptime
+      regex: "uptime is\\s+([^\\n]+)"
+
+arista_show_version_ssh:
+  description: "Arista show version (SSH fallback)"
+  fields:
+    - name: version
+      json_path: version
+    - name: modelName
+      json_path: modelName
+
+arista_show_interfaces_transceiver:
+  description: "Arista EOS transceiver DOM info per interface"
+  custom_parser: arista_transceiver
+  fields: []
+
+cisco_nxos_show_interface_transceiver:
+  description: "Cisco NX-OS interface transceiver"
+  custom_parser: cisco_nxos_transceiver
+  fields: []
+
+arista_show_interface_status:
+  description: "Arista EOS interfaces (status, last flap)"
+  custom_parser: arista_interface_status
+  fields: []
+
+cisco_nxos_show_interface_status:
+  description: "Cisco NX-OS interface status (state, last_link_flapped)"
+  custom_parser: cisco_interface_status
+  fields: []
+
+cisco_nxos_show_interface:
+  description: "Cisco NX-OS show interface (eth_link_flapped HH:MM:SS, eth_reset_cntr)"
+  custom_parser: cisco_interface_detailed
+  fields: []
+
+arista_show_interface_description:
+  description: "Arista EOS interface descriptions"
+  custom_parser: arista_interface_description
+  fields: []
+
+cisco_nxos_show_interface_description:
+  description: "Cisco NX-OS interface description"
+  custom_parser: cisco_interface_description
+  fields: []
+
+cisco_nxos_show_interface_mtu:
+  description: "Cisco NX-OS show interface (eth_mtu per interface)"
+  custom_parser: cisco_interface_show_mtu
+  fields: []

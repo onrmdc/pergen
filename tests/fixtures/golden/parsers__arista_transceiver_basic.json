@@ -1,0 +1,22 @@
+{
+  "transceiver_rows": [
+    {
+      "interface": "Ethernet1",
+      "serial": "SN1234",
+      "type": "",
+      "manufacturer": "",
+      "temp": "",
+      "tx_power": "-1.23",
+      "rx_power": "-2.50"
+    },
+    {
+      "interface": "Ethernet2",
+      "serial": "",
+      "type": "",
+      "manufacturer": "",
+      "temp": "",
+      "tx_power": "-",
+      "rx_power": "-"
+    }
+  ]
+}

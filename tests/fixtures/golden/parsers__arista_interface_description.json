@@ -1,0 +1,7 @@
+{
+  "interface_descriptions": {
+    "Ethernet1": "uplink-to-spine-01",
+    "Ethernet2": "",
+    "Management1": "mgmt-net"
+  }
+}

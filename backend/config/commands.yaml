@@ -1,0 +1,233 @@
+# Commands per vendor/role. Each command has a unique id, method (ssh|api), and spec.
+# Device (vendor, role) is matched; roles list empty means all roles for that vendor.
+# id is used in parsers.yaml to define parsed fields.
+commands:
+  - id: arista_show_version
+    vendor: Arista
+    model: EOS
+    roles: [Leaf, Spine, Wan-Edge, Border-Leaf, Border-Gateway, Wan-Router, DCI-Router]
+    method: api
+    api:
+      path: /command-api
+      commands: ["show version | json"]
+
+  - id: arista_show_uptime
+    vendor: Arista
+    model: EOS
+    roles: [Leaf, Spine, Wan-Edge, Border-Leaf, Border-Gateway, Wan-Router, DCI-Router]
+    method: api
+    api:
+      path: /command-api
+      commands: ["show uptime | json"]
+
+  - id: arista_show_bgp_evpn_summary
+    vendor: Arista
+    model: EOS
+    roles: [Leaf, Spine]
+    method: api
+    api:
+      path: /command-api
+      commands: ["show bgp evpn summary | json"]
+
+  - id: arista_show_interfaces_status
+    vendor: Arista
+    model: EOS
+    roles: [Leaf, Spine, Wan-Edge, Border-Leaf, Border-Gateway, Wan-Router, DCI-Router]
+    method: api
+    api:
+      path: /command-api
+      commands: ["show interfaces status | json"]
+
+  - id: arista_show_bgp_summary
+    vendor: Arista
+    model: EOS
+    roles: [Leaf, Spine, Wan-Edge, Border-Leaf, Border-Gateway, Wan-Router, DCI-Router]
+    method: api
+    api:
+      path: /command-api
+      commands: ["show bgp summary | json"]
+
+  - id: cisco_nxos_show_version
+    vendor: Cisco
+    model: NX-OS
+    roles: [Leaf, Spine, Wan-Edge, Border-Leaf, Border-Gateway]
+    method: api
+    api:
+      path: /ins
+      commands: ["show version"]
+
+  - id: cisco_nxos_show_interface_status
+    vendor: Cisco
+    model: NX-OS
+    roles: [Leaf, Spine, Wan-Edge, Border-Leaf, Border-Gateway, Wan-Router, DCI-Router]
+    method: api
+    api:
+      path: /ins
+      commands: ["show interface status"]
+
+  - id: cisco_nxos_show_interface
+    vendor: Cisco
+    model: NX-OS
+    roles: [Leaf, Spine, Wan-Edge, Border-Leaf, Border-Gateway, Wan-Router, DCI-Router]
+    method: api
+    api:
+      path: /ins
+      commands: ["show interface"]
+
+  - id: cisco_nxos_show_isis_adjacency
+    vendor: Cisco
+    model: NX-OS
+    roles: [Leaf, Spine, Wan-Edge, Border-Leaf, Border-Gateway]
+    method: api
+    api:
+      path: /ins
+      commands: ["show isis interface brief"]
+
+  - id: cisco_nxos_show_system_resources
+    vendor: Cisco
+    model: NX-OS
+    roles: [Leaf, Spine, Wan-Edge, Border-Leaf, Border-Gateway]
+    method: api
+    api:
+      path: /ins
+      commands: ["show system resources"]
+
+  - id: cisco_nxos_show_system_uptime
+    vendor: Cisco
+    model: NX-OS
+    roles: [Leaf, Spine, Wan-Edge, Border-Leaf, Border-Gateway]
+    method: api
+    api:
+      path: /ins
+      commands: ["show system uptime"]
+
+  - id: arista_show_processes_top_once
+    vendor: Arista
+    model: EOS
+    roles: [Leaf, Spine, Wan-Edge, Border-Leaf, Border-Gateway, Wan-Router, DCI-Router]
+    method: api
+    api:
+      path: /command-api
+      commands: ["show processes top once | json"]
+
+  - id: arista_show_file_systems
+    vendor: Arista
+    model: EOS
+    roles: [Leaf, Spine, Wan-Edge, Border-Leaf, Border-Gateway, Wan-Router, DCI-Router]
+    method: api
+    api:
+      path: /command-api
+      commands: ["show file systems | json"]
+
+  - id: arista_show_environment_power
+    vendor: Arista
+    model: EOS
+    roles: [Leaf, Spine, Wan-Edge, Border-Leaf, Border-Gateway, Wan-Router, DCI-Router]
+    method: api
+    api:
+      path: /command-api
+      commands: ["show environment power | json"]
+
+  - id: cisco_nxos_show_environment_power
+    vendor: Cisco
+    model: NX-OS
+    roles: [Leaf, Spine, Wan-Edge, Border-Leaf, Border-Gateway]
+    method: api
+    api:
+      path: /ins
+      commands: ["show environment power"]
+
+  - id: cisco_ios_show_version
+    vendor: Cisco
+    model: IOS
+    roles: [Wan-Router]
+    method: ssh
+    ssh:
+      command: "show version"
+
+  - id: cisco_nxos_show_run
+    vendor: Cisco
+    model: NX-OS
+    roles: [Leaf, Spine, Wan-Edge, Border-Leaf, Border-Gateway]
+    method: ssh
+    ssh:
+      command: "show running-config"
+
+  - id: cisco_ios_show_run
+    vendor: Cisco
+    model: IOS
+    roles: [Wan-Router]
+    method: ssh
+    ssh:
+      command: "show running-config"
+
+  - id: arista_show_run
+    vendor: Arista
+    model: EOS
+    roles: [Leaf, Spine, Wan-Edge, Border-Leaf, Border-Gateway, Wan-Router, DCI-Router]
+    method: ssh
+    ssh:
+      command: "show running-config"
+
+  - id: arista_show_version_ssh
+    vendor: Arista
+    model: EOS
+    roles: []
+    method: ssh
+    ssh:
+      command: "show version | json"
+    comment: "Fallback when API not available"
+
+  - id: arista_show_interfaces_transceiver
+    vendor: Arista
+    model: EOS
+    roles: [Leaf, Spine, Wan-Edge, Border-Leaf, Border-Gateway, Wan-Router, DCI-Router]
+    method: api
+    api:
+      path: /command-api
+      commands: ["show interfaces transceiver | json"]
+
+  - id: cisco_nxos_show_interface_transceiver
+    vendor: Cisco
+    model: NX-OS
+    roles: [Leaf, Spine, Wan-Edge, Border-Leaf, Border-Gateway, Wan-Router, DCI-Router]
+    method: api
+    api:
+      path: /ins
+      commands: ["show interface transceiver details"]
+
+  - id: arista_show_interface_status
+    vendor: Arista
+    model: EOS
+    roles: [Leaf, Spine, Wan-Edge, Border-Leaf, Border-Gateway, Wan-Router, DCI-Router]
+    method: api
+    api:
+      path: /command-api
+      commands: ["show interfaces | json"]
+
+  - id: arista_show_interface_description
+    vendor: Arista
+    model: EOS
+    roles: [Leaf, Spine, Wan-Edge, Border-Leaf, Border-Gateway, Wan-Router, DCI-Router]
+    method: api
+    api:
+      path: /command-api
+      commands: ["show interfaces description | json"]
+
+  - id: cisco_nxos_show_interface_description
+    vendor: Cisco
+    model: NX-OS
+    roles: [Leaf, Spine, Wan-Edge, Border-Leaf, Border-Gateway, Wan-Router, DCI-Router]
+    method: api
+    api:
+      path: /ins
+      commands: ["show interface description"]
+
+  - id: cisco_nxos_show_interface_mtu
+    vendor: Cisco
+    model: NX-OS
+    roles: [Leaf, Spine, Wan-Edge, Border-Leaf, Border-Gateway, Wan-Router, DCI-Router]
+    method: api
+    api:
+      path: /ins
+      commands: ["show interface"]

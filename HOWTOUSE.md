@@ -1,0 +1,309 @@
+# Pergen — How To Use
+
+Operational guide for running, configuring, testing and developing
+Pergen after the OOD/TDD refactor.
+
+---
+
+## 1. Prerequisites
+
+- Python 3.9+
+- macOS / Linux (Windows works under WSL2)
+- A device inventory CSV with the canonical 10-column header
+  (`hostname,ip,fabric,site,hall,vendor,model,role,tag,credential`)
+
+---
+
+## 2. First-time setup
+
+```bash
+git clone git@github.com:asceylan/pergen.git
+cd pergen
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt        # production deps
+pip install -r requirements-dev.txt    # tests + ruff + coverage
+```
+
+Place your inventory CSV at `backend/inventory/inventory.csv`
+(or set `PERGEN_INVENTORY_PATH=/abs/path/to/inv.csv`).  If neither
+exists the app falls back to `backend/inventory/example_inventory.csv`.
+
+---
+
+## 3. Environment variables
+
+### Core configuration
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `SECRET_KEY` | `pergen-default-secret-CHANGE-ME` | Master secret. **Production refuses both this and the historic `dev-secret-change-in-prod`** placeholder; min length 16 chars. |
+| `FLASK_ENV` / `PERGEN_CONFIG` | `development` | Selects `development` / `testing` / `production` from `CONFIG_MAP`. |
+| `PERGEN_INVENTORY_PATH` | `backend/inventory/inventory.csv` | Inventory CSV path. |
+| `PERGEN_INSTANCE_DIR` | `backend/instance` | Notepad / reports / credential DB root. |
+| `LOG_LEVEL` | `INFO` (`DEBUG` in dev) | Root log level. |
+| `LOG_FORMAT` | `colour` (dev) / `json` (prod) | Stream formatter. |
+| `LOG_FILE` | unset | If set, also rotate logs to this file (10 MB × 5). |
+| `LOG_SLOW_MS` | `500` | Slow-request WARN threshold. |
+| `CREDENTIAL_DB_PATH` | `backend/instance/credentials_v2.db` | Encrypted credential store (chmodded 0o600 + `PRAGMA secure_delete`). |
+
+### Audit-batch security knobs (post-Phase-13 + audit batch 4)
+
+In **production** (`PERGEN_CONFIG=production` / `FLASK_ENV=production`)
+two protections are now **mandatory** — `create_app("production")` will
+refuse to start otherwise:
+
+| Variable | Production | Purpose |
+|----------|-----------|---------|
+| `PERGEN_API_TOKEN` or `PERGEN_API_TOKENS` | **REQUIRED** (≥32 chars per token) | Without it, `/api/*` would be open. Audit C-1 fail-closed. |
+| `PERGEN_REQUIRE_DESTRUCTIVE_CONFIRM` | **always-on** in prod | Destructive routes (`/api/transceiver/recover`, `/api/transceiver/clear-counters`) require `X-Confirm-Destructive: yes`. |
+
+In **development / testing** these stay opt-in so the developer
+experience is unchanged. A WARN line is logged on first request to
+flag the open posture.
+
+#### Multi-actor token configuration (audit C-2)
+
+Prefer per-operator tokens so audit log lines can record who took an
+action:
+
+```bash
+export PERGEN_API_TOKENS="alice:$(openssl rand -hex 32),bob:$(openssl rand -hex 32)"
+```
+
+The matched actor is stored on `flask.g.actor` and recorded in
+`audit credential.set actor=<name> ...` log lines. The legacy
+single-bearer form (`PERGEN_API_TOKEN`) still works and resolves
+to `actor=shared`.
+
+#### Optional knobs
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `PERGEN_API_TOKEN` | unset (dev) / required (prod) | Single shared bearer. Constant-time compare via `hmac.compare_digest`. `/api/health`, `/api/v2/health`, `/` (SPA) always exempt. |
+| `PERGEN_API_TOKENS` | unset | Per-actor format `actor1:tok1,actor2:tok2`. Preferred over `PERGEN_API_TOKEN` for accountability. |
+| `PERGEN_REQUIRE_DESTRUCTIVE_CONFIRM` | unset (dev) / on (prod) | When `=1`, `/api/transceiver/recover` and `/api/transceiver/clear-counters` require an `X-Confirm-Destructive: yes` header. Returns 403 otherwise. |
+| `PERGEN_ALLOW_INTERNAL_PING` | unset | When `=1`, `/api/ping` is allowed against loopback / link-local / multicast / private / reserved IPs. Default-deny prevents the endpoint being abused as an internal-network scanner. |
+| `PERGEN_ALLOW_DEBUG_RESPONSES` | unset | When `=1`, `/api/nat-lookup` honours `debug=true` in the request body (otherwise the field is suppressed to prevent Palo Alto API body leakage). |
+| `PERGEN_SSH_STRICT_HOST_KEY` | unset | When `=1`, the SSH runner uses Paramiko `RejectPolicy` instead of the default `AutoAddPolicy`. Pair with `PERGEN_SSH_KNOWN_HOSTS` to enroll your devices. |
+| `PERGEN_SSH_KNOWN_HOSTS` | unset | Path to a managed `known_hosts` file. Loaded before `connect()`. |
+
+> **Inventory-binding posture (not configurable).** Every device-targeted route (`/api/run/device`, `/api/run/pre`, `/api/arista/run-cmds`, `/api/custom-command`, `/api/transceiver/recover`, `/api/transceiver/clear-counters`) RESOLVES the device against the inventory CSV by hostname/IP and uses the inventory's `credential` field. Caller-supplied `credential`, `vendor` and `model` fields are ignored. Audit H-2 prevents an attacker from binding an arbitrary IP to a privileged credential.
+
+> **Device TLS posture (not configurable).** All HTTPS calls to network devices (Arista eAPI, Cisco NX-API, Palo Alto XML API) are sent with `verify=False` because devices in this fleet present local self-signed certificates. The single source of truth is `DEVICE_TLS_VERIFY` in `backend/runners/_http.py`. If you deploy CA-signed device certs in the future, flip that constant rather than reintroducing per-runner toggles. Public APIs (RIPE, PeeringDB) keep `verify=True`.
+
+> **XML parsing (not configurable).** `nat_lookup` parses untrusted XML responses from network firewalls. `defusedxml` is a HARD requirement (no fallback) — a missing dependency raises `ImportError` at module import time rather than silently downgrading to the unsafe stdlib parser. Audit H-1.
+
+> **Credential storage (not configurable).** `cryptography` is a HARD requirement. The legacy `backend/credential_store.py` no longer falls back to base64 when the import fails — it now raises at module import time. Audit C-3.
+
+---
+
+## 4. Running the app
+
+### 4.1 Development (factory + auto-reload)
+
+```bash
+export PERGEN_CONFIG=development
+export SECRET_KEY=$(python3 -c "import secrets; print(secrets.token_urlsafe(32))")
+python3 -c "from backend.app_factory import create_app; create_app('development').run(host='0.0.0.0', port=5000, debug=True)"
+```
+
+### 4.2 Legacy entry point (still supported)
+
+```bash
+FLASK_APP=backend.app flask run --host 0.0.0.0 --port 5000
+```
+
+### 4.3 Production (gunicorn or similar)
+
+```bash
+export PERGEN_CONFIG=production
+export SECRET_KEY=...                  # MUST be a non-default value
+export LOG_FORMAT=json
+export LOG_FILE=/var/log/pergen/app.log
+gunicorn -w 4 -b 0.0.0.0:8000 'backend.app_factory:create_app("production")'
+```
+
+`ProductionConfig.validate()` raises `RuntimeError` on the default
+`SECRET_KEY`, so a misconfigured deploy fails before binding to a port.
+
+---
+
+## 5. Health check
+
+```bash
+curl -s http://localhost:5000/api/health
+# {"status": "ok"}
+
+curl -s http://localhost:5000/api/v2/health      # phase-4 blueprint
+# {"service": "pergen", "status": "ok",
+#  "timestamp": "...", "config": "development",
+#  "request_id": "..."}
+```
+
+---
+
+## 6. Inventory CRUD
+
+| Method | Path | Owner | Purpose |
+|--------|------|-------|---------|
+| GET | `/api/fabrics` | `inventory_bp` | List distinct fabrics |
+| GET | `/api/sites?fabric=` | `inventory_bp` | Sites within a fabric |
+| GET | `/api/halls?fabric=&site=` | `inventory_bp` | Halls |
+| GET | `/api/roles?fabric=&site=&hall=` | `inventory_bp` | Roles |
+| GET | `/api/devices?fabric=&site=&role=&hall=` | `inventory_bp` | Devices |
+| GET | `/api/devices-arista?...` | `inventory_bp` | Arista-only filter |
+| GET | `/api/devices-by-tag?tag=&fabric=&site=` | `inventory_bp` | Lookup by tag |
+| GET | `/api/inventory` | `inventory_bp` | Full dump (`{"inventory": [...]}`) |
+| POST | `/api/inventory/device` | legacy (`backend/app.py`) | Add device |
+| PUT | `/api/inventory/device` | legacy | Update device |
+| DELETE | `/api/inventory/device` | legacy | Delete device |
+| POST | `/api/inventory/import` | legacy | Bulk CSV import |
+
+Example:
+
+```bash
+curl -s "http://localhost:5000/api/devices?fabric=FAB1&site=Mars" | jq .
+```
+
+---
+
+## 7. Notepad (shared)
+
+```bash
+curl -s http://localhost:5000/api/notepad
+# {"content": "...", "line_editors": ["alice", "bob", ...]}
+
+curl -s -X PUT http://localhost:5000/api/notepad \
+     -H "content-type: application/json" \
+     -d '{"content": "first line\nsecond line", "user": "alice"}'
+```
+
+Owned by `notepad_bp` → `NotepadService` → `NotepadRepository`.
+
+---
+
+## 8. Credentials
+
+Legacy routes (still backed by `backend.credential_store`) currently
+own `/api/credentials*`.  Phase 9 also registers a new
+`CredentialService` against `credentials_v2.db` for blueprints to use
+once the data migration is done.
+
+```bash
+curl -X POST http://localhost:5000/api/credentials \
+     -H "content-type: application/json" \
+     -d '{"name": "lab", "method": "basic", "username": "admin", "password": "secret"}'
+
+curl http://localhost:5000/api/credentials                 # list
+curl -X DELETE http://localhost:5000/api/credentials/lab   # delete
+```
+
+> Never commit `credentials.db` / `credentials_v2.db` to git — they
+> are excluded by `.gitignore`.
+
+---
+
+## 9. Running commands on devices
+
+The legacy `/api/run/device`, `/api/transceiver`, `/api/find-leaf`,
+`/api/nat-lookup`, `/api/route-map/run`, `/api/bgp/*`,
+`/api/run/pre/*`, `/api/run/post/*`, `/api/custom-command`,
+`/api/arista/run-cmds`, `/api/router-devices`, `/api/ping`,
+`/api/commands`, `/api/parsers/*`, `/api/reports*`,
+`/api/credentials/<name>/validate` and `/api/diff` endpoints stay in
+`backend/app.py` for now.  Refer to the legacy implementation for
+exact payload shapes.  These will move to per-domain blueprints in a
+follow-on phase via the new `DeviceService`.
+
+---
+
+## 10. Tests
+
+```bash
+make test                          # full suite (330 tests)
+make cov                           # with coverage report
+venv/bin/python -m pytest tests/golden/ -q                # golden / characterisation
+venv/bin/python -m pytest -k phase9 -q                    # phase-9 only
+venv/bin/python -m pytest tests/test_services.py -q       # service layer
+```
+
+Useful environment knobs:
+
+- `PERGEN_REGEN_GOLDEN=1` — regenerate the golden snapshots in
+  `tests/fixtures/golden/`.
+- `PERGEN_INSTANCE_DIR` / `PERGEN_INVENTORY_PATH` — same as runtime;
+  `conftest.py` already wires per-test isolation.
+
+---
+
+## 11. Linting / formatting
+
+```bash
+make lint                          # ruff check
+venv/bin/ruff check --fix .        # auto-fix what is fixable
+```
+
+`pyproject.toml` pins the rule sets (`E,F,W,I,B,SIM,S,…`) and the
+target Python version.
+
+---
+
+## 12. Adding a new endpoint
+
+The recommended pattern (post-phase-9):
+
+1. **Repository** — if persistence is involved, add or extend a
+   `backend/repositories/<thing>_repository.py` class.
+2. **Service** — wrap business logic in
+   `backend/services/<thing>_service.py`.
+3. **Blueprint** — create `backend/blueprints/<thing>_bp.py` that
+   pulls the service from `current_app.extensions[...]` and returns
+   `jsonify(...)`.
+4. **Register** — append the blueprint and service to
+   `_register_blueprints` / `_register_services` in
+   `backend/app_factory.py`.
+5. **Tests first** — write unit tests for the service (mock the
+   repository) and one happy-path blueprint test before touching the
+   route file.
+6. **Phase-13 security checklist for any new endpoint:**
+   - If the endpoint forwards a string to a network device, it
+     **must** call `CommandValidator.validate(cmd)` before transport
+     and return `{"error": "rejected command: …"}` with HTTP 400 on
+     failure.
+   - If the endpoint accepts an IP, hostname, ASN, prefix or
+     credential name, it **must** route the input through
+     `InputSanitizer.sanitize_*` before any side effect.
+   - If the endpoint accepts a free-form body, set or rely on
+     Flask's `MAX_CONTENT_LENGTH` (10 MiB by default; tighten
+     per-route as needed — see `_MAX_NOTEPAD_BYTES`).
+   - Never echo `str(e)` into a JSON response.  Use
+     `current_app.logger.exception(...)` for the full traceback
+     server-side and return a generic `{"error": "internal error"}`
+     envelope.
+
+---
+
+## 13. Phase-13 security operations notes
+
+* **Response headers** — every Pergen response carries
+  `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`,
+  `Referrer-Policy: strict-origin-when-cross-origin`,
+  `Permissions-Policy: geolocation=(), microphone=(), camera=()`
+  in addition to `X-Request-ID`.  If you front Pergen with a
+  reverse proxy that injects its own headers, leave these in
+  place — they are set with `setdefault`, so per-route or
+  proxy overrides still win.
+* **Request size** — Flask refuses requests larger than 10 MiB
+  by default; tune via `MAX_CONTENT_LENGTH` env var.  The notepad
+  PUT additionally enforces a per-route 512 KiB cap (`HTTP 413`).
+* **Ping fan-out** — `/api/ping` rejects payloads with more than
+  64 devices in a single call (`HTTP 400`).  Batch operationally
+  if you need to reach more than that.
+* **Defusedxml** — `nat_lookup` requires `defusedxml` (already in
+  `requirements.txt`).  In the highly unlikely event the package
+  is missing, the fallback to stdlib `xml.etree` is logged and
+  XXE protection degrades; install `defusedxml` to restore it.
+* **`python -O` deployments** — safe.  Phase 13 replaced every
+  `assert` used as a security guard with `raise ValueError(...)`,
+  so optimised builds keep the same hardening.

@@ -1,0 +1,3 @@
+hostname,ip,fabric,site,hall,vendor,model,role,tag,credential
+switch1,192.168.1.1,fab1,site1,hall-1,arista,eos,spine,,my-cred
+switch2,192.168.1.2,fab1,site1,hall-1,cisco,nx-os,leaf,,my-cred

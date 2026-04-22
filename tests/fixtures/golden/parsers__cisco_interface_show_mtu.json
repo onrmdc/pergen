@@ -1,0 +1,6 @@
+{
+  "interface_mtu_map": {
+    "Ethernet1/1": "9216",
+    "Ethernet1/2": "1500"
+  }
+}

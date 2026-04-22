@@ -1,0 +1,9 @@
+{
+  "ISIS": "1",
+  "isis_adjacency_rows": [
+    {
+      "interface": "Ethernet1",
+      "state": "Up"
+    }
+  ]
+}
