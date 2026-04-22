@@ -48,6 +48,8 @@ logs/
 AGENTS.md
 ECC_USAGE_GUIDE.md
 coverage.json
+# Coverage build artifacts from audit runs (regenerated each pass)
+docs/test-coverage/coverage_*.json
 
 # OpenCode workspace config (per-developer, not source-controlled)
 .opencode/

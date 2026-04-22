@@ -48,8 +48,13 @@ def _get_json(
         )
         # Treat any redirect as a hard failure: a legitimate stat.ripe.net
         # / peeringdb.com response is always 200 with the JSON body inline.
+        # Wave-4 W4-M-05: do NOT echo the upstream Location header — it is
+        # attacker-controllable in any MITM/DNS-spoof scenario and could
+        # land XSS payload in the JSON response body.
         if 300 <= r.status_code < 400:
-            return {"_error": f"refused redirect from {url} → {r.headers.get('Location')!r}"}
+            return {
+                "_error": f"refused redirect from upstream (HTTP {r.status_code})"
+            }
         r.raise_for_status()
         return r.json()
     except (requests.RequestException, ValueError) as e:

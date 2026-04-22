@@ -55,7 +55,14 @@ def api_notepad_put():
     """
     data = request.get_json(silent=True) or {}
     content = data.get("content")
-    user = (data.get("user") or "").strip() or "—"
+    # Wave-4 W4-M-04: strip control chars (\\n, \\r, \\t etc.) and cap
+    # length to defeat audit-log line-injection. JSON-mode logs were
+    # already safe (json.dumps escapes); text-mode logs land the raw
+    # value which would otherwise split the audit record into two.
+    raw_user = (data.get("user") or "").strip() or "—"
+    user = "".join(c for c in raw_user[:64] if c.isprintable() and c not in "\r\n\t")
+    if not user:
+        user = "—"
     if content is None:
         return jsonify({"error": "content required"}), 400
     if not isinstance(content, str):
