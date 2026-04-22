@@ -270,7 +270,10 @@
 
     async function loadFabrics() {
       const { fabrics } = await get("/api/fabrics");
-      fabricSel.innerHTML = "<option value=\"\">—</option>" + fabrics.map(f => `<option value="${f}">${f}</option>`).join("");
+      // Audit H-01: escape every value before interpolating into innerHTML
+      // — inventory writes are open in dev/test, so attacker-controlled
+      // strings can land in the fabric/site/hall/role columns.
+      fabricSel.innerHTML = "<option value=\"\">—</option>" + fabrics.map(f => `<option value="${escapeHtml(f)}">${escapeHtml(f)}</option>`).join("");
     }
 
     async function loadSites() {
@@ -281,7 +284,8 @@
       deviceList.innerHTML = "";
       if (!fabric) return;
       const { sites } = await get("/api/sites?fabric=" + encodeURIComponent(fabric));
-      siteSel.innerHTML = "<option value=\"\">— All —</option>" + (sites || []).map(s => `<option value="${s}">${s}</option>`).join("");
+      // Audit H-01
+      siteSel.innerHTML = "<option value=\"\">— All —</option>" + (sites || []).map(s => `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join("");
       siteSel.selectedIndex = 0;
       await loadHalls();
     }
@@ -294,7 +298,8 @@
       deviceList.innerHTML = "";
       if (!fabric) return;
       const { halls } = await get("/api/halls?fabric=" + encodeURIComponent(fabric) + "&site=" + encodeURIComponent(site || ""));
-      hallSel.innerHTML = "<option value=\"\">— All —</option>" + (halls || []).map(h => `<option value="${h}">${h}</option>`).join("");
+      // Audit H-01
+      hallSel.innerHTML = "<option value=\"\">— All —</option>" + (halls || []).map(h => `<option value="${escapeHtml(h)}">${escapeHtml(h)}</option>`).join("");
       await loadRoles();
     }
 
@@ -308,7 +313,8 @@
       let path = "/api/roles?fabric=" + encodeURIComponent(fabric) + "&site=" + encodeURIComponent(site || "");
       if (hall) path += "&hall=" + encodeURIComponent(hall);
       const { roles } = await get(path);
-      roleSel.innerHTML = "<option value=\"\">—</option>" + (roles || []).map(r => `<option value="${r}">${r}</option>`).join("");
+      // Audit H-01
+      roleSel.innerHTML = "<option value=\"\">—</option>" + (roles || []).map(r => `<option value="${escapeHtml(r)}">${escapeHtml(r)}</option>`).join("");
     }
 
     async function loadDevices() {
@@ -4052,7 +4058,10 @@
               ["Hall", d.hall || ""],
               ["Interface", d.interface || ""]
             ];
-            resultBody.innerHTML = rows.map(function(r) { return "<tr><td>" + r[0] + "</td><td>" + (r[1] ? String(r[1]) : "") + "</td></tr>"; }).join("");
+            // Audit H-02: every column value (incl. inventory hall/site,
+            // device leaf_hostname) must be HTML-escaped — a hostile NX-API
+            // or inventory writer could otherwise plant <img onerror=…>.
+            resultBody.innerHTML = rows.map(function(r) { return "<tr><td>" + escapeHtml(r[0]) + "</td><td>" + (r[1] ? escapeHtml(String(r[1])) : "") + "</td></tr>"; }).join("");
             resultWrap.style.display = "block";
           }
           devs.forEach(function(d) {
@@ -4132,7 +4141,9 @@
               var name = d.hostname || d.ip || "?";
               var li = document.createElement("li");
               li.setAttribute("data-hostname", name);
-              li.innerHTML = "<span class=\"device-check-name\">" + (label ? label + " " : "") + name + "</span><span class=\"device-check-status\"><span class=\"device-check-loading\"></span></span>";
+              // Audit H-02: device hostname/ip flows from inventory (writable
+              // via open API in dev/test); label is operator-supplied. Escape both.
+              li.innerHTML = "<span class=\"device-check-name\">" + (label ? escapeHtml(label) + " " : "") + escapeHtml(name) + "</span><span class=\"device-check-status\"><span class=\"device-check-loading\"></span></span>";
               listEl.appendChild(li);
             });
           }
@@ -4229,7 +4240,8 @@
                 if (data.ok && data.firewall_ip) updateRow(data.firewall_ip, true);
                 if (!resultBody || !resultWrap) return;
                 if (!data.ok) {
-                  resultBody.innerHTML = "<tr><td colspan=\"2\">" + (data.error || "") + "</td></tr>";
+                  // Audit H-02: server error string flows from device API.
+                  resultBody.innerHTML = "<tr><td colspan=\"2\">" + escapeHtml(data.error || "") + "</td></tr>";
                   resultWrap.style.display = "block";
                   if (data.debug && debugOut && debugMatch && debugConfig) {
                     debugMatch.textContent = data.debug.nat_policy_match != null ? data.debug.nat_policy_match : (data.debug.nat_policy_match_error != null ? "Error: " + data.debug.nat_policy_match_error : "");
@@ -4245,7 +4257,10 @@
                   ["Translated IP(s)", (data.translated_ips && data.translated_ips.length) ? data.translated_ips.join(", ") : ""],
                   ["Firewall", (data.firewall_hostname || data.firewall_ip || "").trim() || ""]
                 ];
-                resultBody.innerHTML = rows.map(function(r) { return "<tr><td>" + r[0] + "</td><td>" + (r[1] ? String(r[1]) : "") + "</td></tr>"; }).join("");
+                // Audit H-02: rule_name + translated_ips originate from
+                // a Palo Alto NAT config that any operator with rulebase
+                // write access can author — must escape every cell.
+                resultBody.innerHTML = rows.map(function(r) { return "<tr><td>" + escapeHtml(r[0]) + "</td><td>" + (r[1] ? escapeHtml(String(r[1])) : "") + "</td></tr>"; }).join("");
                 var firstIp = data.translated_ips && data.translated_ips.length ? data.translated_ips[0].trim() : "";
                 if (firstIp) {
                   var pathRow = "<tr><td>BGP path (Looking Glass)</td><td id=\"natBgpPathCell\" class=\"muted\" style=\"font-size:0.9em;\">Loading…</td></tr>";

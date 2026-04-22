@@ -27,10 +27,6 @@ def _read_app_js() -> str:
     return _APP_JS.read_text(encoding="utf-8")
 
 
-@pytest.mark.xfail(
-    reason="audit H-01 — fabric/site/hall/role dropdowns interpolate without escapeHtml",
-    strict=True,
-)
 @pytest.mark.parametrize(
     "builder_name",
     ["loadFabrics", "loadSites", "loadHalls", "loadRoles"],

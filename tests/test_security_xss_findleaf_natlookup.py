@@ -27,10 +27,6 @@ def _read_app_js() -> str:
     return _APP_JS.read_text(encoding="utf-8")
 
 
-@pytest.mark.xfail(
-    reason="audit H-02 — find-leaf / NAT-lookup result tables interpolate without escape",
-    strict=True,
-)
 def test_findleaf_result_row_uses_escapehtml() -> None:
     """The find-leaf result table assembly at app.js:~4055 should escape `r[1]`."""
     src = _read_app_js()
@@ -47,10 +43,6 @@ def test_findleaf_result_row_uses_escapehtml() -> None:
     )
 
 
-@pytest.mark.xfail(
-    reason="audit H-02 — NAT-lookup translated_ips list interpolates without escape",
-    strict=True,
-)
 def test_nat_lookup_translated_ips_uses_escapehtml() -> None:
     """NAT translated IPs are rendered into innerHTML via map+join — must escape."""
     src = _read_app_js()

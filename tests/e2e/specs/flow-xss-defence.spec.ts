@@ -8,14 +8,12 @@ import { AppShell } from "../pages/AppShell";
  * an `<img onerror>` HTML injection. The SPA must not execute the JS or
  * insert the `<img>` element into the DOM.
  *
- * NOTE: this test is currently expected to FAIL because the SPA writes
- * the result row via raw `innerHTML` interpolation (see audit H-02). It
- * is marked .fail() so the build stays green; once the escapeHtml fix
- * lands, remove the .fail() and the test will pin the new behaviour.
+ * Wave-3 Phase 2 landed the escapeHtml() fix in the result-row builder
+ * (app.js:4061), so this test now pins the safe behaviour.
  */
 
 test.describe("XSS defence in result tables (audit H-02)", () => {
-  test.fail("find-leaf result must not execute or render injected HTML", async ({ page }) => {
+  test("find-leaf result must not execute or render injected HTML", async ({ page }) => {
     const xssPayload = "<img src=x onerror='window.__xss_landed=1'>";
 
     await page.route("**/api/find-leaf-check-device**", (route) =>
