@@ -16,17 +16,18 @@ commands shown below.
 
 | Metric | Value |
 |--------|-------|
-| Tests passing (pytest) | **1394 / 1394** + **0 xfailed** (every audit tracker closed) |
-| Total test functions | **1394** (all passing) |
-| Test files (Python) | **74** (wave-2 baseline) |
-| Time to run full pytest suite | ~71 s on an M-series Mac |
-| End-to-end tests (Playwright) | **85** in **38 spec files** (+15 P0/P1 specs in wave-3 Phase 12) |
+| Tests passing (pytest) | **1619 / 1619** + **4 xfailed** (3 wave-4 audit followups deferred) |
+| Total test functions | **1623** (1619 pass + 4 xfail) |
+| Test files (Python) | **88** (was 74 at wave-3 close — +7 wave-4 security tests + +10 Tier-1 unit-test files in 4 new test dirs) |
+| Time to run full pytest suite | ~70 s on an M-series Mac |
+| End-to-end tests (Playwright) | **90** in **41 spec files** (+3 P0 wave-4 specs; 1 wave-3 spec renamed for clarity) |
 | Frontend unit tests (Vitest) | **37 / 37** in <1 s (utils.js + subnet.js helpers) |
 | Lint (`ruff check`) on new code | **0 errors** |
 | Coverage — parser surface (`backend.parsers/*` + shim) | **87 %** (wave-2 baseline) |
-| Coverage — whole-project | **84.17 %** (was 78.33 % at wave-3 start; +5.84 pp) |
-| Audit findings remediated | **38 / 38** (batches 1–4) + **7 frontend XSS** (audit-wave-1) + **24 wave-3 closures** |
-| Audit findings tracked via `xfail` | **0** (every wave-1 + wave-2 + wave-3 tracker closed) |
+| Coverage — wave-3 4 new packages combined | **92 %** (was 57 % at wave-3 close — +35 pp from Tier-1 tests) |
+| Coverage — whole-project | **90.42 %** (was 84.17 % at wave-4 start; +6.25 pp) |
+| Audit findings remediated | **38 / 38** (batches 1–4) + **7 frontend XSS** (audit-wave-1) + **24 wave-3 closures** + **3 wave-4 closures** (W4-H-01, W4-M-04, W4-M-05) |
+| Audit findings tracked via `xfail` | **4** total (3 wave-4 deferred MED + 1 paired assertion) |
 | God modules remaining | **0** (find_leaf, nat_lookup, bgp_looking_glass, route_map_analysis all split into packages in wave-3 Phase 8) |
 | `backend/parse_output.py` size | **151 lines** (was 1,552 — 90 % reduction; now a back-compat shim over `backend/parsers/*` package, 31 modules) |
 | `backend/app.py` size | **87 lines** (was 1,577 — 95 % reduction) |

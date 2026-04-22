@@ -134,7 +134,7 @@ tests/                           # 861 tests (852 pass + 9 xfail) across 58 file
 └── test_runner_dispatch_coverage.py    # 13 runner.run_device_commands branches
 ```
 
-**Total tests: 1392 pytest (1368 passed + 24 xfailed) + 16 Vitest + 69 Playwright** — audit-tracker `xfail` count grew to 24 in wave-2,
+**Total tests: 1623 pytest (1619 passed + 4 xfailed) + 37 Vitest + 90 Playwright** — wave-3 closed all wave-1+2 trackers; wave-4 surfaced 1 NEW HIGH (closed) + 3 NEW MEDIUM (pinned by strict-xfail in `wave4_followups.md`),
 all green. Lint clean on every blueprint, service, util, factory,
 app.py, config, hardened runner, security module, and request_logging.
 Audit batch 4 added 24 security-regression tests
@@ -307,7 +307,7 @@ blueprints incrementally.
 The test suite is now stratified across three runtimes, each with
 a different feedback loop and ownership boundary.
 
-### 7.1 Python — pytest (1368 passed + 24 xfailed in ~73 s)
+### 7.1 Python — pytest (1619 passed + 4 xfailed in ~70 s)
 
 The classical layer. Owned by every code change. Three sub-tiers:
 
@@ -390,7 +390,7 @@ module split is queued); audit-wave-1 dropped the count from
 ### 7.4 Coverage gates (Makefile)
 
 - `make cov` — whole-project line coverage (gate 45 %, current
-  78.33 % post-wave-2; legacy RIPEStat helpers drag the average; their
+  90.42 % post-wave-4; legacy RIPEStat helpers drag the average; their
   public APIs are all covered, only deep parser branches remain.
 - `make cov-new` — new-OOD-layer-only coverage (gate 85 %, current
   94 %). This is the gate that *must* hold green; the global gate

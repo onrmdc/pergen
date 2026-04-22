@@ -75,7 +75,7 @@
 
 ---
 
-## Status Log — wave-3 COMPLETE
+## Status Log — wave-3 COMPLETE; wave-4 audit follow-ups in `wave4_followups.md`
 
 | Date | Phase | Outcome |
 |------|-------|---------|
@@ -148,3 +148,22 @@ documented future-work, not regressions:
 
 The roadmap doc is now sealed; future work goes to its own dedicated planning
 doc per item.
+
+## Wave-4 audit (post wave-3 close-out)
+
+A wave-4 audit run on 2026-04-22 confirmed wave-3's mitigations held and
+surfaced 1 NEW HIGH + 5 NEW MEDIUM + 4 LOW + 3 INFO findings — all detailed
+in `docs/security/audit_2026-04-22-wave4.md`. Wave-4 close-out:
+
+- 1 NEW HIGH (W4-H-01 — `/api/run/post/complete` IDOR bypass) — **closed**
+  with a 1-line fix.
+- 2 NEW MEDIUM (W4-M-04 notepad log-injection; W4-M-05 bgp_lg Location
+  echo) — **closed** in wave-4.
+- 3 NEW MEDIUM (W4-M-01, W4-M-02, W4-M-03) — pinned by strict-xfail tests;
+  shipping plan in `docs/refactor/wave4_followups.md`.
+- 4 LOW + 3 INFO — minor hardening, deferred to a future polish pass.
+
+Wave-4 also lifted coverage 84.17 % → **90.42 %** with +219 unit tests
+across the 4 new wave-3 packages (every targeted module ≥87 %), and added
+3 new Playwright P0 specs for the post-run + report-restore + extended
+error-path flows.

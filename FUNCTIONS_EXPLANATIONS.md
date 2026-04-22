@@ -401,13 +401,64 @@ removed; existing callers continue to work.
 |--------|--------|-------|
 | `run_device_commands(...)` (SSH branch) | called `ssh_runner.run_command` directly | runs `cmd` through `CommandValidator.validate` first; rejected commands record `entry["error"] = "rejected by CommandValidator: …"` and never reach the transport layer. |
 
-### `backend/nat_lookup.py`
+### `backend/nat_lookup/` (wave-3 Phase 8 — split from monolith)
 
-| Symbol | Before | After |
-|--------|--------|-------|
-| `import xml.etree.ElementTree as ET` | stdlib parser | `from defusedxml import ElementTree as ET` (stdlib fallback + `_DefusedXmlException` stub). |
-| `_find_nat_rule_name_in_response`, `_find_translated_ips_in_rule_config` | `except _ETParseError` | `except (_ETParseError, _DefusedXmlException)` so XXE/Billion-Laughs payloads are swallowed and the regex fallback runs. |
-| Outbound `requests.get(...)` for nat-policy-match and rule-config | passed `params={"key": api_key, …}` | passes `headers=api_headers` (with `X-PAN-KEY`) and **omits** `key` from `params`; debug error responses contain only `type(e).__name__`. |
+The 341-LOC `backend/nat_lookup.py` was split into a 6-file package
+following the parse_output playbook. All callers continue to use the
+existing `from backend import nat_lookup` shape — `__init__.py` is
+the back-compat shim.
+
+| Module | Role |
+|--------|------|
+| `nat_lookup/__init__.py` | back-compat shim re-exporting public + private symbols + holds the literal `from defusedxml import ElementTree as ET` line for `inspect.getsource(...)` security tests |
+| `nat_lookup/ip_helpers.py` | `_IPV4_RE`, `_is_valid_ip` |
+| `nat_lookup/xml_helpers.py` | `_format_first_nat_rule_response`, `_find_nat_rule_name_in_response`, `_format_translated_address_response` (legacy-preserved L-09 escape chain), `_find_translated_ips_in_rule_config` |
+| `nat_lookup/palo_alto/api.py` | `build_nat_policy_match_cmd`, `build_rule_config_xpath` (H7 quote-style alternation), `call_nat_policy_match`, `call_nat_rule_config` (X-PAN-KEY header, A02) |
+| `nat_lookup/service.py` | `nat_lookup` orchestrator + `_resolve_fabric_site` + `_try_one_firewall` helpers |
+
+**Wave-2 audit hardening preserved verbatim:**
+| Symbol | Hardening |
+|--------|-----------|
+| `import xml.etree.ElementTree as ET` | replaced by `from defusedxml import ElementTree as ET` (stdlib fallback + `_DefusedXmlException` stub) |
+| `_find_nat_rule_name_in_response`, `_find_translated_ips_in_rule_config` | `except (_ETParseError, _DefusedXmlException)` swallows XXE/Billion-Laughs payloads; regex fallback runs |
+| Outbound `requests.get(...)` for nat-policy-match and rule-config | passes `headers={"X-PAN-KEY": api_key}` (audit A02); error envelopes contain only `type(e).__name__` |
+
+### `backend/find_leaf/` (wave-3 Phase 8)
+
+Split from a 325-LOC monolith. Per-vendor strategies replace the
+inlined Arista/Cisco branches.
+
+| Module | Role |
+|--------|------|
+| `find_leaf/__init__.py` | back-compat shim + vendor-dispatch for `_query_one_leaf_search` / `_complete_find_leaf_from_hit` |
+| `find_leaf/ip_helpers.py` | `_IPV4_RE`, `_is_valid_ip`, `_leaf_ip_from_remote` |
+| `find_leaf/strategies/arista.py` | `_query_arista_leaf_search` (BGP-EVPN mac-ip lookup) + `_complete_arista_hit` (ARP follow-up on the resolved leaf) |
+| `find_leaf/strategies/cisco.py` | `_query_cisco_leaf_search` (ARP-suppression-cache lookup) + `_complete_cisco_hit` |
+| `find_leaf/service.py` | `find_leaf` and `find_leaf_check_device` orchestration; preserves the parallel ThreadPoolExecutor first-hit-wins behaviour verbatim (audit M-09 deferred) |
+
+### `backend/bgp_looking_glass/` (wave-3 Phase 8)
+
+Split from a 447-LOC monolith. RIPEStat / RPKI / PeeringDB calls land
+in dedicated submodules.
+
+| Module | Role |
+|--------|------|
+| `bgp_looking_glass/__init__.py` | back-compat shim; re-exports `requests` for tests that patch `backend.bgp_looking_glass.requests.get` |
+| `bgp_looking_glass/normalize.py` | pure `normalize_resource` — prefix/AS validator |
+| `bgp_looking_glass/http_client.py` | `_get_json` with audit M-01 (`allow_redirects=False`) and W4-M-05 (opaque redirect-error envelope) |
+| `bgp_looking_glass/ripestat.py` | RIPEStat fetch+parse helpers (status/RPKI/history/visibility/LG/bgplay/AS-overview/announced-prefixes) |
+| `bgp_looking_glass/peeringdb.py` | PeeringDB AS-name lookup |
+| `bgp_looking_glass/service.py` | 7 public `get_bgp_*` orchestrators |
+
+### `backend/route_map_analysis/` (wave-3 Phase 8)
+
+Split from a 232-LOC monolith into a 3-file package.
+
+| Module | Role |
+|--------|------|
+| `route_map_analysis/__init__.py` | back-compat shim |
+| `route_map_analysis/parser.py` | Arista `show running-config | json` parser (`analyze_router_config` + `_extract_*` helpers) |
+| `route_map_analysis/comparator.py` | cross-device unified BGP table builder (`build_unified_bgp_full_table` + `_device_order_key`) |
 
 ### `backend/app.py` (legacy routes hardened)
 

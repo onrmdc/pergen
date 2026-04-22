@@ -8,6 +8,98 @@ return shape. Behaviour changes are explicitly noted; otherwise none.
 
 ---
 
+## v0.5.0 — Wave-4: post-wave-3 audit pass
+
+**Scope:** Re-audit after wave-3 close-out (4 parallel agents:
+security-reviewer, python-reviewer, coverage analysis, e2e gap analysis).
+Confirm wave-3 mitigations held, surface NEW issues, close the actionable
+ones, plan the rest. Roadmap: `docs/refactor/wave4_followups.md`.
+
+**Audit reports**
+
+- `docs/security/audit_2026-04-22-wave4.md` (556 lines) — 0 CRITICAL,
+  **1 NEW HIGH** (W4-H-01), 5 NEW MEDIUM, 4 LOW, 3 INFO. Confirmed 0
+  new dangerous-primitive sites introduced by wave-3.
+- `docs/code-review/python_review_2026-04-22-wave4.md` — parser refactor
+  still A−. 4 new wave-3 packages graded B+/A−/A−/A−. Same NEW HIGH
+  identified independently.
+- `docs/test-coverage/coverage_audit_2026-04-22-wave4.md` — 84.17 %
+  combined; the wave-3 god-module split moved coverage debt: 19 functions
+  in the 4 new packages had 0 % body coverage.
+- `docs/test-coverage/e2e_gap_analysis_2026-04-22-wave4.md` — 85/85
+  Playwright passing; 11 endpoints with 0 E2E coverage; 1 spec misnamed.
+
+**W4-H-01 fix — `/api/run/post/complete` IDOR bypass**
+
+The wave-3 Phase 4 sweep correctly added `actor=_current_actor()` to
+the 3 sibling endpoints (`/api/run/result`, `/api/run/post`,
+`/api/reports/<id>/restore`) but missed `/api/run/post/complete`. Bob
+could complete Alice's PRE run and persist tampered POST results to
+disk under her run_id. **One-line fix** at `runs_bp.py:312`. Pinned
+by `tests/test_security_run_post_complete_actor_scoping.py`.
+
+**Other wave-4 closures (2 NEW MEDIUM)**
+
+- W4-M-04 — notepad log-injection: control-char strip + 64-char cap on
+  the `user` field before `_audit.info(...)`. Defeats `\n`-splitting
+  in text-mode logs (JSON-mode was already safe).
+- W4-M-05 — bgp_lg `_get_json` Location-header echo: opaque envelope
+  replaces `f"... → {Location!r}"`. Defence-in-depth against MITM
+  payload landing in the JSON response body.
+
+**Tier-1 coverage lift — +219 unit tests, 4 new test directories**
+
+The wave-3 god-module split moved coverage debt from the old monoliths
+into the new packages. Wave-4 closes that debt by adding focused unit
+tests mirroring the `tests/parsers/cisco_nxos/test_arp.py` pattern.
+
+10 new test files across 4 new test directories (`tests/find_leaf/`,
+`tests/nat_lookup/`, `tests/route_map_analysis/`, `tests/bgp_looking_glass/`):
+
+- `test_strategies_cisco.py` (14 tests), `test_strategies_arista.py` (13),
+  `test_ip_helpers.py` (16), `test_init.py` (12)
+- `test_xml_helpers.py` (24), `test_palo_alto_api.py` (20),
+  `test_service.py` (12)
+- `test_comparator.py` (14), `test_parser.py` (22)
+- `test_ripestat_format.py` (36)
+
+Coverage delta on the 4 packages combined: **57 % → 92 %** (+35 pp).
+Every targeted module now ≥87 %. **0 functions at 0 % body coverage.**
+
+**E2E additions (3 NEW P0 specs + 1 rename)**
+
+- `flow-postrun-complete.spec.ts` — POST `/api/run/post/complete`
+  round-trip; implicitly verifies the W4-H-01 fix doesn't break the
+  happy path.
+- `flow-report-restore.spec.ts` — POST `/api/reports/<id>/restore`
+  flow (the wave-3 Phase 4 endpoint).
+- `flow-error-paths-extended.spec.ts` — credential POST 500, inventory
+  empty-shape response, find-leaf abort-during-navigation.
+- `flow-custom-command.spec.ts` → `flow-restapi-runcmd.spec.ts` rename
+  (audit flagged the original filename as misleading).
+
+**Wave-4 deferred (3 NEW MEDIUM, pinned by strict-xfail)**
+
+- W4-M-01 — `POST /api/reports/<id>/restore` actor-scoping (needs
+  `created_by_actor` field in the report-on-disk format + backfill CLI).
+- W4-M-02 — Anonymous-actor runs leak to authenticated actors (single-file
+  RunStateStore tightening).
+- W4-M-03 — `RunStateStore.update()` no actor parameter + `_created_by_actor`
+  reserved-key rejection (API-shape change).
+
+Plan + shipping order in `docs/refactor/wave4_followups.md`.
+
+**Numbers**
+
+- pytest: 1394 → **1619 passing** (+225), 0 → **4 xfail** (3 wave-4 audit
+  followups + 1 paired assertion).
+- Vitest: 37 (no change).
+- Playwright: 38 spec files / 85 tests → **41 spec files / 90 tests**.
+- 4 wave-3 packages combined: 57 % → **92 %**.
+- Whole-project coverage: 84.17 % → **90.42 %** (+6.25 pp).
+
+---
+
 ## v0.4.0 — Wave-3: production-readiness sweep (14 phases)
 
 **Scope:** Execute every audit finding from the wave-2 reports
