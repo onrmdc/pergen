@@ -389,14 +389,22 @@ byte-for-byte against the pre-refactor baseline.
 ## 10. Tests
 
 ```bash
-make test                          # full suite (1631 passed + 0 xfailed, ~71 s)
-make cov                           # whole-project coverage report (gate 45 %, currently 90.23 %)
-npm run test:frontend              # Vitest frontend unit tests (37 tests, <1 s)
-npx playwright test                # Playwright E2E (90 tests / 41 specs, ~10–30 s)
+make test                          # full suite (1717 passed + 0 xfailed, ~79 s)
+make cov                           # whole-project coverage report (gate 45 %, currently 90.51 %)
+npm run test:frontend              # Vitest frontend unit tests (45 tests, <1 s)
+npx playwright test                # Playwright E2E (100 tests / 43 specs, ~10–30 s)
 
 # Operator CLI (wave-5):
 python -m backend.cli.backfill_report_actors --dry-run   # preview legacy report stamping
 python -m backend.cli.backfill_report_actors --owner=netops-2026   # stamp + commit
+
+# Operator CLI (wave-6 Phase E — credential migration):
+python scripts/migrate_credentials_v1_to_v2.py --dry-run            # preview
+python scripts/migrate_credentials_v1_to_v2.py --verbose             # real run
+# Audit classifier (wave-6 Phase C):
+node scripts/audit/innerhtml_classifier.mjs                          # generate XSS site CSV
+# SPA cookie auth (wave-6 Phase F) — opt-in:
+export PERGEN_AUTH_COOKIE_ENABLED=1                                  # then restart app
 make cov-new                       # OOD-layer-only coverage report (gate 85 %, currently 94 %)
 venv/bin/python -m pytest tests/golden/ -q                # golden / characterisation
 venv/bin/python -m pytest -k phase9 -q                    # phase-9 only

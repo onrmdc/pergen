@@ -16,6 +16,86 @@ return shape. Behaviour changes are explicitly noted; otherwise none.
 
 ---
 
+## v0.7.0 — Wave-6: ALL reclassified items shipped (refactor FULLY COMPLETE)
+
+**Scope:** Land all 5 items the wave-5 close-out reclassified as "future
+feature work" — credential migration tooling, SPA cookie auth + CSRF,
+CSP `'unsafe-inline'` removal, long-tail XSS sweep + lint guard,
+find-leaf parallel-cancel. After this commit, every plan in
+`docs/refactor/` is `DONE_*`-prefixed and zero unfinished refactor work
+remains. Plan: `docs/refactor/DONE_wave3_roadmap.md` §"Reclassified
+items — ALL CLOSED in wave-6".
+
+**Phases (7)**
+
+- Phase A — baseline lock (1631 + 0 xfail). Tag `pre-feature-wave`.
+- Phase B — find-leaf parallel-cancel (audit M-09). 10s → 0.35s.
+  Manual try/finally + `executor.shutdown(wait=False, cancel_futures=True)`.
+- Phase C — XSS long-tail sweep. New classifier script, 5 audit-confirmed
+  XSS sites closed (router-bgp table, BGP chip list, find-leaf list, 2
+  CSS-selector lookups via `CSS.escape`), CI lint guard, hardened
+  `escapeHtml` (manual five-entity replacement closes attribute-context
+  blind spot), new `safeHtml` tagged template, Playwright XSS canary spec.
+- Phase D — CSP `'unsafe-inline'` removal. Moved 1 inline `<style>` block
+  + 239 inline `style="..."` attributes from `index.html` + 32 fragments
+  from `app.js` to two new CSS files (~160 selectors). Tightened CSP:
+  removed `'unsafe-inline'` from `style-src`; added `form-action 'self'`,
+  `connect-src 'self'`, `upgrade-insecure-requests`. 18 new tests.
+- Phase E — Credential migration tooling. New
+  `backend/repositories/credential_migration.py` library (97% covered)
+  + `scripts/migrate_credentials_v1_to_v2.py` operator CLI with
+  `--dry-run`, `--verbose`, pre-flight canary decrypt. Idempotent,
+  refuses on SECRET_KEY mismatch. Operator runbook in `HOWTOUSE.md` §8.
+  Per the wave-6 plan, the legacy module shim stays loadable.
+- Phase F — SPA cookie auth + CSRF (Council Option B). New `pergenFetch`
+  wrapper (53 fetch sites converted, 1 raw `fetch(` survives — enforced
+  by lint test); new `backend/security/csrf.py` (100% covered); new
+  `backend/blueprints/auth_bp.py` (95% covered) with login/logout/whoami
+  + `/login` Jinja form (CSP-clean external CSS+JS); dual-path gate
+  (legacy `X-API-Token` header AND cookie+CSRF); login throttling
+  (10/60s → 429); audit emissions for `auth.{login.success,login.fail,
+  logout,csrf.mismatch,login.throttled}`. Cookie path opt-in via
+  `PERGEN_AUTH_COOKIE_ENABLED=1`.
+- Phase G — close-out: docs sealed, tag pushed.
+
+**Numbers**
+
+- pytest: 1631 → **1717 passing** (+86), 0 → **0 xfailed**.
+- Vitest: 37 → **45 passing** (+8 from new safeHtml + escapeHtml tests).
+- Playwright: 90 → **100 in 43 spec files** (+5 new auth + 5 new XSS).
+- Whole-project coverage: 90.23 % → **90.51 %**.
+- New modules:
+  - `backend/security/csrf.py` (100%)
+  - `backend/blueprints/auth_bp.py` (95%)
+  - `backend/repositories/credential_migration.py` (97%)
+- New CSS: `backend/static/css/{extracted-inline,components,login}.css`
+  (~1500 LOC across the 3 files).
+- New scripts: `scripts/audit/innerhtml_classifier.mjs`,
+  `scripts/migrate_credentials_v1_to_v2.py`.
+- Final CSP: `default-src 'self'; img-src 'self' data:; script-src 'self';
+  style-src 'self'; object-src 'none'; base-uri 'self';
+  frame-ancestors 'none'; form-action 'self'; connect-src 'self';
+  upgrade-insecure-requests` (no `'unsafe-inline'` anywhere).
+- Inline `style="..."` attributes in SPA: **0** (was 239 + 1 `<style>` block).
+
+**Backwards compatibility**
+
+- Cookie auth path is OPT-IN via `PERGEN_AUTH_COOKIE_ENABLED=1`.
+  Default behaviour unchanged: `X-API-Token` header still works for
+  every existing integration (CI, curl, automation).
+- Credential migration script is OPERATOR-LED. The legacy `credentials.db`
+  remains the live store until the operator runs the script.
+- Wave-3 token-gate immutability invariant preserved: tokens still
+  resolved once at `create_app` via `MappingProxyType`; no per-request
+  env reads on either auth path.
+
+**`docs/refactor/` status after wave-6**
+
+Every file in the directory carries the `DONE_` prefix. Zero plans
+remain unshipped. The refactor program is **fully complete**.
+
+---
+
 ## v0.6.0 — Wave-5: refactor close-out (sealed)
 
 **Scope:** Land the 3 deferred wave-4 medium findings to close every

@@ -116,53 +116,68 @@
 - [x] Every state-changing route has at least one Playwright spec (15 new flow specs in Phase 12).
 - [x] Every helper extracted out of the SPA IIFE has Vitest unit tests (utils.js + subnet.js, 37 tests).
 
-## Reclassified — future FEATURE work (not refactor debt)
+## Reclassified items — ALL CLOSED in wave-6 (2026-04-22)
 
-The five items below were originally tracked as "deferred refactor".
-After wave-5 close-out (every audit-tracker xfail closed), they are
-explicitly reclassified as **future feature work** — they are not
-unfinished refactor debt and do not block the production-readiness
-acceptance.
+The five items below were originally tracked as "deferred refactor"
+then reclassified as "future feature work" at wave-5 close-out.
+**Wave-6 shipped all five in a single dedicated session.** Every plan
+in `docs/refactor/` is now `DONE_*` and every xfail tracker is a
+passing test.
 
-Each is non-trivial in its own right and warrants a dedicated planning
-+ shipping cycle (its own wave or PR). They appear here so future
-contributors know they are tracked but intentionally outside the
-refactor program.
+1. **✅ DONE — Full credential_store data migration** (`DONE_credential_store_migration.md`)
+   Wave-6 Phase E. New `backend/repositories/credential_migration.py`
+   library (97 % covered) + `scripts/migrate_credentials_v1_to_v2.py`
+   operator CLI with `--dry-run`, `--verbose`, pre-flight canary
+   decrypt. Idempotent, refuses on SECRET_KEY mismatch, no payload
+   leakage. 25 unit tests. Operator runbook in `HOWTOUSE.md` §8.
+   Per the wave-6 plan, the legacy module shim stays loadable (its
+   wave-3 DeprecationWarning is intentional).
 
-1. **Full credential_store data migration** (`credential_store_migration.md`)
-   — `credentials.db` → `credentials_v2.db` operator data move. Deprecation
-   marker landed in wave-3 Phase 6; the actual migration is operator-led
-   work that warrants a dry-run command + roundtrip verification.
-   *Reclassified: operator data tooling; not refactor.*
+2. **✅ DONE — SPA cookie auth + CSRF** (`DONE_spa_auth_ui.md`)
+   Wave-6 Phase F. Council-decided Option B: `pergenFetch` wrapper
+   over 53 fetch sites; `backend/security/csrf.py` (100 % cov);
+   `backend/blueprints/auth_bp.py` (95 % cov) with login/logout/whoami
+   + `/login` Jinja form (CSP-clean external CSS+JS); dual-path gate
+   (legacy `X-API-Token` header AND cookie+CSRF); login throttling
+   (10/60s → 429 with Retry-After, LRU-bounded); audit emissions for
+   `auth.{login.success,login.fail,logout,csrf.mismatch,login.throttled}`.
+   Backwards compatible: cookie path is opt-in via
+   `PERGEN_AUTH_COOKIE_ENABLED=1`. 41 new pytest tests + 5 Playwright
+   tests; lint test enforces single raw `fetch(` survives in app.js.
 
-2. **SPA cookie auth + CSRF** (`spa_auth_ui.md`)
-   — Council-decided Option-B: in-app login page + HttpOnly signed cookie
-   + CSRF token. ~5 days, HIGH risk (changes the auth model for every
-   operator). The existing token-header gate is hardened across wave-1+2+3
-   (immutable snapshot, actor scoping, dev-open boot guard).
-   *Reclassified: new feature (auth UX rework); not refactor.*
+3. **✅ DONE — CSP `unsafe-inline` removal** (`DONE_csp_hsts_json_headers.md`)
+   Wave-6 Phase D. Moved 1 inline `<style>` block + 239 inline
+   `style="..."` attributes from `index.html` AND 32 inline-style
+   fragments from app.js to two new CSS files
+   (`backend/static/css/{extracted-inline,components}.css`,
+   ~160 distinct selectors). Tightened CSP: removed `'unsafe-inline'`
+   from `style-src`; added `form-action 'self'`, `connect-src 'self'`,
+   `upgrade-insecure-requests`. 18 new tests covering CSP on HTML +
+   JSON + 4xx/405 paths. Final CSP: `style-src 'self'` (no
+   `'unsafe-inline'`).
 
-3. **CSP `unsafe-inline` removal** (`csp_hsts_json_headers.md`)
-   — `backend/static/index.html` has 1 inline `<style>` block + 239 inline
-   `style="..."` attributes. Stripping these requires a CSS class refactor
-   with paired Playwright visual regression specs.
-   *Reclassified: frontend rework; not refactor.*
+4. **✅ DONE — Sweeping ~125-site XSS audit** (`DONE_xss_innerhtml_audit.md`)
+   Wave-6 Phase C. New `scripts/audit/innerhtml_classifier.mjs` walks
+   all 131 `innerHTML` sites and emits a CSV report; new `safeHtml`
+   tagged-template + hardened `escapeHtml` (manual five-entity
+   replacement closes attribute-context blind spot); 5 NEW
+   audit-confirmed XSS sites closed (router-bgp table, BGP chip list,
+   find-leaf device list, 2 CSS-selector lookups via `CSS.escape`); CI
+   lint guard fails on `\.innerHTML = ...${...}` without `// xss-safe`
+   annotation; `tests/e2e/specs/xss-innerhtml-regression.spec.ts` (5
+   Playwright canaries); `docs/security/spa_xss_policy.md` codifies
+   the rule.
 
-4. **Sweeping ~125-site XSS audit** (`xss_innerhtml_audit.md`)
-   — The audit-confirmed UNSAFE sites (H-01 dropdowns + H-02 result
-   tables + the device-check-name builder) are fixed in wave-3 Phase 2.
-   The full long-tail sweep + lint guard is its own PR.
-   *Reclassified: defence-in-depth hardening; not refactor.*
+5. **✅ DONE — Find-leaf parallel-cancel** (audit M-09)
+   Wave-6 Phase B. Replaced `ThreadPoolExecutor` `with`-block with
+   manual try/finally + explicit
+   `executor.shutdown(wait=False, cancel_futures=True)` on first hit.
+   Pre-fix: 10s wait for slow sibling queries to drain. Post-fix:
+   0.35s. Pinned by `tests/find_leaf/test_service_cancel.py`.
 
-5. **Find-leaf parallel-cancel** (audit M-09)
-   — `ThreadPoolExecutor.shutdown(wait=False, cancel_futures=True)` once
-   the first hit lands, instead of letting pending queries drain. ~1 day.
-   Preserved verbatim during the Phase 8 refactor.
-   *Reclassified: performance polish; not refactor.*
-
-Each item has a complete plan in `docs/refactor/`. They are sealed as
-forward-looking work; no pin / xfail tracker remains in the test suite
-for any of them.
+**The refactor program is now FULLY COMPLETE.** Every plan in
+`docs/refactor/` is `DONE_*`-prefixed. Future work is tracked
+elsewhere (issues, new wave roadmaps).
 
 The roadmap doc is now sealed; future work goes to its own dedicated planning
 doc per item.

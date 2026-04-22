@@ -16,19 +16,25 @@ commands shown below.
 
 | Metric | Value |
 |--------|-------|
-| Tests passing (pytest) | **1631 / 1631** + **0 xfailed** (refactor program SEALED — every audit tracker closed) |
-| Total test functions | **1631** (all passing) |
-| Test files (Python) | **89** (was 88 at wave-4 close — +1 backfill-CLI test file in wave-5 close-out) |
-| Time to run full pytest suite | ~71 s on an M-series Mac |
-| End-to-end tests (Playwright) | **90** in **41 spec files** |
-| Frontend unit tests (Vitest) | **37 / 37** in <1 s (utils.js + subnet.js helpers) |
+| Tests passing (pytest) | **1717 / 1717** + **0 xfailed** (wave-6 close-out: every reclassified item shipped) |
+| Total test functions | **1717** (all passing) |
+| Test files (Python) | **102** (was 89 at wave-5 close — +13 wave-6 test files: XSS lint, CSP HTML/JSON/all-types, credential-migration, SPA fetch wrapper, CSRF unit + required, auth login flow + actor pinning + session fixation + throttling, find-leaf cancel) |
+| Time to run full pytest suite | ~79 s on an M-series Mac |
+| End-to-end tests (Playwright) | **100** in **43 spec files** (+5 wave-6: auth login flow + XSS regression) |
+| Frontend unit tests (Vitest) | **45 / 45** in <1 s (utils.js helpers + new safeHtml + escapeHtml hardening) |
 | Lint (`ruff check`) on new code | **0 errors** |
-| Coverage — parser surface (`backend.parsers/*` + shim) | **87 %** (wave-2 baseline) |
-| Coverage — wave-3 4 new packages combined | **92 %** (lifted from 57 % at wave-3 close) |
-| Coverage — whole-project | **90.23 %** (held flat at wave-4's 90.4 % despite +production CLI LOC, thanks to paired CLI tests) |
-| Audit findings remediated | **38 / 38** (batches 1–4) + **7 frontend XSS** (audit-wave-1) + **24 wave-3 closures** + **6 wave-4 closures** (W4-H-01, W4-M-01..05) |
-| Audit findings tracked via `xfail` | **0** (refactor program SEALED — every wave-1+2+3+4 tracker is a passing test) |
-| God modules remaining | **0** (find_leaf, nat_lookup, bgp_looking_glass, route_map_analysis all split into packages in wave-3 Phase 8) |
+| Coverage — parser surface (`backend.parsers/*` + shim) | **87 %** |
+| Coverage — wave-3 4 new packages combined | **92 %** |
+| Coverage — wave-6 new modules (auth_bp, csrf, credential_migration) | **97 %** combined |
+| Coverage — whole-project | **90.51 %** |
+| Audit findings remediated | **38 / 38** (batches 1–4) + **7 frontend XSS** (wave-1) + **24 wave-3** + **6 wave-4** + **5 wave-6 reclassified items** (all closed) |
+| Audit findings tracked via `xfail` | **0** |
+| God modules remaining | **0** |
+| CSP `'unsafe-inline'` | **REMOVED** from `style-src` (wave-6 Phase D) |
+| Inline `style="..."` attributes in SPA | **0** (was 239 + 1 `<style>` block; all moved to CSS classes) |
+| Cookie auth + CSRF | **shipped** (wave-6 Phase F, Council Option B) — opt-in via `PERGEN_AUTH_COOKIE_ENABLED=1`, dual-path with legacy `X-API-Token` |
+| Credential migration tooling | **shipped** (wave-6 Phase E) — `python scripts/migrate_credentials_v1_to_v2.py [--dry-run]` |
+| `docs/refactor/` plans remaining | **0** (all `DONE_*`-prefixed) |
 | `backend/parse_output.py` size | **151 lines** (was 1,552 — 90 % reduction; now a back-compat shim over `backend/parsers/*` package, 31 modules) |
 | `backend/app.py` size | **87 lines** (was 1,577 — 95 % reduction) |
 | Routes registered through factory | **55** across **12 blueprints** |

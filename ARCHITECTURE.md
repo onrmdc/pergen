@@ -134,7 +134,7 @@ tests/                           # 861 tests (852 pass + 9 xfail) across 58 file
 └── test_runner_dispatch_coverage.py    # 13 runner.run_device_commands branches
 ```
 
-**Total tests: 1631 pytest (all passing, 0 xfailed) + 37 Vitest + 90 Playwright** — refactor program SEALED at wave-5; every audit-tracker `xfail` across all 4 audit waves is now a passing test,
+**Total tests: 1717 pytest (all passing, 0 xfailed) + 45 Vitest + 100 Playwright** — refactor program FULLY COMPLETE at wave-6; every plan in `docs/refactor/` is DONE_*-prefixed,
 all green. Lint clean on every blueprint, service, util, factory,
 app.py, config, hardened runner, security module, and request_logging.
 Audit batch 4 added 24 security-regression tests
@@ -317,7 +317,7 @@ blueprints incrementally.
 The test suite is now stratified across three runtimes, each with
 a different feedback loop and ownership boundary.
 
-### 7.1 Python — pytest (1631 passed + 0 xfailed in ~71 s)
+### 7.1 Python — pytest (1717 passed + 0 xfailed in ~79 s)
 
 The classical layer. Owned by every code change. Three sub-tiers:
 
@@ -400,7 +400,7 @@ module split is queued); audit-wave-1 dropped the count from
 ### 7.4 Coverage gates (Makefile)
 
 - `make cov` — whole-project line coverage (gate 45 %, current
-  90.23 % post-wave-5; legacy RIPEStat helpers drag the average; their
+  90.51 % post-wave-6; legacy RIPEStat helpers drag the average; their
   public APIs are all covered, only deep parser branches remain.
 - `make cov-new` — new-OOD-layer-only coverage (gate 85 %, current
   94 %). This is the gate that *must* hold green; the global gate

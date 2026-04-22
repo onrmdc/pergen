@@ -25,24 +25,27 @@
 > tests (+16 tests), and the Playwright harness fix that prevents flow
 > specs from polluting the operator's real `instance/` dir.
 >
- > Every existing API still ships unchanged — **1,631 pytest tests +
-> 37 Vitest + 90 Playwright** lock the response shapes byte-for-byte
+ > Every existing API still ships unchanged — **1,717 pytest tests +
+> 45 Vitest + 100 Playwright** lock the response shapes byte-for-byte
 > across all 28 golden parser snapshots.
 >
 > **Coverage:** **87 %** on the parser surface; **92 %** on the 4 new
-> wave-3 packages; **90.23 %** whole-project (was 78.33 % pre-wave-3,
-> +12 pp net); 94 % on the OOD layer.
+> wave-3 packages; **97 %** on the wave-6 modules (auth_bp, csrf,
+> credential_migration); **90.51 %** whole-project (was 74.94 %
+> pre-refactor, +15.6 pp net); 94 % on the OOD layer.
 >
-> **Refactor program SEALED** — every audit-tracker `xfail` across
-> waves 1, 2, 3, and 4 is now a passing test (24+6 → 0). The 5
-> remaining `docs/refactor/` items are reclassified as future feature
-> work (operator data migration, SPA cookie auth, CSP class refactor,
-> long-tail XSS sweep, find-leaf parallel-cancel) — none block
-> production-readiness. See
+> **Refactor program FULLY COMPLETE** — wave-6 shipped all 5 reclassified
+> items in a single dedicated session: credential migration tooling
+> (`scripts/migrate_credentials_v1_to_v2.py`), SPA cookie auth + CSRF
+> (Council Option B, opt-in via `PERGEN_AUTH_COOKIE_ENABLED=1`), CSP
+> `'unsafe-inline'` removal (240 inline styles → CSS classes; final
+> CSP locked down to `style-src 'self'`), long-tail XSS sweep with
+> CI lint guard + classifier + 5 audit-confirmed XSS sites closed,
+> and find-leaf parallel-cancel (10s → 0.35s). Every plan in
+> `docs/refactor/` is now `DONE_*`-prefixed. See
 > [`docs/refactor/DONE_wave3_roadmap.md`](docs/refactor/DONE_wave3_roadmap.md)
-> and [`docs/refactor/DONE_wave4_followups.md`](docs/refactor/DONE_wave4_followups.md).
-> All historical plan/audit docs in `docs/` have been prefixed with
-> `DONE_` to signal that the refactor program is sealed; new work
+> §"Reclassified items — ALL CLOSED in wave-6". All historical
+> plan/audit docs in `docs/` carry the `DONE_` prefix; new work
 > should land in fresh, undecorated docs.
 >
 > **Recent UI/Boot work** (post-batch-4): the Phase-13 CSP
