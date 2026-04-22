@@ -23,9 +23,28 @@ from typing import Any
 
 import yaml
 
-from backend.parse_output import parse_output as _legacy_parse_output
+from backend.parsers.dispatcher import Dispatcher
 
 _log = logging.getLogger("app.parsers.engine")
+
+# Module-level dispatcher singleton. Kept here (rather than per-instance)
+# so test code can patch ``backend.parsers.engine._DEFAULT_DISPATCHER``
+# without touching every engine instance, and so engines built ad-hoc
+# (e.g. in tests) automatically pick it up.
+_DEFAULT_DISPATCHER = Dispatcher()
+
+
+def _legacy_parse_output(command_id: str, raw_output: Any, parser_config: dict) -> dict:
+    """Compatibility trampoline.
+
+    Pre-refactor, ``ParserEngine.parse`` delegated to
+    ``backend.parse_output.parse_output``. After the parse_output split
+    (see ``docs/refactor/parse_output_split.md``) we route via the
+    ``Dispatcher`` directly. This wrapper preserves the legacy patch
+    target ``backend.parsers.engine._legacy_parse_output`` that
+    ``tests/test_parser_engine.py`` and other test sites depend on.
+    """
+    return _DEFAULT_DISPATCHER.parse(command_id, raw_output, parser_config)
 
 
 class ParserEngine:
