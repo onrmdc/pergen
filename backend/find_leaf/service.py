@@ -7,11 +7,12 @@ namespace at call time, so that test patches like
 ``unittest.mock.patch("backend.find_leaf._query_one_leaf_search", ...)`` reach
 the orchestration code in this module unchanged.
 
-Behaviour is preserved verbatim from the original
-``backend/find_leaf.py::find_leaf`` and ``find_leaf_check_device``. The
-``ThreadPoolExecutor`` first-hit-wins pattern is intentionally left as-is —
-audit M-09 (``find_leaf_parallel_no_cancel``) is deferred to a separate
-follow-up and is **not** in scope for this refactor.
+Wave-6 (audit M-09): the parallel fan-out now calls
+``executor.shutdown(wait=False, cancel_futures=True)`` immediately on
+first hit. Pending un-started queries are cancelled, holding open
+fewer SSH/eAPI sessions and returning to the operator faster. Note
+that already-running queries continue to run (Python contract limit),
+but the operator no longer waits for them.
 """
 
 from __future__ import annotations
@@ -138,11 +139,12 @@ def find_leaf(
     ]
 
     # Query all leaf-search devices in parallel; use first hit.
-    # NOTE: audit M-09 (no executor cancel on first hit) is deferred — preserve
-    # the original first-hit-wins semantics verbatim.
+    # Wave-6 (audit M-09): cancel pending un-started futures on first hit
+    # so the operator does not wait for slow sibling queries to drain.
     hit = None
     max_workers = min(len(leaf_search), 32)
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+    executor = ThreadPoolExecutor(max_workers=max_workers)
+    try:
         futures = {
             executor.submit(
                 _shim._query_one_leaf_search, dev, search_ip, secret_key, cred_store_module
@@ -155,8 +157,14 @@ def find_leaf(
                 if result is not None:
                     hit = result
                     break
-            except Exception:
+            except Exception:  # noqa: BLE001 — best-effort per-device error
                 pass
+    finally:
+        # ``cancel_futures=True`` (Python ≥ 3.9) drops pending un-started
+        # tasks from the queue. Already-running tasks continue but the
+        # operator's call returns immediately. ``wait=False`` makes the
+        # finally non-blocking.
+        executor.shutdown(wait=False, cancel_futures=True)
 
     if hit is None:
         out["error"] = "IP not found on any leaf-search device"
