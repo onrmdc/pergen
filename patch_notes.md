@@ -1159,3 +1159,138 @@ lifted whole-project coverage **66 % → 74 %**.
 * Decompose `nat_lookup.nat_lookup` (173 lines / cyclomatic 22). Identified by python-reviewer as the largest maintainability risk; deferred because the function is tightly coupled to the user-facing `/api/nat-lookup` route and refactoring needs careful golden-test review.
 * Migrate every consumer (`find_leaf`, `nat_lookup`, `runs_bp`, `device_commands_bp`, `transceiver_bp`, `bgp_bp`) off `backend/credential_store` to `CredentialService`. Currently both stacks coexist — `CredentialService` for write paths, legacy module for read paths.
 * CSV-injection escaping in `inventory_repository._save` (audit M-2).
+
+---
+
+## v0.1.2-ui-csp-boot-docs — UI CSP compliance, boot path fix, doc alignment
+
+**Scope:** post-batch-4 cleanup of three operator-facing regressions
+that were silently introduced when Phase-13 added CSP and Phase-12
+finished blueprint extraction. No backend behaviour changes; one UI
+load-path bug fixed; `run.sh` retargeted at the App Factory; five doc
+files reconciled with actual reality.
+
+### Bug fixed
+
+**UI silently broken under CSP `script-src 'self'`** (commit `c997fe0`).
+The Phase-13 CSP header (audit M8) blocks every inline `<script>` block
+and every cross-origin script CDN. `backend/static/index.html` had two
+inline `<script>` blocks (theme bootstrap, ~5,250-line SPA logic) plus a
+JSZip CDN tag — all three were silently rejected by the browser.
+Symptoms: only the home page rendered, menu clicks were inert,
+`window.showPage` / `onHashChange` undefined, no `/api/*` calls fired
+on load.
+
+Fix without weakening CSP:
+
+- **Extract** theme bootstrap → `backend/static/js/theme-init.js` (6 lines).
+- **Vendor** JSZip 3.10.1 → `backend/static/vendor/jszip.min.js` (replaces
+  the `cdnjs.cloudflare.com` external dependency).
+- **Extract** main SPA logic (~5,250 lines: event bus, panels, API
+  clients, table renderers) → `backend/static/js/app.js`.
+- **Replace** the three inline blocks with `<script src="…">` tags so
+  `script-src 'self'` accepts everything.
+- `backend/static/index.html` shrinks from ~6,600 lines → ~1,350 lines
+  (markup-only).
+
+Verified via headless Chromium: zero CSP errors in console;
+`/api/fabrics`, `/api/inventory`, `/api/credentials` all fire on load;
+hash router activates pages on navigation.
+
+### Boot path fix
+
+**`run.sh` was launching the legacy shim** (commits `182eafb` then
+`c997fe0`). After Phase-12 the legacy `backend/app.py` is an 87-line
+shim with **zero `@app.route` handlers** — booting `FLASK_APP=backend.app`
+serves 404 on every URL.
+
+`run.sh` now defaults to:
+
+```bash
+FLASK_APP=backend.app_factory:create_app
+FLASK_CONFIG=development
+```
+
+…and prints the resolved `FLASK_APP` / `FLASK_CONFIG` / URL on startup
+so operators can see which entry point is active. Override either by
+exporting it before launch (`FLASK_CONFIG=production ./run.sh`).
+
+### Documentation reconciliation
+
+Five docs still claimed `FLASK_APP=backend.app` "still works" or "still
+boots the app". That instruction is now broken in practice. Reconciled
+in commit `dc95169`:
+
+- **`README.md`** — switched the canonical run-locally recipe to
+  `FLASK_APP=backend.app_factory:create_app + FLASK_CONFIG=development`;
+  added an explicit "shim has zero routes → 404 every URL" warning;
+  documented `run.sh`'s new defaults + boot banner; added a
+  Frontend/CSP section covering the new
+  `static/js/{theme-init,app}.js` + `static/vendor/jszip.min.js`
+  layout.
+- **`HOWTOUSE.md`** — rewrote §4 (Running the app): recommended dev
+  recipe goes through the factory + `run.sh`; flagged §4.3 "Legacy
+  `backend.app`" as **DO NOT USE** with the 404 explanation.
+  Re-attributed `/api/inventory/device` CRUD + `/api/inventory/import`
+  to `inventory_bp` (already migrated). Rewrote §9 (Running commands
+  on devices) into a blueprint-ownership table covering the full route
+  surface — dropped the stale "these routes stay in `backend/app.py`"
+  note.
+- **`ARCHITECTURE.md`** — rewrote §3 (App Factory) to clarify that
+  step 2's import of `backend.app` no longer registers any routes
+  (only the Flask global + `_*` helper aliases) and that step 7
+  (`_register_blueprints`) now mounts the full set of 12 blueprints.
+  Replaced the stale §6 "Outstanding items" list — blueprint
+  migration is COMPLETE; documented the Phase-12 final shape, the
+  frontend/CSP extraction, the `run.sh` boot path, and the post-13
+  audit batches.
+- **`comparison_from_original.md`** — corrected the four
+  "FLASK_APP=backend.app still works" claims (in §3, §12, §14.2, §15.1,
+  §15.2, §15.5) to reflect that operators using `./run.sh` are
+  unaffected, but anyone with a hard-coded `FLASK_APP=backend.app`
+  launcher must retarget at the factory.
+- **`FUNCTIONS_EXPLANATIONS.md`** — updated `create_app` /
+  `_register_services` / `_register_blueprints` rows so the symbol
+  descriptions match what the code actually does post-Phase-12
+  (12 blueprints, 7 services).
+- **`backend/app_factory.py`** — refreshed the module + `create_app`
+  docstrings so the source-of-truth comments no longer claim the
+  legacy `app.py` "registers every route as a side effect" or that
+  "FLASK_APP=backend.app flask run keeps working".
+
+### Verification
+
+- `python -m pytest -q` → **840/840 passed in ~80 s** (no test changes).
+- `create_app("testing")` smoke test: builds a Flask app exposing **55
+  url_map rules** (54 blueprint routes + Flask static).
+- Headless Chromium load of `index.html` from a local dev server: no
+  CSP errors in console; `/api/fabrics`, `/api/inventory`,
+  `/api/credentials` all fire on load; hash navigation activates the
+  expected page.
+
+### Files
+
+| File | Status |
+|------|--------|
+| `backend/static/index.html` | shrunk ~6,600 → ~1,350 lines (markup only) |
+| `backend/static/js/theme-init.js` | new |
+| `backend/static/js/app.js` | new (~5,248 lines extracted from index.html) |
+| `backend/static/vendor/jszip.min.js` | new (vendored 3.10.1) |
+| `run.sh` | retargeted at `backend.app_factory:create_app`; prints boot banner |
+| `backend/app_factory.py` | docstring refresh (no behaviour change) |
+| `README.md` | run-locally recipe + Frontend/CSP section |
+| `HOWTOUSE.md` | §4 rewrite; §9 blueprint-ownership table |
+| `ARCHITECTURE.md` | §3 + §6 rewrite |
+| `FUNCTIONS_EXPLANATIONS.md` | factory rows updated |
+| `comparison_from_original.md` | four boot-path claims corrected |
+| `patch_notes.md` | this entry |
+
+### Breaking changes (operator-facing)
+
+- Anyone with a hard-coded `FLASK_APP=backend.app` launcher must
+  retarget at `FLASK_APP=backend.app_factory:create_app` (or use
+  `./run.sh`). Booting the legacy shim now serves 404 on every URL.
+- Custom UI build pipelines that injected scripts inline into
+  `index.html` need to either add their own `<script src="…">` tag
+  pointing at a `static/`-served file, or relax the CSP — the
+  in-tree default is `script-src 'self'`.

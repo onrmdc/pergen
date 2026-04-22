@@ -9,18 +9,28 @@
 > wiring, and legacy helper aliases. Every route lives in a per-domain
 > blueprint registered through `create_app()`.
 >
-> Post-decomposition, three parallel audits (`security-reviewer`,
-> `python-reviewer`, `coverage analysis`) surfaced **24 findings**
-> spanning 4 CRITICAL, 9 HIGH, and 11 MEDIUM. **All 24 are remediated**
-> in batches 1–3 with focused fixes and contract-pinning regression
-> tests. Every existing API still ships unchanged — **802 tests**
-> (78 baseline / golden + 72 OWASP + 33 phase-13 security +
-> 67 audit-batch + 71 coverage-push + 481 unit/integration) lock
-> the response shapes byte-for-byte.
+> Post-decomposition, four parallel audits (`security-reviewer`,
+> `python-reviewer`, `coverage analysis`, batch-4 sweep) surfaced
+> **38 findings** spanning 7 CRITICAL, 14 HIGH, and 17 MEDIUM. **All
+> are remediated** in batches 1–4 with focused fixes and contract-pinning
+> regression tests. Every existing API still ships unchanged —
+> **840 tests** (78 baseline / golden + 105 OWASP + phase-13 security +
+> 67 audit-batch 1–3 + 24 audit-batch 4 + 13 dispatch coverage +
+> 71 coverage-push + 482 unit/integration) lock the response shapes
+> byte-for-byte.
 >
-> **Coverage:** 94 % on the new OOD layer / 74 % whole-project (legacy
-> parsers + RIPEStat helpers drag the average; their public APIs are
-> all covered, only deep parser branches are uncovered).
+> **Coverage:** 94 % on the new OOD layer / **74.8 %** whole-project
+> (legacy parsers + RIPEStat helpers drag the average; their public
+> APIs are all covered, only deep parser branches are uncovered).
+>
+> **Recent UI/Boot work** (post-batch-4): the Phase-13 CSP
+> (`script-src 'self'`) was silently blocking the SPA. Inline `<script>`
+> blocks were extracted to `backend/static/js/{theme-init,app}.js` and
+> JSZip was vendored to `backend/static/vendor/jszip.min.js` (commit
+> `c997fe0`). `run.sh` now boots through `backend.app_factory:create_app`
+> by default (commits `182eafb` / `c997fe0`); booting `FLASK_APP=backend.app`
+> directly serves 404 on every URL because the shim has zero routes.
+> See [`patch_notes.md` v0.1.2](./patch_notes.md) for the full entry.
 >
 > See [`patch_notes.md`](./patch_notes.md) for the per-phase log,
 > [`ARCHITECTURE.md`](./ARCHITECTURE.md) for the layered design,

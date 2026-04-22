@@ -259,11 +259,13 @@ byte-for-byte against the pre-refactor baseline.
 ## 10. Tests
 
 ```bash
-make test                          # full suite (330 tests)
-make cov                           # with coverage report
+make test                          # full suite (840 tests, ~80 s)
+make cov                           # whole-project coverage report (gate 45 %)
+make cov-new                       # OOD-layer-only coverage report (gate 85 %)
 venv/bin/python -m pytest tests/golden/ -q                # golden / characterisation
 venv/bin/python -m pytest -k phase9 -q                    # phase-9 only
 venv/bin/python -m pytest tests/test_services.py -q       # service layer
+venv/bin/python -m pytest tests/test_security_audit_batch4.py -q   # batch-4 security regressions
 ```
 
 Useful environment knobs:

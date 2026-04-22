@@ -1,8 +1,9 @@
 # Test results — Pergen `refactor/ood-tdd`
 
 Generated for the refactor branch after **phases 1–12 decomposition** +
-**audit batches 1–3 remediation**. All numbers are reproducible by
-running `python -m pytest -q` and the `coverage` commands shown below.
+**audit batches 1–4 remediation** + **UI/CSP/boot-path alignment**.
+All numbers are reproducible by running `python -m pytest -q` and the
+`coverage` commands shown below.
 
 ---
 
@@ -10,14 +11,14 @@ running `python -m pytest -q` and the `coverage` commands shown below.
 
 | Metric | Value |
 |--------|-------|
-| Tests passing | **802 / 802** |
-| Test files | 32 |
-| Time to run full suite | ~124 s on an M-series Mac (mostly mocked-network blueprint tests) |
+| Tests passing | **840 / 840** |
+| Test files | 47 |
+| Time to run full suite | ~82 s on an M-series Mac (mostly mocked-network blueprint tests) |
 | Lint (`ruff check`) on new code | **0 errors** (12 blueprints + 7 services + 4 utils + factory + app.py + config + 2 hardened runners + security + request_logging) |
 | Lint (`ruff check`) whole-backend | 15 pre-existing legacy errors (unchanged) |
 | Coverage — new OOD layer (blueprints + services + utils) | **94 %** (target: 90 %) |
-| Coverage — whole-project | **74 %** (was 49.7 % before audit batches; +24 pp) |
-| Audit findings remediated | **24 / 24** (4 CRITICAL + 9 HIGH + 11 MEDIUM) |
+| Coverage — whole-project | **74.82 %** (was 49.7 % before audit batches; +25 pp) |
+| Audit findings remediated | **38 / 38** (7 CRITICAL + 14 HIGH + 17 MEDIUM across batches 1–4) |
 | `backend/app.py` size | **87 lines** (was 1,577 — 95 % reduction) |
 | Routes registered through factory | **55** across **12 blueprints** |
 
@@ -39,10 +40,12 @@ running `python -m pytest -q` and the `coverage` commands shown below.
 | Phase 11 runs_bp + reports_bp | 1 | 20 |
 | Audit findings batch 1+2 | 1 | 25 |
 | Audit findings batch 3 | 1 | 14 |
+| Audit findings batch 4 (security sweep) | 1 | 24 |
+| Runner dispatch coverage | 1 | 13 |
 | Coverage push (NEW code) | 1 | 71 |
 | Legacy coverage (bgp_lg, route_map, find_leaf, nat_lookup, parse_output, runner, loader) | 5 | 152 |
 | Pre-existing unit/integration | 9 | 216 |
-| **Total** | **32** | **802** |
+| **Total** | **47** | **840** |
 
 ### Coverage by layer (new OOD code)
 
@@ -89,7 +92,7 @@ Run: `python -m coverage run --source=backend -m pytest && python -m coverage re
 | Parsers (engine + parse_output) | 53–90 % |
 | Helpers (bgp_looking_glass, route_map_analysis, find_leaf, nat_lookup) | 36–74 % |
 | Other (logging, config, request_logging) | 82–98 % |
-| **WHOLE-PROJECT** | **74 %** |
+| **WHOLE-PROJECT** | **74.82 %** |
 
 The legacy parsers (`parse_output.py` 53 %, `find_leaf.py` 36 %,
 `nat_lookup.py` 42 %, `route_map_analysis.py` 51 %) drag the average
@@ -98,10 +101,19 @@ that exercise specific device-output shapes remain uncovered. Lifting
 those to 90 % would require ~500 LOC of canned-fixture tests; tracked
 as future work.
 
-### Audit-batch security regression tests (39 total)
+### Audit-batch security regression tests (76 total)
 
 * `tests/test_security_audit_findings.py` — 25 tests (batches 1+2)
 * `tests/test_security_audit_batch3.py` — 14 tests (batch 3)
+* `tests/test_security_audit_batch4.py` — 24 tests (batch 4: fail-closed
+  prod auth, per-actor tokens, hard `cryptography` / `defusedxml` imports,
+  inventory-binding on every device-targeted route, sanitised credential
+  delete, SSRF guard on cloud-metadata IPs, `hmac.compare_digest` regression
+  detection, generic error envelopes on `find-leaf` / `nat-lookup`)
+* `tests/test_runner_dispatch_coverage.py` — 13 tests covering every branch
+  of `runner.run_device_commands` (api/ssh/unknown method, `command_id_filter`,
+  `command_id_exact`, hostname extraction, parser application). Lifted
+  `backend/runners/runner.py` from 51 % → 91.7 %.
 
 Each test names its audit finding ID (C1, H6, M11, etc.) so the audit
 report and the test suite are cross-referenceable.
@@ -138,7 +150,27 @@ report and the test suite are cross-referenceable.
 | `tests/test_parse_arista_interface_status.py` (legacy) | 3 | ✅ | pre-refactor |
 | `tests/test_transceiver_recovery_policy.py` (legacy) | 2 | ✅ | pre-refactor |
 | `tests/test_parse_cisco_interface_detailed.py` (legacy) | 1 | ✅ | pre-refactor |
-| **Total** | **435** | **✅** | — |
+| `tests/test_utils_phase2.py` | 30 | ✅ | decomp-2 |
+| `tests/test_inventory_writes_phase3.py` | 19 | ✅ | decomp-3 |
+| `tests/test_commands_bp_phase4.py` | 6 | ✅ | decomp-4 |
+| `tests/test_network_ops_bp_phase5.py` | 7 | ✅ | decomp-5 |
+| `tests/test_credentials_bp_phase6.py` | 10 | ✅ | decomp-6 |
+| `tests/test_bgp_bp_phase7.py` | 15 | ✅ | decomp-7 |
+| `tests/test_network_lookup_bp_phase8.py` | 10 | ✅ | decomp-8 |
+| `tests/test_transceiver_bp_phase9.py` | 11 | ✅ | decomp-9 |
+| `tests/test_device_commands_bp_phase10.py` | 13 | ✅ | decomp-10 |
+| `tests/test_runs_reports_bp_phase11.py` | 20 | ✅ | decomp-11 |
+| `tests/test_security_audit_findings.py` | 25 | ✅ | audit-batch-1+2 |
+| `tests/test_security_audit_batch3.py` | 14 | ✅ | audit-batch-3 |
+| `tests/test_security_audit_batch4.py` | 24 | ✅ | audit-batch-4 |
+| `tests/test_runner_dispatch_coverage.py` | 13 | ✅ | audit-batch-4 |
+| `tests/test_coverage_push.py` | 71 | ✅ | coverage-push |
+| `tests/test_legacy_coverage_bgp_lg.py` | 24 | ✅ | legacy-coverage |
+| `tests/test_legacy_coverage_route_map.py` | 12 | ✅ | legacy-coverage |
+| `tests/test_legacy_coverage_find_leaf_nat.py` | 14 | ✅ | legacy-coverage |
+| `tests/test_legacy_coverage_parse_output.py` | 43 | ✅ | legacy-coverage |
+| `tests/test_legacy_coverage_runners.py` | 35 | ✅ | legacy-coverage |
+| **Total** | **840** | **✅** | — |
 
 Re-run a single file with:
 

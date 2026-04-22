@@ -85,7 +85,7 @@ backend/
 │   └── ping.py                  # single_ping + MAX_PING_DEVICES
 └── credential_store.py / find_leaf.py / nat_lookup.py / ...  (legacy domain)
 
-tests/                           # 802 tests across 32 files
+tests/                           # 840 tests across 47 files
 ├── conftest.py                  # Fixtures (instance dir isolation, mock CSV, factory client)
 ├── golden/                      # Phase 1 — characterisation snapshots
 │   ├── _snapshot.py
@@ -118,12 +118,17 @@ tests/                           # 802 tests across 32 files
 ├── test_legacy_coverage_route_map.py   # 12 route-map legacy tests
 ├── test_legacy_coverage_find_leaf_nat.py  # 14 find-leaf + nat tests
 ├── test_legacy_coverage_parse_output.py   # 43 parse_output tests
-└── test_legacy_coverage_runners.py     # 35 runner + ssh + loader tests
+├── test_legacy_coverage_runners.py     # 35 runner + ssh + loader tests
+├── test_security_audit_batch4.py       # 24 audit-batch-4 security tests
+└── test_runner_dispatch_coverage.py    # 13 runner.run_device_commands branches
 ```
 
-**Total tests: 802**, all green. Lint clean on every blueprint, service,
+**Total tests: 840**, all green. Lint clean on every blueprint, service,
 util, factory, app.py, config, hardened runner, security module,
-and request_logging.
+and request_logging. Audit batch 4 added 24 security-regression tests
+(`tests/test_security_audit_batch4.py`) and 13 runner-dispatch coverage
+tests (`tests/test_runner_dispatch_coverage.py`) — see
+`patch_notes.md` "Audit batch 4" for the per-finding map.
 
 ---
 
