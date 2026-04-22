@@ -5,6 +5,7 @@ import {
   formatBytes,
   isValidIPv4,
   parseHash,
+  safeHtml,
 } from "../../../backend/static/js/lib/utils.js";
 
 describe("escapeHtml", () => {
@@ -34,6 +35,57 @@ describe("escapeHtml", () => {
     expect(out).not.toMatch(/<img/);
     expect(out).not.toMatch(/<\//);
     // The escaped form contains &lt;img — text content, not an HTML element.
+    expect(out).toContain("&lt;img");
+  });
+
+  it("escapes double-quote so attribute-context interpolation is safe", () => {
+    // Wave-6 Phase C: attribute-injection regression. Without this
+    // encoding, `data-x="${escapeHtml(v)}"` would break out of the
+    // attribute when v contains `"`.
+    const out = escapeHtml('a"b');
+    expect(out).toBe("a&quot;b");
+  });
+
+  it("escapes single-quote so attribute-context interpolation is safe", () => {
+    expect(escapeHtml("o'clock")).toBe("o&#39;clock");
+  });
+});
+
+describe("safeHtml", () => {
+  it("interpolates plain values with full HTML escaping", () => {
+    const name = "<img src=x onerror=alert(1)>";
+    const out = safeHtml`<span>${name}</span>`;
+    expect(out).not.toContain("<img");
+    expect(out).toContain("&lt;img");
+    expect(out).toMatch(/^<span>/);
+    expect(out).toMatch(/<\/span>$/);
+  });
+
+  it("escapes attribute-context double-quotes", () => {
+    const v = 'a"b';
+    const out = safeHtml`<div title="${v}">x</div>`;
+    expect(out).toBe('<div title="a&quot;b">x</div>');
+  });
+
+  it("supports multiple interpolations and preserves literal segments", () => {
+    const out = safeHtml`<tr><td>${"a&b"}</td><td>${"<x>"}</td></tr>`;
+    expect(out).toBe("<tr><td>a&amp;b</td><td>&lt;x&gt;</td></tr>");
+  });
+
+  it("returns the literal template when there are no interpolations", () => {
+    const out = safeHtml`<hr/>`;
+    expect(out).toBe("<hr/>");
+  });
+
+  it("coerces null/undefined values to empty string", () => {
+    const out = safeHtml`<p>${null}|${undefined}</p>`;
+    expect(out).toBe("<p>|</p>");
+  });
+
+  it("neutralises the canonical audit XSS payload", () => {
+    const payload = "<img src=x onerror='window.__xss=1'>";
+    const out = safeHtml`<td>${payload}</td>`;
+    expect(out).not.toMatch(/<img/);
     expect(out).toContain("&lt;img");
   });
 });

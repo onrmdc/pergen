@@ -15,27 +15,45 @@
 // separate, low-risk change captured in the docs.
 
 /**
- * HTML-escape a string so it is safe to interpolate into innerHTML.
+ * HTML-escape a string so it is safe to interpolate into innerHTML in
+ * BOTH text-content and attribute-value contexts.
  *
- * Uses the DOM's textContent → innerHTML round-trip to delegate to the
- * browser's authoritative escaping rules. Returns an empty string for
+ * Wave-6 Phase C update: previously this function used the DOM's
+ * `textContent → innerHTML` round-trip. That delegation is incorrect
+ * for attribute contexts because the browser only encodes `<`, `>`,
+ * `&` on the way out — `"` and `'` are emitted verbatim. A value such
+ * as `a"b` interpolated into `data-x="${escapeHtml(v)}"` would break
+ * out of the attribute. The full manual replacement closes that hole
+ * and keeps text-content safety. Returns an empty string for
  * null/undefined.
  */
 export function escapeHtml(s) {
   if (s === null || s === undefined) return "";
-  const div = (typeof document !== "undefined" ? document : null)?.createElement("div");
-  if (!div) {
-    // Fallback for environments without a DOM (rare — both jsdom and a
-    // real browser provide one).
-    return String(s)
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;")
-      .replace(/'/g, "&#39;");
+  return String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+/**
+ * Tagged-template helper that auto-escapes every interpolation through
+ * {@link escapeHtml}. Use this when building markup with multiple
+ * dynamic fragments — it removes the need to remember `escapeHtml(...)`
+ * around each `${...}` and is safe in both text-content and attribute
+ * contexts (because escapeHtml encodes quotes too).
+ *
+ * @example
+ *   const html = safeHtml`<tr><td>${row.name}</td><td>${row.ip}</td></tr>`;
+ *   tbody.innerHTML = html;
+ */
+export function safeHtml(strings, ...values) {
+  let out = strings[0];
+  for (let i = 0; i < values.length; i++) {
+    out += escapeHtml(values[i]) + strings[i + 1];
   }
-  div.textContent = String(s);
-  return div.innerHTML;
+  return out;
 }
 
 /**

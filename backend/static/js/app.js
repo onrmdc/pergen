@@ -46,6 +46,7 @@
         var phLabel = d.phase === "queued" ? "Queued" : d.phase === "running" ? "Running" : d.phase === "done" ? "Done" : "Error";
         return "<tr><td>" + escapeHtml(d.hostname) + "</td><td>" + escapeHtml(d.ip) + "</td><td class=\"" + phCls + "\">" + phLabel + "</td><td>" + escapeHtml(d.detail) + "</td></tr>";
       }).join("");
+      // xss-safe: `rows` is built from escapeHtml() on every cell above; wrapper is constant.
       body.innerHTML = "<table><thead><tr><th>Hostname</th><th>IP</th><th>Phase</th><th>Detail</th></tr></thead><tbody>" + rows + "</tbody></table>";
     }
     function openHeaderProgressDetailPopup() {
@@ -350,10 +351,34 @@
       }).join("");
     }
 
+    // Wave-6 Phase C: HTML-escape for both text-content and attribute
+    // contexts. The previous textContent → innerHTML round-trip did NOT
+    // encode `"` or `'`, which silently allowed attribute-context
+    // injection in `data-x="${escapeHtml(v)}"` patterns. Manual
+    // replacement covers all five entities and matches the canonical
+    // helper exported from backend/static/js/lib/utils.js (Vitest
+    // covers both implementations).
     function escapeHtml(s) {
-      const div = document.createElement("div");
-      div.textContent = s;
-      return div.innerHTML;
+      if (s === null || s === undefined) return "";
+      return String(s)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+    }
+
+    // Wave-6 Phase C: tagged-template helper that auto-escapes every
+    // `${...}` interpolation through escapeHtml. Use for multi-fragment
+    // markup where remembering escapeHtml() on every interpolation is
+    // error-prone. Mirrors backend/static/js/lib/utils.js#safeHtml so
+    // the Vitest unit suite covers the same surface.
+    function safeHtml(strings, ...values) {
+      let out = strings[0];
+      for (let i = 0; i < values.length; i++) {
+        out += escapeHtml(values[i]) + strings[i + 1];
+      }
+      return out;
     }
 
     function formatRecoverApiOutput(data) {
@@ -2388,7 +2413,10 @@
               else if (prefixes.length === 0) listDiv.innerHTML = "<span class=\"muted\" style=\"font-size:0.85em;\">No prefixes</span>";
               else {
                 listDiv.innerHTML = prefixes.map(function(p) {
-                  var pEsc = String(p).replace(/"/g, "&quot;").replace(/</g, "&lt;");
+                  // Wave-6 Phase C: ad-hoc partial-replace was unsafe
+                  // (missed `>`, `&`, `'`). escapeHtml covers all five
+                  // entities AND attribute context.
+                  var pEsc = escapeHtml(p);
                   return "<span class=\"bgp-fav-chip bgp-fav-prefix-chip\" data-value=\"" + pEsc + "\" style=\"display:inline-flex; align-items:center; margin:0 0.2rem 0.2rem 0; padding:0.15rem 0.35rem; background:var(--bg); border:1px solid var(--border); border-radius:4px; font-size:0.8em; cursor:pointer;\">" + pEsc + "</span>";
                 }).join("");
                 listDiv.querySelectorAll(".bgp-fav-prefix-chip").forEach(function(c) {
@@ -2937,15 +2965,19 @@
           theadEl.appendChild(tr2);
         }
 
+        // Wave-6 Phase C: every dynamic value (route-map name, prefix-list name,
+        // prefix string, peer_group, device list) is server-supplied via the
+        // /api/router-bgp response and was previously injected raw. Each
+        // interpolation now passes through escapeHtml.
         function cellHtml(hier, name) {
-          if (!hier.length) return "<span>" + (name || "—") + "</span>";
+          if (!hier.length) return "<span>" + escapeHtml(name || "—") + "</span>";
           var openOuter = highlightPrefix && hier.some(function(pl) { return (pl.prefixes || []).indexOf(highlightPrefix) !== -1; });
-          var parts = ["<span" + (openOuter ? " class=\"search-highlight\"" : "") + ">" + (name || "—") + "</span>", "<details" + (openOuter ? " open" : "") + " style=\"cursor:pointer; margin-top:0.25rem;\"><summary>Prefix-lists (" + hier.length + ")</summary><ul style=\"margin:0.25rem 0 0 0; padding-left:1rem; list-style:none;\">"];
+          var parts = ["<span" + (openOuter ? " class=\"search-highlight\"" : "") + ">" + escapeHtml(name || "—") + "</span>", "<details" + (openOuter ? " open" : "") + " style=\"cursor:pointer; margin-top:0.25rem;\"><summary>Prefix-lists (" + hier.length + ")</summary><ul style=\"margin:0.25rem 0 0 0; padding-left:1rem; list-style:none;\">"];
           hier.forEach(function(pl) {
             var plOpen = highlightPrefix && (pl.prefixes || []).indexOf(highlightPrefix) !== -1;
-            parts.push("<li><details" + (plOpen ? " open" : "") + " style=\"cursor:pointer;\"><summary" + (plOpen ? " class=\"search-highlight\"" : "") + ">" + (pl.prefix_list || "—") + "</summary><ul style=\"margin:0.15rem 0 0 1rem; padding:0; list-style:disc; font-size:0.8rem;\">");
+            parts.push("<li><details" + (plOpen ? " open" : "") + " style=\"cursor:pointer;\"><summary" + (plOpen ? " class=\"search-highlight\"" : "") + ">" + escapeHtml(pl.prefix_list || "—") + "</summary><ul style=\"margin:0.15rem 0 0 1rem; padding:0; list-style:disc; font-size:0.8rem;\">");
             (pl.prefixes || []).forEach(function(p) {
-              parts.push("<li" + (highlightPrefix && p === highlightPrefix ? " class=\"search-highlight\"" : "") + ">" + p + "</li>");
+              parts.push("<li" + (highlightPrefix && p === highlightPrefix ? " class=\"search-highlight\"" : "") + ">" + escapeHtml(p) + "</li>");
             });
             parts.push("</ul></details></li>");
           });
@@ -2957,10 +2989,10 @@
           var ho = row.hierarchy_out || [];
           var devStr = (row.devices || []).join(", ");
           var cells = [];
-          if (visibleCols.indexOf("peer_group") !== -1) cells.push("<td>" + (row.peer_group || "—") + "</td>");
+          if (visibleCols.indexOf("peer_group") !== -1) cells.push("<td>" + escapeHtml(row.peer_group || "—") + "</td>");
           if (visibleCols.indexOf("route_map_in") !== -1) cells.push("<td>" + cellHtml(hi, row.route_map_in) + "</td>");
           if (visibleCols.indexOf("route_map_out") !== -1) cells.push("<td>" + cellHtml(ho, row.route_map_out) + "</td>");
-          if (visibleCols.indexOf("devices") !== -1) cells.push("<td>" + devStr + "</td>");
+          if (visibleCols.indexOf("devices") !== -1) cells.push("<td>" + escapeHtml(devStr) + "</td>");
           return "<tr>" + cells.join("") + "</tr>";
         }).join("");
         if (tableWrap) tableWrap.style.display = "block";
@@ -4033,15 +4065,24 @@
             return;
           }
           listEl.innerHTML = devs.map(function(d) {
+            // Wave-6 Phase C: `name` was injected raw into the <span> body
+            // and only quote-escaped in the data-attr — leaving angle-bracket
+            // and ampersand injection wide open for hostnames straight from
+            // the inventory. escapeHtml covers all five entities AND the
+            // attribute context, so the same string is safe in both slots.
             var name = d.hostname || d.ip || "?";
-            return "<li data-hostname=\"" + name.replace(/"/g, "&quot;") + "\"><span class=\"device-check-name\">" + name + "</span><span class=\"device-check-status\"><span class=\"device-check-loading\"></span></span></li>";
+            var nameEsc = escapeHtml(name);
+            return "<li data-hostname=\"" + nameEsc + "\"><span class=\"device-check-name\">" + nameEsc + "</span><span class=\"device-check-status\"><span class=\"device-check-loading\"></span></span></li>";
           }).join("");
           listEl.style.display = "block";
           if (statusEl) { statusEl.textContent = "Checking " + devs.length + " device(s)..."; statusEl.className = "ping-status"; }
           var firstFound = null;
           var abortController = new AbortController();
           function updateRow(hostname, found) {
-            var li = listEl.querySelector("li[data-hostname=\"" + hostname.replace(/"/g, "&quot;") + "\"]");
+            // Wave-6 Phase C: storage now uses escapeHtml() for the data-attr,
+            // so the lookup must encode the same way to match. xss-safe: status
+            // strings are constants ("✓" / "✗"); no dynamic interpolation.
+            var li = listEl.querySelector("li[data-hostname=\"" + escapeHtml(hostname) + "\"]");
             if (!li) return;
             var status = li.querySelector(".device-check-status");
             if (!status) return;
@@ -4148,7 +4189,13 @@
             });
           }
           function updateRow(hostname, found) {
-            var li = listEl.querySelector("li[data-hostname=\"" + hostname.replace(/"/g, "&quot;") + "\"]");
+            // Wave-6 Phase C: storage uses setAttribute (raw value), so the
+            // selector must use CSS.escape to handle quotes/backslashes
+            // correctly. The previous `.replace(/"/g, "&quot;")` was wrong
+            // for CSS-attribute syntax (it needed `\\"` escaping). xss-safe:
+            // status spans are constants.
+            var sel = "li[data-hostname=\"" + (typeof CSS !== "undefined" && CSS.escape ? CSS.escape(hostname) : hostname.replace(/(["\\])/g, "\\$1")) + "\"]";
+            var li = listEl.querySelector(sel);
             if (!li) return;
             var status = li.querySelector(".device-check-status");
             if (status) status.innerHTML = found ? "<span class=\"device-check-ok\">✓</span>" : "<span class=\"device-check-fail\">✗</span>";
