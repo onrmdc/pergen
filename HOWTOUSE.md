@@ -229,6 +229,72 @@ curl -X DELETE http://localhost:5000/api/credentials/lab   # delete
 > Never commit `credentials.db` / `credentials_v2.db` to git — they
 > are excluded by `.gitignore`.
 
+### Migrating from the legacy credential store
+
+Pergen historically wrote credentials to `instance/credentials.db`
+using a single SHA-256 → Fernet derivation
+(`backend/credential_store.py`, now deprecation-flagged). The new path
+is `instance/credentials_v2.db`, encrypted by `EncryptionService`
+(PBKDF2-HMAC-SHA256 600 000 iterations → AES-128-CBC + HMAC-SHA256).
+HTTP CRUD already writes to the v2 store; this runbook describes the
+**operator-led, one-shot data move** for any rows still living in the
+legacy DB.
+
+The migration script reads the legacy DB read-only, decrypts each row
+with the operator's `SECRET_KEY`, and re-encrypts into the v2 DB. It
+is **idempotent** (rows already present in v2 by name are skipped —
+the operator's manually-set newer credential always wins) and
+**non-destructive** (the legacy file is never modified or deleted).
+
+Steps:
+
+```bash
+# 1. Stop Pergen so no writes race the migration.
+#    (kill the process, stop the systemd unit, etc.)
+
+# 2. Back up the legacy DB out-of-band (the script does NOT do this for you).
+cp backend/instance/credentials.db backend/instance/credentials.db.bak.$(date +%Y%m%d)
+chmod 0600 backend/instance/credentials.db.bak.*
+
+# 3. Confirm the same SECRET_KEY the running app uses is in your env.
+echo "${SECRET_KEY:0:6}..."   # sanity-check: same first 6 chars as the app
+
+# 4. Dry-run first — prints would-be migration count without writing v2.
+python scripts/migrate_credentials_v1_to_v2.py --dry-run --verbose
+
+# 5. Real migration. Pre-flight canary-decrypts one entry; refuses to
+#    proceed (exit 2) if SECRET_KEY is wrong.
+python scripts/migrate_credentials_v1_to_v2.py --verbose
+
+# 6. Restart Pergen and verify.
+curl -s http://localhost:5000/api/credentials | jq '.credentials | length'
+curl -s -X POST http://localhost:5000/api/credentials/<name>/validate
+
+# 7. Keep credentials.db.bak.<date> for at least one release cycle in
+#    case a credential turns up missing post-migration.
+```
+
+Flags:
+
+| Flag | Default | Purpose |
+|------|---------|---------|
+| `--legacy-db` | `$PERGEN_INSTANCE_DIR/credentials.db` | Source path. |
+| `--v2-db` | `$PERGEN_INSTANCE_DIR/credentials_v2.db` | Destination path (created if missing). |
+| `--dry-run` | off | Decrypt-and-count only; no v2 writes. |
+| `--verbose` | off | Per-row `{name, method, status}` line in summary. No payloads ever printed. |
+
+Exit codes: `0` success • `1` at least one row failed (operator
+inspects the printed error list) • `2` pre-flight refused (missing
+`SECRET_KEY`, missing legacy DB, wrong key).
+
+**Wave-6 keep-shim note.** `backend/credential_store.py` remains
+importable after this migration — it emits `DeprecationWarning` on
+import (already pinned by
+`tests/test_security_legacy_credstore_deprecation.py`) but the 5
+blueprint sites + `runners/runner.py` + `find_leaf` + `nat_lookup`
+keep working unchanged. The shim → `CredentialService` cut-over is
+deliberately a separate wave.
+
 ---
 
 ## 9. Running commands on devices
