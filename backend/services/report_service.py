@@ -13,11 +13,11 @@ class ReportService:
     def __init__(self, report_repo: ReportRepository) -> None:
         self._repo = report_repo
 
-    def list(self) -> list[dict]:
-        return self._repo.list()
+    def list(self, actor: str | None = None) -> list[dict]:
+        return self._repo.list(actor=actor)
 
-    def load(self, run_id: str) -> dict | None:
-        return self._repo.load(run_id)
+    def load(self, run_id: str, actor: str | None = None) -> dict | None:
+        return self._repo.load(run_id, actor=actor)
 
     def save(
         self,
@@ -30,6 +30,7 @@ class ReportService:
         post_created_at: str | None = None,
         post_device_results: list[dict] | None = None,
         comparison: dict | None = None,
+        created_by_actor: str | None = None,
     ) -> None:
         self._repo.save(
             run_id=run_id,
@@ -40,10 +41,11 @@ class ReportService:
             post_created_at=post_created_at,
             post_device_results=post_device_results,
             comparison=comparison,
+            created_by_actor=created_by_actor,
         )
 
-    def delete(self, run_id: str) -> bool:
-        return self._repo.delete(run_id)
+    def delete(self, run_id: str, actor: str | None = None) -> bool:
+        return self._repo.delete(run_id, actor=actor)
 
     # ------------------------------------------------------------------ #
     # Pre/post comparison                                                #

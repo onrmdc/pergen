@@ -49,12 +49,6 @@ def _gated_client(monkeypatch, tmp_path):
     return app.test_client()
 
 
-@pytest.mark.xfail(
-    reason="W4-M-01 — report-on-disk has no created_by_actor field; "
-    "restore endpoint cannot enforce actor scoping until ReportRepository "
-    "records owner at save time. Plan: docs/refactor/wave4_followups.md.",
-    strict=True,
-)
 def test_report_restore_rejects_cross_actor(monkeypatch, tmp_path) -> None:
     """W4-M-01 — Bob must NOT be able to restore Alice's saved report."""
     client = _gated_client(monkeypatch, tmp_path)

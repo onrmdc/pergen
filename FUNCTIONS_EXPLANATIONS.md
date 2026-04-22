@@ -123,14 +123,14 @@ Null bytes (`\x00`) are rejected in every method with a WARN log.
 | `save(content, line_editors)` | Persists LF-normalised content + per-line editors. |
 | `update(content, user) -> dict` | Diff-aware update — preserves the editor for unchanged lines, attributes new/changed lines to `user` (defaults to `"—"` when blank). |
 
-### `ReportRepository`
+### `ReportRepository` (wave-5 W4-M-01: actor scoping)
 | Method | Description |
 |--------|-------------|
 | `__init__(reports_dir)` | Stores the dir + lock. |
-| `list() -> list[dict]` | Reads the gzipped index file. |
-| `load(run_id) -> dict | None` | Returns the gzipped JSON report. |
-| `save(*, run_id, name, created_at, devices, device_results, post_*, comparison)` | Persists a fresh report + index entry. |
-| `delete(run_id) -> bool` | Removes report + index entry. |
+| `list(actor=None) -> list[dict]` | Reads the gzipped index file. When `actor` is supplied, projects out cross-actor entries (legacy entries pre-W4-M-01 are visible to every actor for back-compat). |
+| `load(run_id, actor=None) -> dict | None` | Returns the gzipped JSON report. When `actor` is supplied, refuses cross-actor reads (returns None — IDOR mismatch treated as "not found"). |
+| `save(*, run_id, name, created_at, devices, device_results, post_*, comparison, created_by_actor=None)` | Persists a fresh report + index entry. `created_by_actor` (defaulting to `"anonymous"`) is recorded in BOTH the gzipped payload and the index entry. |
+| `delete(run_id, actor=None) -> bool` | Removes report + index entry. When `actor` is supplied, cross-actor delete is a silent no-op (no-disclosure). |
 
 ---
 
@@ -333,13 +333,32 @@ in `tests/parsers/generic/test_field_engine.py`.
 - Diff computation unified via `ReportService.compare_runs`.
 - `/api/diff` capped at 256 KB per side (audit M4).
 
-### `reports_bp` (Phase 11)
-- `GET /api/reports`, `/api/reports/<run_id>` (with optional `?restore=1`),
-  `DELETE /api/reports/<run_id>`.
+### `reports_bp` (Phase 11 + wave-3 M-03 + wave-5 W4-M-01)
+- `GET /api/reports` — list saved reports. Wave-5: projects out cross-actor
+  entries via `_scoping_actor()`.
+- `GET /api/reports/<run_id>` — fetch one (legacy `?restore=1` returns 405;
+  use POST `/restore` instead). Wave-5: cross-actor reads return 404.
+- `POST /api/reports/<run_id>/restore` — wave-3 M-03 endpoint that pushes
+  the saved report back into the in-memory run-state store. Wave-5:
+  cross-actor restores return 404.
+- `DELETE /api/reports/<run_id>` — wave-5: cross-actor deletes are silent
+  no-ops (no-disclosure); audit log line emitted on every call.
 
 ---
 
-## 13. Phase-13 changed-signature reference
+## 13. `backend/cli/` (operator tools)
+
+### `backend/cli/backfill_report_actors.py` (wave-5 W4-M-01)
+- One-shot operator CLI to stamp legacy reports under `instance/reports/`
+  with the wave-5 `created_by_actor` field. Idempotent (already-stamped
+  reports are skipped). Supports `--owner=<name>`, `--reports-dir=<path>`,
+  and `--dry-run`. Default owner is `"legacy"`.
+- Invocation: `python -m backend.cli.backfill_report_actors`.
+- Unit tested at `tests/test_cli_backfill_report_actors.py` (8 tests).
+
+---
+
+## 14. Phase-13 changed-signature reference
 
 Every change below is a security or robustness fix.  No public API
 removed; existing callers continue to work.

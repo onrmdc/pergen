@@ -23,11 +23,6 @@ import pytest
 pytestmark = [pytest.mark.security]
 
 
-@pytest.mark.xfail(
-    reason="W4-M-02 — RunStateStore treats owner=None as 'no scoping'. "
-    "Plan: docs/refactor/wave4_followups.md.",
-    strict=True,
-)
 def test_runstatestore_anonymous_run_not_readable_by_named_actor() -> None:
     """A run stored with actor=None must not leak to actor='alice'."""
     from backend.services.run_state_store import RunStateStore

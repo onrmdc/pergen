@@ -47,14 +47,26 @@ class RunStateStore:
     # ------------------------------------------------------------------ #
     # Public API                                                         #
     # ------------------------------------------------------------------ #
+    # Sentinel literal for the anonymous-actor bucket. Stored verbatim
+    # in ``_created_by_actor`` so the actor-scope check below can refuse
+    # cross-bucket reads (named caller cannot read anonymous-create;
+    # anonymous caller cannot read named-create).
+    _ANON_OWNER: str = "anonymous"
+
     def get(self, run_id: str, actor: str | None = None) -> dict | None:
         """Return a *deep copy* of the stored value, or ``None`` if expired/missing.
 
-        Audit M-02: when ``actor`` is supplied, the call returns ``None`` for
-        runs created by a different actor (treats IDOR mismatch identically
-        to "not found" so the response cannot disclose run-id existence).
-        ``actor=None`` retains the legacy permissive behaviour for callers
-        that have not yet adopted scoping (e.g. internal admin paths).
+        Audit M-02 (wave-3) + W4-M-02 (wave-4): scoping is now ALWAYS active.
+        ``set()`` always records an owner — either the supplied ``actor`` or
+        the literal ``"anonymous"``. ``get(actor=X)`` returns ``None`` (not
+        the value) for any cross-bucket attempt:
+
+        * named caller, anonymous-create entry → refused.
+        * anonymous caller, named-create entry → refused.
+        * named caller, different-named-create → refused (the wave-3 case).
+
+        IDOR mismatch is treated identically to "not found" so the
+        response cannot disclose run-id existence.
         """
         with self._lock:
             entry = self._state.get(run_id)
@@ -65,9 +77,10 @@ class RunStateStore:
                 # Lazy expiry — pop on read.
                 self._state.pop(run_id, None)
                 return None
-            # Audit M-02 actor scoping: refuse cross-actor reads.
-            owner = value.get("_created_by_actor")
-            if actor is not None and owner is not None and owner != actor:
+            # Wave-4 W4-M-02: cross-bucket actor check (always active).
+            owner = value.get("_created_by_actor", self._ANON_OWNER)
+            caller = actor if actor is not None else self._ANON_OWNER
+            if owner != caller:
                 return None
             # Move to end (LRU touch) so accessed runs survive eviction.
             self._state.move_to_end(run_id)
@@ -76,23 +89,38 @@ class RunStateStore:
     def set(self, run_id: str, value: dict, *, actor: str | None = None) -> None:
         """Store a *deep copy* of ``value`` under ``run_id``.
 
-        Audit M-02: ``actor`` (when supplied) is recorded under the
-        reserved key ``_created_by_actor`` so a later ``get(actor=...)``
-        can refuse cross-actor reads.
+        Audit M-02 (wave-3) + W4-M-02 (wave-4): ``_created_by_actor`` is
+        ALWAYS recorded — either the supplied ``actor`` or the literal
+        ``"anonymous"``. The explicit ``actor=`` argument always wins
+        over any value already in ``value["_created_by_actor"]``.
         """
         with self._lock:
             self._evict_expired()
             stored = copy.deepcopy(value)
-            if actor is not None:
-                stored["_created_by_actor"] = actor
+            stored["_created_by_actor"] = actor if actor is not None else self._ANON_OWNER
             self._state[run_id] = (time.monotonic(), stored)
             self._state.move_to_end(run_id)
             # FIFO cap (oldest entry first).
             while len(self._state) > self._max:
                 self._state.popitem(last=False)
 
-    def update(self, run_id: str, **fields: Any) -> dict | None:
-        """Patch fields on an existing run; return a deep copy or ``None``."""
+    def update(
+        self, run_id: str, *, actor: str | None = None, **fields: Any
+    ) -> dict | None:
+        """Patch fields on an existing run; return a deep copy or ``None``.
+
+        Wave-4 W4-M-03: ``actor`` mirrors ``get()`` semantics — cross-bucket
+        updates are refused with the same "not found" disclosure-safe shape.
+
+        Wave-4 W4-M-03 paired guard: ``_created_by_actor`` is rejected as
+        a writable field. The ownership marker is set exclusively by
+        ``set()`` (or by an explicit future re-assign API) — never by an
+        ad-hoc ``update`` call.
+        """
+        if "_created_by_actor" in fields:
+            raise ValueError(
+                "_created_by_actor is a reserved field; use set() to assign ownership"
+            )
         with self._lock:
             entry = self._state.get(run_id)
             if entry is None:
@@ -100,6 +128,11 @@ class RunStateStore:
             ts, value = entry
             if self._is_expired(ts):
                 self._state.pop(run_id, None)
+                return None
+            # Wave-4 W4-M-03: cross-bucket actor check (mirrors get()).
+            owner = value.get("_created_by_actor", self._ANON_OWNER)
+            caller = actor if actor is not None else self._ANON_OWNER
+            if owner != caller:
                 return None
             new_value = copy.deepcopy(value)
             new_value.update(fields)

@@ -224,12 +224,15 @@ def api_run_pre_create():
         actor=_current_actor(),
     )
     with contextlib.suppress(Exception):  # persistence is best-effort
+        # Wave-4 W4-M-01: stamp the report with its creator so subsequent
+        # ReportRepository.list/load/delete can refuse cross-actor reads.
         _report_service().save(
             run_id=run_id,
             name=name or "pre_report",
             created_at=created_at,
             devices=devices,
             device_results=device_results,
+            created_by_actor=_current_actor() or "anonymous",
         )
     return jsonify({"run_id": run_id, "run_created_at": created_at})
 
@@ -283,8 +286,11 @@ def api_run_post():
     device_results = _run_devices_inline(devices)
     comparison = _report_service().compare_runs(pre_run["device_results"], device_results)
     post_created_at = _now_iso()
+    # Wave-4 W4-M-03: thread actor= so update() honours the same
+    # cross-bucket refusal that get() applies.
     store.update(
         run_id,
+        actor=_current_actor(),
         post_device_results=device_results,
         comparison=comparison,
         post_created_at=post_created_at,
@@ -326,8 +332,10 @@ def api_run_post_complete():
     rs = _report_service()
     comparison = rs.compare_runs(pre_run["device_results"], device_results)
     post_created_at = _now_iso()
+    # Wave-4 W4-M-03: thread actor= for the cross-bucket refusal contract.
     store.update(
         run_id,
+        actor=_current_actor(),
         post_device_results=device_results,
         comparison=comparison,
         post_created_at=post_created_at,

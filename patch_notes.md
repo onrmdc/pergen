@@ -8,6 +8,74 @@ return shape. Behaviour changes are explicitly noted; otherwise none.
 
 ---
 
+## v0.6.0 — Wave-5: refactor close-out (sealed)
+
+**Scope:** Land the 3 deferred wave-4 medium findings to close every
+audit-tracker `xfail`. After this commit, the refactor program is
+officially sealed; the 5 remaining `docs/refactor/` items are
+reclassified as future feature work (not unfinished refactor debt).
+Plan: `docs/refactor/wave4_followups.md` (now marked CLOSED).
+
+**Phases (4)**
+
+- Phase 0 — baseline lock (1619 + 4 xfail confirmed).
+- Phase 1 — **W4-M-02** RunStateStore anonymous-actor isolation.
+  `set()` always records `_created_by_actor` (defaulting to
+  `"anonymous"`). `get()` enforces cross-bucket isolation. 1 paired
+  pre-existing test updated to pop the marker before strict equality.
+- Phase 2 — **W4-M-03** `RunStateStore.update()` actor parameter +
+  reserved-key rejection. Both callers in `runs_bp.py` thread
+  `actor=_current_actor()`. `update()` raises `ValueError` if
+  `_created_by_actor` appears in `**fields`.
+- Phase 3 — **W4-M-01** `ReportRepository` actor scoping + backfill CLI:
+  - `save()` records `created_by_actor` in payload + index.
+  - `load() / list() / delete()` accept `actor=` and refuse cross-actor
+    ops with the same "not found" disclosure-safe shape used elsewhere.
+  - `reports_bp` threads `_scoping_actor()` through every route.
+  - `runs_bp` `_report_service().save()` call now passes
+    `created_by_actor=_current_actor() or "anonymous"`.
+  - New operator CLI `python -m backend.cli.backfill_report_actors`
+    stamps legacy reports with `created_by_actor` (default `"legacy"`,
+    `--owner=...` + `--dry-run` supported, idempotent).
+  - CLI unit-tested at `tests/test_cli_backfill_report_actors.py` (8 tests).
+- Phase 4 — verify + seal docs:
+  - `wave4_followups.md` marked CLOSED for all 3 deferred items.
+  - `wave3_roadmap.md` reclassifies the 5 remaining items from
+    "deferred refactor" to "future feature work" with explicit rationale.
+  - README + TEST_RESULTS + ARCHITECTURE + HOWTOUSE + comparison_from_original
+    refreshed to wave-5 numbers.
+
+**Numbers**
+
+- pytest: 1619 → **1631 passing** (+12), 4 → **0 xfailed**.
+- Vitest: 37 (no change).
+- Playwright: 90 in 41 spec files (no change).
+- Whole-project coverage: 90.42 % → **90.23 %** (held flat — +production
+  CLI LOC offset by +8 paired CLI tests).
+- Audit-tracker xfails across all 4 audit waves: **0** (was 4 at
+  wave-5 start; was 24 + 6 cumulative across waves 1+2+3+4).
+- New module: `backend/cli/` with the W4-M-01 backfill operator tool.
+- New tests: `tests/test_cli_backfill_report_actors.py` (8 tests).
+
+**Reclassified — future FEATURE work (NOT refactor)**
+
+The 5 items below were "deferred refactor" before wave-5; explicitly
+reclassified as future feature work after this commit. They are
+non-trivial in their own right and warrant dedicated planning + shipping
+cycles. None block production-readiness.
+
+1. Full credential_store data migration (`credential_store_migration.md`)
+   — operator data tooling.
+2. SPA cookie auth + CSRF (`spa_auth_ui.md`) — auth UX rework, ~5 days.
+3. CSP `unsafe-inline` removal (`csp_hsts_json_headers.md`) — frontend
+   CSS class refactor + Playwright visual regression specs.
+4. Sweeping ~125-site XSS audit (`xss_innerhtml_audit.md`) — defence-in-depth.
+5. Find-leaf parallel-cancel (audit M-09) — performance polish.
+
+The refactor program is officially **SEALED**.
+
+---
+
 ## v0.5.0 — Wave-4: post-wave-3 audit pass
 
 **Scope:** Re-audit after wave-3 close-out (4 parallel agents:

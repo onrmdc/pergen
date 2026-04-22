@@ -178,7 +178,13 @@ def test_run_state_store_concurrent_set_does_not_lose_writes():
     for t in threads:
         t.join()
     for i in range(n):
-        assert store.get(f"run-{i}") == {"phase": "PRE", "i": i}
+        # Wave-4 W4-M-02: set() always records ``_created_by_actor`` —
+        # strip it from the equality compare since the test only cares
+        # that the user-supplied fields round-trip intact.
+        got = store.get(f"run-{i}")
+        assert got is not None
+        got.pop("_created_by_actor", None)
+        assert got == {"phase": "PRE", "i": i}
 
 
 def test_run_state_store_get_returns_deep_copy():

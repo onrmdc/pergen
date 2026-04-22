@@ -25,18 +25,20 @@
 > tests (+16 tests), and the Playwright harness fix that prevents flow
 > specs from polluting the operator's real `instance/` dir.
 >
- > Every existing API still ships unchanged — **1,619 pytest tests +
+ > Every existing API still ships unchanged — **1,631 pytest tests +
 > 37 Vitest + 90 Playwright** lock the response shapes byte-for-byte
 > across all 28 golden parser snapshots.
 >
 > **Coverage:** **87 %** on the parser surface; **92 %** on the 4 new
-> wave-3 packages; **90.42 %** whole-project (was 78.33 % pre-wave-3,
+> wave-3 packages; **90.23 %** whole-project (was 78.33 % pre-wave-3,
 > +12 pp net); 94 % on the OOD layer.
 >
-> **Wave-3 closed every wave-1+2 audit-tracker `xfail`** (24 → 0). A
-> wave-4 audit then surfaced 1 NEW HIGH (closed) + 5 NEW MEDIUM (3
-> closed, 3 pinned for `wave4_followups.md`) + +219 Tier-1 unit tests
-> bringing the 4 new packages from 57 % → 92 % coverage. See
+> **Refactor program SEALED** — every audit-tracker `xfail` across
+> waves 1, 2, 3, and 4 is now a passing test (24+6 → 0). The 5
+> remaining `docs/refactor/` items are reclassified as future feature
+> work (operator data migration, SPA cookie auth, CSP class refactor,
+> long-tail XSS sweep, find-leaf parallel-cancel) — none block
+> production-readiness. See
 > [`docs/refactor/wave3_roadmap.md`](docs/refactor/wave3_roadmap.md)
 > and [`docs/refactor/wave4_followups.md`](docs/refactor/wave4_followups.md).
 >

@@ -21,11 +21,6 @@ import pytest
 pytestmark = [pytest.mark.security]
 
 
-@pytest.mark.xfail(
-    reason="W4-M-03 — RunStateStore.update has no actor parameter; the "
-    "wave-3 actor-scope design pinned the safety check to get() only.",
-    strict=True,
-)
 def test_runstatestore_update_refuses_cross_actor() -> None:
     """Bob must not be able to update Alice's run via update()."""
     from backend.services.run_state_store import RunStateStore
@@ -37,11 +32,6 @@ def test_runstatestore_update_refuses_cross_actor() -> None:
     assert out is None
 
 
-@pytest.mark.xfail(
-    reason="W4-M-03 — update() does not reject the reserved "
-    "_created_by_actor key in **fields.",
-    strict=True,
-)
 def test_runstatestore_update_rejects_creator_field() -> None:
     """`_created_by_actor` must not be a writable field via update()."""
     from backend.services.run_state_store import RunStateStore

@@ -25,6 +25,20 @@ _audit = logging.getLogger("app.audit")
 def _actor() -> str:
     return getattr(g, "actor", None) or "anonymous"
 
+
+def _scoping_actor() -> str | None:
+    """Return the named actor for repo scoping, or None when anonymous.
+
+    Wave-4 W4-M-01: thread-through to ReportRepository.list/load/delete
+    so cross-actor reads are refused. Mirrors runs_bp._current_actor()
+    semantics: anonymous → permissive (legacy back-compat).
+    """
+    actor = getattr(g, "actor", None)
+    if not actor or actor == "anonymous":
+        return None
+    return str(actor)
+
+
 reports_bp = Blueprint("reports", __name__)
 
 
@@ -44,9 +58,13 @@ def _state_store():
 
 @reports_bp.route("/api/reports", methods=["GET"])
 def api_reports_list():
-    """List saved reports (from disk index)."""
+    """List saved reports (from disk index).
+
+    Wave-4 W4-M-01: projects out cross-actor entries when a named actor
+    is on the request. Anonymous callers see every entry (back-compat).
+    """
     try:
-        return jsonify({"reports": _service().list()})
+        return jsonify({"reports": _service().list(actor=_scoping_actor())})
     except Exception:  # noqa: BLE001 - degrade gracefully
         return jsonify({"reports": []})
 
@@ -60,6 +78,10 @@ def api_report_get(run_id: str):
     and would dodge any future POST-only CSRF guard. The restore branch
     is now served by ``POST /api/reports/<run_id>/restore``; this GET
     route only reads.
+
+    Wave-4 W4-M-01: cross-actor reads return 404 (treats IDOR mismatch
+    identically to "not found" so the response cannot disclose run-id
+    existence).
     """
     run_id = (run_id or "").strip()
     if not run_id:
@@ -79,7 +101,7 @@ def api_report_get(run_id: str):
             405,
         )
     try:
-        report = _service().load(run_id)
+        report = _service().load(run_id, actor=_scoping_actor())
     except Exception:  # noqa: BLE001
         return jsonify({"error": "failed to load report"}), 500
     if report is None:
@@ -89,26 +111,18 @@ def api_report_get(run_id: str):
 
 @reports_bp.route("/api/reports/<run_id>/restore", methods=["POST"])
 def api_report_restore(run_id: str):
-    """Restore a saved report into the run-state store (audit M-03)."""
+    """Restore a saved report into the run-state store (audit M-03 + W4-M-01)."""
     run_id = (run_id or "").strip()
     if not run_id:
         return jsonify({"error": "run_id required"}), 400
+    actor = _scoping_actor()
     try:
-        report = _service().load(run_id)
+        # Wave-4 W4-M-01: cross-actor restore returns 404 (no disclosure).
+        report = _service().load(run_id, actor=actor)
     except Exception:  # noqa: BLE001
         return jsonify({"error": "failed to load report"}), 500
     if report is None:
         return jsonify({"error": "report not found"}), 404
-    # Use the wave-3 actor scoping so subsequent reads honour M-02.
-    actor = None
-    try:
-        from flask import g as _g
-
-        actor = getattr(_g, "actor", None)
-        if not actor or actor == "anonymous":
-            actor = None
-    except Exception:  # pragma: no cover — defensive
-        actor = None
     _state_store().set(
         run_id,
         {
@@ -127,12 +141,17 @@ def api_report_restore(run_id: str):
 
 @reports_bp.route("/api/reports/<run_id>", methods=["DELETE"])
 def api_report_delete(run_id: str):
-    """Remove a saved report from disk + index."""
+    """Remove a saved report from disk + index.
+
+    Wave-4 W4-M-01: cross-actor delete is a silent no-op (no
+    disclosure). Returns 200 in both cases (deleted-mine vs
+    not-found-as-yours) for the same reason.
+    """
     run_id = (run_id or "").strip()
     if not run_id:
         return jsonify({"error": "run_id required"}), 400
     try:
-        _service().delete(run_id)
+        _service().delete(run_id, actor=_scoping_actor())
         # Audit M-07: log the run id + actor.
         _audit.info("audit report.delete actor=%s run_id=%s", _actor(), run_id)
         return jsonify({"ok": True})

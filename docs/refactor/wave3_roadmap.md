@@ -116,35 +116,53 @@
 - [x] Every state-changing route has at least one Playwright spec (15 new flow specs in Phase 12).
 - [x] Every helper extracted out of the SPA IIFE has Vitest unit tests (utils.js + subnet.js, 37 tests).
 
-## What's intentionally still deferred
+## Reclassified — future FEATURE work (not refactor debt)
 
-These items have ready-to-flip plans in `docs/refactor/` and remain
-documented future-work, not regressions:
+The five items below were originally tracked as "deferred refactor".
+After wave-5 close-out (every audit-tracker xfail closed), they are
+explicitly reclassified as **future feature work** — they are not
+unfinished refactor debt and do not block the production-readiness
+acceptance.
+
+Each is non-trivial in its own right and warrants a dedicated planning
++ shipping cycle (its own wave or PR). They appear here so future
+contributors know they are tracked but intentionally outside the
+refactor program.
 
 1. **Full credential_store data migration** (`credential_store_migration.md`)
-   — the deprecation marker is in place (Phase 6 closes the xfail), but the
-   actual `credentials.db` → `credentials_v2.db` migration is data-bearing
-   work that warrants a dry-run command + roundtrip verification. Out of
-   wave-3 scope.
+   — `credentials.db` → `credentials_v2.db` operator data move. Deprecation
+   marker landed in wave-3 Phase 6; the actual migration is operator-led
+   work that warrants a dry-run command + roundtrip verification.
+   *Reclassified: operator data tooling; not refactor.*
 
 2. **SPA cookie auth + CSRF** (`spa_auth_ui.md`)
-   — Phases 3, 4, 5 closed every audit-tracker xfail by hardening the
-   existing token-header auth. The full Option-B work (in-app login + HttpOnly
-   signed cookie + CSRF token) is its own dedicated wave (~5 days, HIGH risk).
+   — Council-decided Option-B: in-app login page + HttpOnly signed cookie
+   + CSRF token. ~5 days, HIGH risk (changes the auth model for every
+   operator). The existing token-header gate is hardened across wave-1+2+3
+   (immutable snapshot, actor scoping, dev-open boot guard).
+   *Reclassified: new feature (auth UX rework); not refactor.*
 
 3. **CSP `unsafe-inline` removal** (`csp_hsts_json_headers.md`)
    — `backend/static/index.html` has 1 inline `<style>` block + 239 inline
-   `style="..."` attributes. Stripping these without a CSS class refactor
-   is its own multi-PR project with paired Playwright visual regression specs.
+   `style="..."` attributes. Stripping these requires a CSS class refactor
+   with paired Playwright visual regression specs.
+   *Reclassified: frontend rework; not refactor.*
 
-4. **Sweeping XSS audit** (`xss_innerhtml_audit.md`)
-   — Phase 2 closed the audit-confirmed UNSAFE sites (H-01 dropdowns + H-02
-   result tables). The full ~125-site sweep + lint guard is its own PR
-   following the audit's hybrid surgical+strategic plan.
+4. **Sweeping ~125-site XSS audit** (`xss_innerhtml_audit.md`)
+   — The audit-confirmed UNSAFE sites (H-01 dropdowns + H-02 result
+   tables + the device-check-name builder) are fixed in wave-3 Phase 2.
+   The full long-tail sweep + lint guard is its own PR.
+   *Reclassified: defence-in-depth hardening; not refactor.*
 
-5. **Find-leaf parallel-no-cancel** (audit M-09)
-   — Preserved verbatim during the Phase 8 refactor with an explicit code
-   comment. ~1-day fix; defer to a paired test+code change PR.
+5. **Find-leaf parallel-cancel** (audit M-09)
+   — `ThreadPoolExecutor.shutdown(wait=False, cancel_futures=True)` once
+   the first hit lands, instead of letting pending queries drain. ~1 day.
+   Preserved verbatim during the Phase 8 refactor.
+   *Reclassified: performance polish; not refactor.*
+
+Each item has a complete plan in `docs/refactor/`. They are sealed as
+forward-looking work; no pin / xfail tracker remains in the test suite
+for any of them.
 
 The roadmap doc is now sealed; future work goes to its own dedicated planning
 doc per item.
@@ -167,3 +185,23 @@ Wave-4 also lifted coverage 84.17 % → **90.42 %** with +219 unit tests
 across the 4 new wave-3 packages (every targeted module ≥87 %), and added
 3 new Playwright P0 specs for the post-run + report-restore + extended
 error-path flows.
+
+## Wave-5 — refactor program SEALED (2026-04-22)
+
+A focused close-out session landed the 3 deferred wave-4 medium findings:
+
+- **W4-M-01** — `ReportRepository` actor scoping at save/load/list/delete +
+  operator backfill CLI (`backend/cli/backfill_report_actors.py`). Reports
+  on disk now carry `created_by_actor`; cross-actor reads return 404.
+- **W4-M-02** — `RunStateStore` always records `_created_by_actor`
+  (defaulting to `"anonymous"`); cross-bucket reads refused.
+- **W4-M-03** — `RunStateStore.update()` grew an `actor=` parameter +
+  rejects the reserved `_created_by_actor` field.
+
+After wave-5: **1631 pytest passing, 0 xfailed**. Every audit-tracker
+xfail across all four waves is now a passing test. The 5 remaining
+`docs/refactor/` items are reclassified above as future feature work.
+
+**The refactor program is officially sealed.** Anything in
+`docs/refactor/` not yet shipped is forward-looking work, not unfinished
+refactor debt.
