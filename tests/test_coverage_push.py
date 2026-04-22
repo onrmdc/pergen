@@ -9,8 +9,6 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
-import pytest
-
 
 # =========================================================================== #
 # transceiver_bp.api_transceiver_recover — happy paths                         #

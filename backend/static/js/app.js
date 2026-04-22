@@ -166,8 +166,8 @@
       if (titleEl) titleEl.textContent = titleLabel + " (" + sorted.length + ")";
       listEl.innerHTML = sorted.map(function(e) {
         var cls = e.type === "success" ? "event-success" : e.type === "warn" ? "event-warn" : "event-fail";
-        var timeStr = e.time ? "<span class=\"event-time\">" + e.time + "</span> " : "";
-        return "<li class=\"" + cls + "\">" + timeStr + "<strong>" + (e.hostname || "?") + "</strong>: " + (e.message || e.error || "") + "</li>";
+        var timeStr = e.time ? "<span class=\"event-time\">" + escapeHtml(e.time) + "</span> " : "";
+        return "<li class=\"" + cls + "\">" + timeStr + "<strong>" + escapeHtml(e.hostname || "?") + "</strong>: " + escapeHtml(e.message || e.error || "") + "</li>";
       }).join("");
     }
     function initErrorCountBtn() {
@@ -2378,7 +2378,7 @@
             listDiv.textContent = "Loading…";
             fetch(API + "/api/bgp/announced-prefixes?asn=" + encodeURIComponent(asn)).then(function(r) { return r.json(); }).then(function(d) {
               var prefixes = (d.prefixes || []).slice(0, 100);
-              if (d.error) listDiv.innerHTML = "<span class=\"muted\" style=\"font-size:0.85em;\">" + (d.error || "Error") + "</span>";
+              if (d.error) listDiv.innerHTML = "<span class=\"muted\" style=\"font-size:0.85em;\">" + escapeHtml(d.error || "Error") + "</span>";
               else if (prefixes.length === 0) listDiv.innerHTML = "<span class=\"muted\" style=\"font-size:0.85em;\">No prefixes</span>";
               else {
                 listDiv.innerHTML = prefixes.map(function(p) {
@@ -2580,7 +2580,7 @@
       if (statusEl) statusEl.textContent = peers.length ? peers.length + " peer(s)." : "No peers.";
       body.innerHTML = peers.slice(0, 500).map(function(p) {
         var asPath = Array.isArray(p.as_path) ? p.as_path.join(" ") : (p.as_path || "");
-        return "<tr><td>" + (p.rrc || "—") + "</td><td>" + (p.location || "—") + "</td><td>" + (p.ip || "—") + "</td><td>" + (p.as_number || "—") + "</td><td>" + (p.prefix || "—") + "</td></tr>";
+        return "<tr><td>" + escapeHtml(p.rrc || "—") + "</td><td>" + escapeHtml(p.location || "—") + "</td><td>" + escapeHtml(p.ip || "—") + "</td><td>" + escapeHtml(p.as_number || "—") + "</td><td>" + escapeHtml(p.prefix || "—") + "</td></tr>";
       }).join("");
       wrap.style.display = "block";
     }
@@ -2603,7 +2603,7 @@
         var prevPath = Array.isArray(c.previous_path) ? c.previous_path.join(" ") : (c.previous_path || "");
         var newPath = Array.isArray(c.new_path) ? c.new_path.join(" ") : (c.new_path || "");
         var src = [c.source_as, c.source_owner, c.source_ip].filter(Boolean).join(" / ") || "—";
-        return "<tr><td>" + (c.timestamp || "—") + "</td><td>" + (c.target_prefix || "—") + "</td><td class=\"bgp-path-prev\" style=\"word-break:break-all;\">" + prevPath + "</td><td class=\"bgp-path-new\" style=\"word-break:break-all;\">" + newPath + "</td><td>" + src + "</td></tr>";
+        return "<tr><td>" + escapeHtml(c.timestamp || "—") + "</td><td>" + escapeHtml(c.target_prefix || "—") + "</td><td class=\"bgp-path-prev\" style=\"word-break:break-all;\">" + escapeHtml(prevPath) + "</td><td class=\"bgp-path-new\" style=\"word-break:break-all;\">" + escapeHtml(newPath) + "</td><td>" + escapeHtml(src) + "</td></tr>";
       }).join("");
       wrap.style.display = "block";
     }
@@ -2692,8 +2692,8 @@
         var html = "";
         html += "<div class=\"card\" style=\"padding:0.75rem;\"><strong>Announced</strong><br><span style=\"color:var(--success);\">" + (status.announced ? "Yes" : "No") + "</span></div>";
         html += "<div class=\"card\" style=\"padding:0.75rem;\"><strong>Withdrawn</strong><br><span>" + (status.withdrawn ? "Yes" : "No") + "</span></div>";
-        html += "<div class=\"card\" style=\"padding:0.75rem;\"><strong>Origin AS</strong><br>" + (status.origin_as || "—") + (status.as_name ? " <span class=\"muted\">(" + status.as_name + ")</span>" : "") + "</div>";
-        html += "<div class=\"card\" style=\"padding:0.75rem;\"><strong>RPKI</strong><br>" + (status.rpki_status || "Unknown") + "</div>";
+        html += "<div class=\"card\" style=\"padding:0.75rem;\"><strong>Origin AS</strong><br>" + escapeHtml(status.origin_as || "—") + (status.as_name ? " <span class=\"muted\">(" + escapeHtml(status.as_name) + ")</span>" : "") + "</div>";
+        html += "<div class=\"card\" style=\"padding:0.75rem;\"><strong>RPKI</strong><br>" + escapeHtml(status.rpki_status || "Unknown") + "</div>";
         cardsEl.innerHTML = html;
         var pct = (visibility && visibility.percentage != null) ? visibility.percentage : null;
         var seeing = (visibility && visibility.probes_seeing != null) ? visibility.probes_seeing : (status.visibility_summary && status.visibility_summary.peers_seeing);
@@ -2721,7 +2721,12 @@
         var actual = (status.origin_as || "").replace(/^AS/i, "").trim();
         if (expected && actual && expected !== actual) {
           hijackEl.style.display = "block";
-          hijackEl.innerHTML = "<strong>HIJACK DETECTED</strong> — Expected Origin AS " + expected + ", got " + actual + ".";
+          // Safe construction: use textContent for untrusted values (form input + RIPEStat).
+          hijackEl.textContent = "";
+          var hjStrong = document.createElement("strong");
+          hjStrong.textContent = "HIJACK DETECTED";
+          hijackEl.appendChild(hjStrong);
+          hijackEl.appendChild(document.createTextNode(" — Expected Origin AS " + expected + ", got " + actual + "."));
         }
         bgpRenderLookingGlass(lookingGlass);
         bgpRenderBgplay(bgplay);
@@ -2792,7 +2797,7 @@
         fetch(API + "/api/router-devices?scope=" + encodeURIComponent(scope)).then(function(r) { return r.json(); }).then(function(data) {
           routerDevicesCache = data.devices || [];
           listEl.innerHTML = routerDevicesCache.map(function(d, i) {
-            return "<div class=\"device-row\" data-index=\"" + i + "\"><input type=\"checkbox\" data-index=\"" + i + "\" /><span class=\"hostname\">" + (d.hostname || "") + "</span><span class=\"ip\">" + (d.ip || "") + "</span></div>";
+            return "<div class=\"device-row\" data-index=\"" + i + "\"><input type=\"checkbox\" data-index=\"" + i + "\" /><span class=\"hostname\">" + escapeHtml(d.hostname || "") + "</span><span class=\"ip\">" + escapeHtml(d.ip || "") + "</span></div>";
           }).join("");
           if (compareBtn) compareBtn.disabled = routerDevicesCache.length === 0;
           if (statusEl) statusEl.textContent = routerDevicesCache.length + " device(s). Select and click Compare.";

@@ -17,8 +17,6 @@ module) owns the route — i.e. the migration actually happened.
 """
 from __future__ import annotations
 
-import json
-
 
 # --------------------------------------------------------------------------- #
 # Add (POST)                                                                   #

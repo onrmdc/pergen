@@ -9,6 +9,7 @@ downgraded the credential DB to no-encryption. The import is now
 unconditional and ``ImportError`` propagates at module import time.
 """
 import base64
+import contextlib
 import hashlib
 import json
 import os
@@ -25,10 +26,9 @@ def _db_path():
     # Audit M-6: enforce 0o600 on the DB file as soon as we touch it so a
     # default-umask install can't leave the credential blob world-readable.
     if os.name == "posix" and os.path.exists(db):
-        try:
+        # chmod failures are non-fatal (e.g. read-only FS in CI sandbox).
+        with contextlib.suppress(OSError):  # pragma: no cover
             os.chmod(db, 0o600)
-        except OSError:  # pragma: no cover - chmod failures are non-fatal
-            pass
     return db
 
 
@@ -62,10 +62,8 @@ def init_db(secret_key: str) -> None:
     conn.close()
     # Audit M-6: lock down file mode after schema creation as well.
     if os.name == "posix":
-        try:
+        with contextlib.suppress(OSError):  # pragma: no cover
             os.chmod(db, 0o600)
-        except OSError:  # pragma: no cover
-            pass
 
 
 def _encrypt(fernet_obj: Fernet, data: dict) -> str:

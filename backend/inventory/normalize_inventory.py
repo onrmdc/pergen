@@ -44,7 +44,16 @@ def _role_from_hostname(hostname: str) -> str:
 
 def _site_from_hostname(hostname: str) -> str:
     h = hostname or ""
-    if "ES" in h.upper() and "-ES-" in h.upper() or h.upper().startswith("ES-") or _parts(h)[:5] and "ES" in _parts(h):
+    # Three OR'd predicates identify the Venus (ES) site. Explicit parens
+    # make the precedence obvious — Python binds `and` tighter than `or`,
+    # so the unparenthesised form `A and B or C or D and E` already reads
+    # as `(A and B) or C or (D and E)`, but spelling it out prevents
+    # accidental edits from shifting the grouping.
+    if (
+        ("ES" in h.upper() and "-ES-" in h.upper())
+        or h.upper().startswith("ES-")
+        or (_parts(h)[:5] and "ES" in _parts(h))
+    ):
         return "Venus"
     if "IL" in h.upper():
         return "Mars"

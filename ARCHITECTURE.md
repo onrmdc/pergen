@@ -85,7 +85,7 @@ backend/
 │   └── ping.py                  # single_ping + MAX_PING_DEVICES
 └── credential_store.py / find_leaf.py / nat_lookup.py / ...  (legacy domain)
 
-tests/                           # 840 tests across 47 files
+tests/                           # 861 tests (852 pass + 9 xfail) across 58 files
 ├── conftest.py                  # Fixtures (instance dir isolation, mock CSV, factory client)
 ├── golden/                      # Phase 1 — characterisation snapshots
 │   ├── _snapshot.py
@@ -123,12 +123,16 @@ tests/                           # 840 tests across 47 files
 └── test_runner_dispatch_coverage.py    # 13 runner.run_device_commands branches
 ```
 
-**Total tests: 840**, all green. Lint clean on every blueprint, service,
-util, factory, app.py, config, hardened runner, security module,
-and request_logging. Audit batch 4 added 24 security-regression tests
+**Total tests: 861** — 852 passed + 9 xfailed (audit-tracker placeholders),
+all green. Lint clean on every blueprint, service, util, factory,
+app.py, config, hardened runner, security module, and request_logging.
+Audit batch 4 added 24 security-regression tests
 (`tests/test_security_audit_batch4.py`) and 13 runner-dispatch coverage
 tests (`tests/test_runner_dispatch_coverage.py`) — see
-`patch_notes.md` "Audit batch 4" for the per-finding map.
+`patch_notes.md` "Audit batch 4" for the per-finding map. The
+follow-up `v0.2.0-audit-wave-1` added 11 more `test_security_*.py`
+files (12 pass + 9 xfail) and a Playwright E2E layer (20 specs /
+62 tests) — see §7 for the test stratification.
 
 ---
 
@@ -280,6 +284,106 @@ blueprints incrementally.
 - **Phase 13** completed (see §10).
 - **Audit batches 1–3** remediated 24 findings (4 CRITICAL, 9 HIGH,
   11 MEDIUM) — see `README.md` audit table.
+- **Audit-wave-1** (`v0.2.0`) added the Playwright E2E layer, fixed
+  7 frontend XSS hot spots in `backend/static/js/app.js`, added
+  21 new security tests (12 pass + 9 xfail audit-trackers), and
+  applied 8 Python ruff quick wins. See §7.
+
+---
+
+## 7. Test architecture (post-audit-wave-1)
+
+The test suite is now stratified across three runtimes, each with
+a different feedback loop and ownership boundary.
+
+### 7.1 Python — pytest (852 passed + 9 xfailed in ~70 s)
+
+The classical layer. Owned by every code change. Three sub-tiers:
+
+1. **Golden / characterisation** (`tests/golden/`, 78 tests) — locks
+   pre-refactor route, parser, runner and inventory contracts byte-
+   for-byte. Re-baseline with `PERGEN_REGEN_GOLDEN=1`.
+2. **Per-layer TDD** (services / repositories / blueprints / runners /
+   security / utils — ~520 tests) — each new layer has its own test
+   module written *before* the implementation.
+3. **Security regression** (`tests/test_security_*.py`, 254 tests
+   across 14 files) — sub-stratified again:
+   - **OWASP Top-10** (`test_security_owasp.py`, 72 tests) +
+     **Phase-13 hardening** (`test_security_phase13.py`, 33 tests).
+   - **Audit batches 1–4** (`test_security_audit_findings.py` /
+     `_batch3.py` / `_batch4.py`, 63 tests).
+   - **Audit-wave-1 lint guards** (`test_security_xss_spa.py`,
+     `test_security_vendor_integrity.py`,
+     `test_security_html_responses_include_csp.py`,
+     `test_security_bgp_routes_pin_ripestat_host.py`,
+     `test_security_token_gate_parsing.py`,
+     `test_security_diff_dos.py`, 12 tests). These are write-time
+     guards — e.g. `test_security_xss_spa.py` greps `app.js` for
+     `innerHTML` near untrusted-data names and asserts an
+     `escapeHtml(...)` wrapper.
+   - **Audit-wave-1 xfail audit-trackers** (`test_security_*.py`,
+     9 xfailed) — these intentionally fail the assertion *today*
+     and pass once the deferred fix lands. Examples: legacy
+     `credential_store` deprecation, `/api/v2/health` config-name
+     leak, `/api/router-devices` credential projection leak,
+     audit-log coverage gaps, token-gate immutability. Each
+     `xfail` is the contract that the next batch must satisfy
+     before flipping to a green pass.
+
+### 7.2 TypeScript — Playwright E2E (62 tests in ~8 s)
+
+Owned by frontend changes. Boots a real Flask server via
+`webServer` config in `playwright.config.ts` (no mocked backend);
+20 spec files under `tests/e2e/specs/` cover all 12 SPA pages,
+API smokes (`api-health`, `api-routes`), the `csp-no-inline`
+regression guard, security headers, and 3 end-to-end operator
+flows (`flow-credential-add`, `flow-notepad-roundtrip`,
+`flow-diff-checker`).
+
+```
+tests/e2e/
+├── pages/           # page-object helpers
+└── specs/           # 20 spec files / 62 tests
+    ├── home.spec.ts
+    ├── navigation.spec.ts
+    ├── prepost.spec.ts
+    ├── notepad.spec.ts
+    ├── nat.spec.ts
+    ├── findleaf.spec.ts
+    ├── bgp.spec.ts
+    ├── restapi.spec.ts
+    ├── transceiver.spec.ts
+    ├── credential.spec.ts
+    ├── routemap.spec.ts
+    ├── subnet.spec.ts
+    ├── api-health.spec.ts
+    ├── api-routes.spec.ts
+    ├── csp-no-inline.spec.ts
+    ├── security-headers.spec.ts
+    ├── diff.spec.ts
+    ├── flow-credential-add.spec.ts
+    ├── flow-notepad-roundtrip.spec.ts
+    └── flow-diff-checker.spec.ts
+```
+
+Run with `make e2e` (one-time `make e2e-install`). Reports land in
+`playwright-report/` (HTML) + `test-results/junit.xml`.
+
+### 7.3 Lint — ruff (44 findings, gate informational)
+
+`make lint` / `python -m ruff check .`. The remaining 44 findings
+are concentrated in deferred files (`backend/parse_output.py` god-
+module split is queued); audit-wave-1 dropped the count from
+`53 → 44` (-9) via the quick-win sweep documented in patch_notes.
+
+### 7.4 Coverage gates (Makefile)
+
+- `make cov` — whole-project line coverage (gate 45 %, current
+  74.94 %). Legacy parsers / RIPEStat helpers drag the average; their
+  public APIs are all covered, only deep parser branches remain.
+- `make cov-new` — new-OOD-layer-only coverage (gate 85 %, current
+  94 %). This is the gate that *must* hold green; the global gate
+  is informational only.
 
 ---
 

@@ -259,13 +259,14 @@ byte-for-byte against the pre-refactor baseline.
 ## 10. Tests
 
 ```bash
-make test                          # full suite (840 tests, ~80 s)
-make cov                           # whole-project coverage report (gate 45 %)
-make cov-new                       # OOD-layer-only coverage report (gate 85 %)
+make test                          # full suite (852 passed + 9 xfailed, ~70 s)
+make cov                           # whole-project coverage report (gate 45 %, currently 74.94 %)
+make cov-new                       # OOD-layer-only coverage report (gate 85 %, currently 94 %)
 venv/bin/python -m pytest tests/golden/ -q                # golden / characterisation
 venv/bin/python -m pytest -k phase9 -q                    # phase-9 only
 venv/bin/python -m pytest tests/test_services.py -q       # service layer
 venv/bin/python -m pytest tests/test_security_audit_batch4.py -q   # batch-4 security regressions
+venv/bin/python -m pytest tests/test_security_xss_spa.py -q        # audit-wave-1 XSS lint guards
 ```
 
 Useful environment knobs:
@@ -274,6 +275,40 @@ Useful environment knobs:
   `tests/fixtures/golden/`.
 - `PERGEN_INSTANCE_DIR` / `PERGEN_INVENTORY_PATH` — same as runtime;
   `conftest.py` already wires per-test isolation.
+
+### 10.1 End-to-end (Playwright)
+
+The Playwright suite (added in `v0.2.0-audit-wave-1`) drives the
+real SPA against a real Flask server. Single command, no mocks.
+
+```bash
+make e2e-install                   # one-time: npm install + npx playwright install chromium
+make e2e                           # 20 spec files / 62 tests, ~6–8 s on a warm Mac
+```
+
+`playwright.config.ts` boots `./run.sh` automatically via `webServer`
+(reuses an already-running server on port 5000 if present), so you
+don't need to start Flask separately.
+
+Reports & artefacts:
+
+- `playwright-report/` — HTML report. Open with
+  `npx playwright show-report` (or `npm run e2e:report`).
+- `test-results/junit.xml` — JUnit XML for CI.
+- `test-results/<spec>/` — screenshots and videos of failed runs
+  (`screenshot: only-on-failure`, `video: retain-on-failure`).
+
+Useful filters:
+
+```bash
+npx playwright test tests/e2e/specs/flow-credential-add.spec.ts
+npx playwright test --grep "csp-no-inline"
+npx playwright test --headed                 # see the browser
+npx playwright test --debug                  # inspector
+```
+
+If a freshly-cloned tree fails immediately, run `make e2e-install`
+first — Chromium has to be downloaded once.
 
 ---
 

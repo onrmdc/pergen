@@ -580,7 +580,6 @@ def _parse_arista_interface_status(raw_output: Any) -> dict[str, Any]:
 
     ifaces = inner.get("interfaces")
     if isinstance(ifaces, dict) and ifaces:
-        now_epoch = time.time()
         for iface_name, info in ifaces.items():
             if not isinstance(info, dict):
                 continue
@@ -646,7 +645,7 @@ def _parse_relative_seconds_ago(s: str) -> float | None:
     if not s or not isinstance(s, str):
         return None
     s = s.strip().lower()
-    if s == "never" or s == "-" or s == "":
+    if s in {"never", "-", ""}:
         return None
     total = 0.0
     for m in re.finditer(r"(\d+)\s*week\(s\)", s):

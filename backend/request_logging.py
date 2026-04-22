@@ -68,11 +68,7 @@ class RequestLogger:
         @app.after_request
         def _log_request_end(response: Response) -> Response:
             started = getattr(g, "_req_started", None)
-            duration_ms: float
-            if started is None:
-                duration_ms = 0.0
-            else:
-                duration_ms = (time.perf_counter() - started) * 1000.0
+            duration_ms: float = 0.0 if started is None else (time.perf_counter() - started) * 1000.0
 
             rid = getattr(g, "request_id", "-")
             response.headers.setdefault("X-Request-ID", rid)

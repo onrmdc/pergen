@@ -45,8 +45,10 @@ business logic, inline credential handling, and inline runner dispatch. After th
 | Repository classes | 0 | **4** | new layer |
 | Security modules | 0 | **3** (sanitizer, validator, encryption) | new layer |
 | Vendor runner classes | 0 (procedural) | **3** (Cisco, Arista, SSH) + factory + base | new abstraction |
-| Test files | 6 | **47** | +41 (≈ 7.8×) |
-| Coverage (line %) | not measured | **74.82 %** | enforced via `Makefile cov` (gate 45 %) and `cov-new` (gate 85 %) |
+| Test files | 6 | **58** | +52 (≈ 9.7×) |
+| Test functions | unknown | **861** (852 pass + 9 xfail) | new TDD safety net |
+| Coverage (line %) | not measured | **74.94 %** | enforced via `Makefile cov` (gate 45 %) and `cov-new` (gate 85 %) |
+| End-to-end suite | none | **62 Playwright tests** in 20 specs | Chromium, ~8 s, real Flask boot |
 | Top-level docs | 1 (`README.md`) | **8** (+ARCHITECTURE, HOWTOUSE, FUNCTIONS_EXPLANATIONS, TEST_RESULTS, patch_notes…) | +7 |
 | Tooling files | `run.sh` only | `Makefile`, `pyproject.toml`, `pytest.ini`, `requirements-dev.txt` | full dev loop |
 
@@ -427,14 +429,17 @@ tests/                                          (44 test modules + helpers)
 
 | Metric | Value |
 |---|---|
-| Total test modules | **47** |
-| Total test functions | **840** (per `TEST_RESULTS.md`) |
-| Coverage — line | **74.82 %** |
+| Total test modules | **58** |
+| Total test functions | **861** — 852 passed + 9 xfailed (per `TEST_RESULTS.md`) |
+| Coverage — line | **74.94 %** |
 | Coverage — branch | **64 %** (1,449 / 2,270 branches) |
 | Coverage — new OOD layer (blueprints + services + utils) | **94 %** (target gate: 90 %) |
 | Coverage — whole-project gate | 45 % (legacy modules drag the average down) |
 | Lint (`ruff check` on new code) | **0 errors** |
-| Audit findings remediated | **38 / 38** (batches 1–4) |
+| Lint (`ruff check`) whole-backend | **44 findings** (down from 53 in audit-wave-1) |
+| Audit findings remediated | **38 / 38** (batches 1–4) + **7 frontend XSS** (audit-wave-1) |
+| Audit findings tracked via `xfail` | **9** (audit-wave-1, await architectural follow-up) |
+| End-to-end (Playwright) | **62 / 62** in ~8 s — added in audit-wave-1 |
 
 `pytest.ini` defines test markers (`unit`, `integration`, `security`, `golden`) and `filterwarnings`. `Makefile cov`
 and `Makefile cov-new` enforce the coverage gates.

@@ -7,8 +7,6 @@ from __future__ import annotations
 
 from unittest.mock import patch, MagicMock
 
-import pytest
-
 
 # --------------------------------------------------------------------------- #
 # runner.py — _hostname_from_api_output                                       #

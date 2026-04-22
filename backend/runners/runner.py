@@ -73,7 +73,6 @@ def run_device_commands(
       "parsed_flat": { "field_name": value, ... }  # merged for table
     }
     """
-    hostname = (device.get("hostname") or "").strip()
     ip = (device.get("ip") or "").strip()
     vendor = (device.get("vendor") or "").strip()
     model = (device.get("model") or "").strip()

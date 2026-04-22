@@ -1,9 +1,11 @@
 # Test results — Pergen `refactor/ood-tdd`
 
 Generated for the refactor branch after **phases 1–12 decomposition** +
-**audit batches 1–4 remediation** + **UI/CSP/boot-path alignment**.
-All numbers are reproducible by running `python -m pytest -q` and the
-`coverage` commands shown below.
+**audit batches 1–4 remediation** + **UI/CSP/boot-path alignment** +
+**audit-wave-1** (`v0.2.0` — frontend XSS sweep, Playwright E2E,
+Python quick wins).
+All numbers are reproducible by running `python -m pytest -q`,
+`npx playwright test`, and the `coverage` commands shown below.
 
 ---
 
@@ -11,14 +13,17 @@ All numbers are reproducible by running `python -m pytest -q` and the
 
 | Metric | Value |
 |--------|-------|
-| Tests passing | **840 / 840** |
-| Test files | 47 |
-| Time to run full suite | ~82 s on an M-series Mac (mostly mocked-network blueprint tests) |
+| Tests passing (pytest) | **852 / 852** + **9 xfailed** (audit-tracker placeholders) |
+| Total test functions | **861** (852 pass + 9 xfail) |
+| Test files | **58** |
+| Time to run full pytest suite | ~70 s on an M-series Mac (mostly mocked-network blueprint tests) |
+| End-to-end tests (Playwright) | **62 / 62** in ~6–8 s (20 spec files) |
 | Lint (`ruff check`) on new code | **0 errors** (12 blueprints + 7 services + 4 utils + factory + app.py + config + 2 hardened runners + security + request_logging) |
-| Lint (`ruff check`) whole-backend | 15 pre-existing legacy errors (unchanged) |
+| Lint (`ruff check`) whole-backend | **44 findings** (down from 53 in audit-wave-1; remainder concentrated in deferred `parse_output.py`) |
 | Coverage — new OOD layer (blueprints + services + utils) | **94 %** (target: 90 %) |
-| Coverage — whole-project | **74.82 %** (was 49.7 % before audit batches; +25 pp) |
-| Audit findings remediated | **38 / 38** (7 CRITICAL + 14 HIGH + 17 MEDIUM across batches 1–4) |
+| Coverage — whole-project | **74.94 %** (was 74.82 % pre-wave-1) |
+| Audit findings remediated | **38 / 38** (batches 1–4) + **7 frontend XSS** (audit-wave-1) |
+| Audit findings tracked via `xfail` | **9** (await architectural follow-up) |
 | `backend/app.py` size | **87 lines** (was 1,577 — 95 % reduction) |
 | Routes registered through factory | **55** across **12 blueprints** |
 
@@ -45,7 +50,8 @@ All numbers are reproducible by running `python -m pytest -q` and the
 | Coverage push (NEW code) | 1 | 71 |
 | Legacy coverage (bgp_lg, route_map, find_leaf, nat_lookup, parse_output, runner, loader) | 5 | 152 |
 | Pre-existing unit/integration | 9 | 216 |
-| **Total** | **47** | **840** |
+| **Audit-wave-1** (XSS lint guards, vendor integrity, CSP/JSON, BGP host pin, token-gate parsing, /api/diff DoS, audit-log coverage, /api/v2/health, router-devices projection, legacy credstore deprecation, token-gate immutability) | 11 | 12 + 9 xfail = 21 |
+| **Total** | **58** | **861** (852 pass + 9 xfail) |
 
 ### Coverage by layer (new OOD code)
 
@@ -92,7 +98,7 @@ Run: `python -m coverage run --source=backend -m pytest && python -m coverage re
 | Parsers (engine + parse_output) | 53–90 % |
 | Helpers (bgp_looking_glass, route_map_analysis, find_leaf, nat_lookup) | 36–74 % |
 | Other (logging, config, request_logging) | 82–98 % |
-| **WHOLE-PROJECT** | **74.82 %** |
+| **WHOLE-PROJECT** | **74.94 %** |
 
 The legacy parsers (`parse_output.py` 53 %, `find_leaf.py` 36 %,
 `nat_lookup.py` 42 %, `route_map_analysis.py` 51 %) drag the average
@@ -170,7 +176,18 @@ report and the test suite are cross-referenceable.
 | `tests/test_legacy_coverage_find_leaf_nat.py` | 14 | ✅ | legacy-coverage |
 | `tests/test_legacy_coverage_parse_output.py` | 43 | ✅ | legacy-coverage |
 | `tests/test_legacy_coverage_runners.py` | 35 | ✅ | legacy-coverage |
-| **Total** | **840** | **✅** | — |
+| `tests/test_security_xss_spa.py` | 4 | ✅ | audit-wave-1 |
+| `tests/test_security_vendor_integrity.py` | 1 | ✅ | audit-wave-1 |
+| `tests/test_security_html_responses_include_csp.py` | 2 | ✅ | audit-wave-1 |
+| `tests/test_security_bgp_routes_pin_ripestat_host.py` | 2 | ✅ | audit-wave-1 |
+| `tests/test_security_token_gate_parsing.py` | 2 | ✅ | audit-wave-1 |
+| `tests/test_security_diff_dos.py` | 1 | ✅ | audit-wave-1 |
+| `tests/test_security_audit_log_coverage.py` | 1 + 4 xfail | ✅ / ⚠ xfail | audit-wave-1 |
+| `tests/test_security_health_disclosure.py` | 1 xfail | ⚠ xfail | audit-wave-1 |
+| `tests/test_security_router_devices_projection.py` | 1 xfail | ⚠ xfail | audit-wave-1 |
+| `tests/test_security_legacy_credstore_deprecation.py` | 2 xfail | ⚠ xfail | audit-wave-1 |
+| `tests/test_security_token_gate_immutable.py` | 1 xfail | ⚠ xfail | audit-wave-1 |
+| **Total** | **861** (852 pass + 9 xfail) | **✅** | — |
 
 Re-run a single file with:
 
@@ -349,3 +366,55 @@ NUL bytes / shell-meta hostnames / garbage IPs, encryption still
 refuses tampered tokens, the Production config still rejects the
 default `SECRET_KEY`.  Phase-13 *added* coverage on top; it removed
 nothing.
+
+---
+
+## 8. Playwright E2E (audit-wave-1)
+
+Added in `v0.2.0-audit-wave-1`. Drives the real SPA against a real
+Flask server (no mocked backend); `webServer` config in
+`playwright.config.ts` boots `./run.sh` and reuses any server already
+on port 5000.
+
+| Metric | Value |
+|--------|-------|
+| Spec files | **20** under `tests/e2e/specs/` |
+| Tests | **62 / 62 passing** |
+| Wall time | **~6–8 s** on a warm M-series Mac, headless Chromium |
+| Browser | Chromium only (`projects: [{ name: "chromium" }]`) |
+| Reporters | `list` (stdout) + `html` (`playwright-report/`) + `junit` (`test-results/junit.xml`) |
+| Artefacts on failure | screenshot + video + trace on retry |
+| Boot path under test | `./run.sh` → `FLASK_APP=backend.app_factory:create_app` |
+
+### Spec coverage
+
+| Spec | What it asserts |
+|------|-----------------|
+| `home.spec.ts` | landing page, 3×3 feature card grid renders |
+| `navigation.spec.ts` | hash router, menu transitions, event-popup wiring |
+| `prepost.spec.ts` | Pre/Post page boots, filters render |
+| `notepad.spec.ts` | notepad page boots, line-editor list visible |
+| `nat.spec.ts` | NAT lookup form, "Open on BGP page" link present |
+| `findleaf.spec.ts` | Find Leaf page boots |
+| `bgp.spec.ts` | BGP / Looking Glass page renders all three sub-tables |
+| `restapi.spec.ts` | REST API page accepts a multi-line payload |
+| `transceiver.spec.ts` | transceiver page filters + table headers |
+| `credential.spec.ts` | credential page form + table render |
+| `routemap.spec.ts` | DCI/WAN routers page boots |
+| `subnet.spec.ts` | subnet calculator divides + joins correctly |
+| `diff.spec.ts` | diff checker accepts two inputs and renders LCS sections |
+| `api-health.spec.ts` | `/api/health` and `/api/v2/health` return 200 + expected envelope |
+| `api-routes.spec.ts` | `/api/fabrics` / `/api/inventory` / `/api/credentials` smoke |
+| `csp-no-inline.spec.ts` | regression guard — index.html has no inline `<script>`; CSP header is `script-src 'self'` |
+| `security-headers.spec.ts` | every response carries CSP / HSTS / X-Frame / X-Content-Type / Referrer-Policy / Permissions-Policy |
+| `flow-credential-add.spec.ts` | full flow: add credential → list shows it → delete → list empty |
+| `flow-notepad-roundtrip.spec.ts` | full flow: PUT notepad → GET → content matches |
+| `flow-diff-checker.spec.ts` | full flow: paste two payloads → diff renders, Added/Deleted/Changed counts correct |
+
+Run with:
+
+```bash
+make e2e-install     # one-time
+make e2e             # 62 / 62 in ~8 s
+npx playwright show-report   # open the HTML report
+```

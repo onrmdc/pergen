@@ -191,11 +191,7 @@ class LoggingConfig:
         log_format = str(app.config.get("LOG_FORMAT", "json")).lower()
         log_file = app.config.get("LOG_FILE", "")
 
-        formatter: logging.Formatter
-        if log_format == "json":
-            formatter = JsonFormatter()
-        else:
-            formatter = ColourFormatter()
+        formatter: logging.Formatter = JsonFormatter() if log_format == "json" else ColourFormatter()
 
         root = logging.getLogger()
         root.setLevel(getattr(logging, log_level, logging.INFO))

@@ -109,9 +109,10 @@ def create_app(config_name: str = "default") -> Flask:
     _log.debug("logging configured for %s", config_name)
 
     # --- Step 6: per-request middleware (idempotent). -------------------- #
-    if not getattr(app, "_pergen_request_logger_mounted", False):
+    pergen_ext = app.extensions.setdefault("pergen", {})
+    if not pergen_ext.get("request_logger_mounted"):
         RequestLogger.init_app(app)
-        app._pergen_request_logger_mounted = True  # type: ignore[attr-defined]
+        pergen_ext["request_logger_mounted"] = True
 
     # --- Step 6b: optional API token gate (audit C1). -------------------- #
     # When ``PERGEN_API_TOKEN`` (env) or ``app.config['PERGEN_API_TOKEN']``
@@ -191,7 +192,8 @@ def _install_api_token_gate(app: Flask) -> None:
 
     from flask import g, jsonify, request
 
-    if getattr(app, "_pergen_token_gate_mounted", False):
+    pergen_ext = app.extensions.setdefault("pergen", {})
+    if pergen_ext.get("token_gate_mounted"):
         return
 
     _exempt = {"/api/health", "/api/v2/health", "/"}
@@ -238,11 +240,11 @@ def _install_api_token_gate(app: Flask) -> None:
         if not tokens:
             # Non-production only path. Emit a one-shot WARN so operators
             # in dev see the open posture in their logs.
-            if not getattr(app, "_pergen_open_api_warned", False):
+            if not pergen_ext.get("open_api_warned"):
                 _log.warning(
                     "PERGEN_API_TOKEN(S) not set — /api/* is OPEN (dev/test only)"
                 )
-                app._pergen_open_api_warned = True  # type: ignore[attr-defined]
+                pergen_ext["open_api_warned"] = True
             g.actor = "anonymous"
             return None
         if request.path in _exempt or not request.path.startswith("/api/"):
@@ -261,7 +263,7 @@ def _install_api_token_gate(app: Flask) -> None:
             return None
         return jsonify({"error": "missing or invalid X-API-Token header"}), 401
 
-    app._pergen_token_gate_mounted = True  # type: ignore[attr-defined]
+    pergen_ext["token_gate_mounted"] = True
 
 
 def _register_blueprints(app: Flask) -> None:

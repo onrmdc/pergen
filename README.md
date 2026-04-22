@@ -1,6 +1,6 @@
 # Pergen — Network device panel
 
-> **`refactor/ood-tdd` branch — phases 0–13 complete + post-audit batches 1–3.**
+> **`refactor/ood-tdd` branch — phases 0–13 complete + post-audit batches 1–4 + audit-wave-1.**
 >
 > Pergen has been migrated to a strict OOD layout (App Factory +
 > 12 Blueprints + service layer + RunnerFactory + ParserEngine) on top
@@ -13,13 +13,15 @@
 > `python-reviewer`, `coverage analysis`, batch-4 sweep) surfaced
 > **38 findings** spanning 7 CRITICAL, 14 HIGH, and 17 MEDIUM. **All
 > are remediated** in batches 1–4 with focused fixes and contract-pinning
-> regression tests. Every existing API still ships unchanged —
-> **840 tests** (78 baseline / golden + 105 OWASP + phase-13 security +
-> 67 audit-batch 1–3 + 24 audit-batch 4 + 13 dispatch coverage +
-> 71 coverage-push + 482 unit/integration) lock the response shapes
+> regression tests. The follow-up **audit-wave-1** (`security-reviewer` +
+> `python-reviewer` + `e2e-runner`) added 7 frontend XSS fixes,
+> 21 new security tests (12 pass / 9 xfail audit-trackers), 8 Python
+> quick-win cleanups (ruff 53 → 44), and a full Playwright E2E layer
+> (62 tests / ~8 s). Every existing API still ships unchanged —
+> **861 tests** (852 passed + 9 xfailed) lock the response shapes
 > byte-for-byte.
 >
-> **Coverage:** 94 % on the new OOD layer / **74.8 %** whole-project
+> **Coverage:** 94 % on the new OOD layer / **74.94 %** whole-project
 > (legacy parsers + RIPEStat helpers drag the average; their public
 > APIs are all covered, only deep parser branches are uncovered).
 >
@@ -31,6 +33,10 @@
 > by default (commits `182eafb` / `c997fe0`); booting `FLASK_APP=backend.app`
 > directly serves 404 on every URL because the shim has zero routes.
 > See [`patch_notes.md` v0.1.2](./patch_notes.md) for the full entry.
+>
+> **Latest:** [`patch_notes.md` v0.2.0-audit-wave-1](./patch_notes.md)
+> — frontend XSS sweep (7 sites), Playwright E2E (62 tests), new
+> security tests (12 pass + 9 xfail audit-trackers), Python quick wins.
 >
 > See [`patch_notes.md`](./patch_notes.md) for the per-phase log,
 > [`ARCHITECTURE.md`](./ARCHITECTURE.md) for the layered design,
@@ -242,6 +248,25 @@ The SPA is served from `backend/static/index.html` plus three split-out asset bu
 - `backend/static/vendor/jszip.min.js` — vendored copy of JSZip 3.10.1 (used by Pre/Post **Export as ZIP**). Replaces the previous `cdnjs.cloudflare.com` `<script src="…">`. Update by replacing the file in place.
 
 When editing the SPA, change `backend/static/js/app.js` (markup-only changes still go in `index.html`). Hard-reload the browser (Cmd/Ctrl+Shift+R) to bypass the static cache.
+
+### Frontend testing (Playwright E2E)
+
+The SPA is exercised end-to-end by a Playwright suite added in
+`v0.2.0-audit-wave-1`. The suite boots the real Flask server via
+`webServer` config (no mocked backend), navigates every page, and
+asserts CSP / security headers + 3 full operator flows.
+
+```bash
+make e2e-install     # one-time: `npm install` + `npx playwright install chromium`
+make e2e             # run the suite (62 tests / ~8 s on a warm M-series Mac)
+```
+
+Reports land in `playwright-report/` (HTML; open with
+`npx playwright show-report`) and `test-results/junit.xml`. Specs
+live under `tests/e2e/specs/` — 20 files covering all 12 SPA pages,
+API smokes, the `csp-no-inline` regression guard, security headers,
+and 3 end-to-end flows (`flow-credential-add`,
+`flow-notepad-roundtrip`, `flow-diff-checker`).
 
 ### API overview
 
