@@ -4,548 +4,11 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Fabric Check — Network Panel</title>
-  <style>
-    /* Cursorrules §10: Dashboard look, Deep Blue/Slate primary, Emerald/Amber/Rose status. §11: Table zebra, monospace, diff colors. */
-    :root, body.theme-dark {
-      --bg: #0f172a;
-      --bg-color: #0f172a;
-      --card: #1e293b;
-      --border: #334155;
-      --text: #f1f5f9;
-      --text-color: #f1f5f9;
-      --muted: #94a3b8;
-      --accent: #58a6ff;
-      --success: #10b981;
-      --warn: #f59e0b;
-      --danger: #f43f5e;
-      --table-zebra-odd: #1e293b;
-      --table-zebra-even: #0f172a;
-      --table-header-bg: #1e293b;
-    }
-    body.theme-light {
-      --bg: #f1f5f9;
-      --bg-color: #f1f5f9;
-      --card: #ffffff;
-      --border: #e2e8f0;
-      --text: #1e293b;
-      --text-color: #1e293b;
-      --muted: #64748b;
-      --accent: #2563eb;
-      --success: #059669;
-      --warn: #d97706;
-      --danger: #dc2626;
-      --table-zebra-odd: #f8fafc;
-      --table-zebra-even: #ffffff;
-      --table-header-bg: #f1f5f9;
-    }
-    * { box-sizing: border-box; }
-    body {
-      font-family: 'Segoe UI', system-ui, sans-serif;
-      background: var(--bg);
-      color: var(--text);
-      margin: 0;
-      padding: 2rem 2.5rem 4rem;
-      padding-left: 3.5rem;
-      padding-top: 3.5rem;
-      min-height: 100vh;
-      line-height: 1.5;
-    }
-    .app-header {
-      display: flex; align-items: center; padding: 0.5rem 1rem; border-bottom: 1px solid var(--border);
-      background: rgba(30, 41, 59, 0.85); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
-      position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
-    }
-    body.theme-light .app-header { background: rgba(255, 255, 255, 0.9); }
-    .hamburger-btn {
-      display: flex; flex-direction: column; justify-content: center; gap: 4px;
-      width: 2.25rem; height: 2.25rem; padding: 0;
-      background: var(--card); border: 1px solid var(--border); border-radius: 8px;
-      cursor: pointer; margin-right: 0.75rem;
-    }
-    .hamburger-btn:hover { background: rgba(88, 166, 255, 0.15); }
-    .hamburger-btn span { display: block; width: 1.1rem; height: 2px; background: var(--text); border-radius: 1px; margin: 0 auto; }
-    .app-header .app-title { font-size: 1rem; font-weight: 700; color: var(--text); }
-    .menu-overlay {
-      position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 1100;
-      opacity: 0; pointer-events: none; transition: opacity 0.2s;
-    }
-    .menu-overlay.open { opacity: 1; pointer-events: auto; }
-    body.menu-open { overflow: hidden; }
-    .menu-sidebar {
-      position: fixed; left: 0; top: 0; bottom: 0; width: 220px; max-width: 85vw;
-      background: #1e293b; border-right: 1px solid var(--border); z-index: 1101;
-      padding: 3rem 0 1rem 1rem; transform: translateX(-100%); transition: transform 0.2s;
-    }
-    body.theme-light .menu-sidebar { background: var(--card); }
-    .menu-sidebar.open, .menu-overlay.open .menu-sidebar { transform: translateX(0); }
-    .menu-sidebar nav { display: flex; flex-direction: column; padding: 0; border: none; margin: 0; }
-    .menu-sidebar nav a {
-      display: block; padding: 0.5rem 0.75rem; color: var(--text); text-decoration: none;
-      margin: 0; border: none; font-size: 1rem; border-radius: 6px; font-weight: 700;
-    }
-    .menu-sidebar nav a:hover { background: rgba(88, 166, 255, 0.15); color: var(--accent); }
-    nav { margin-bottom: 1.5rem; padding: 0.5rem 0; border-bottom: 1px solid var(--border); }
-    nav a { color: var(--accent); margin-right: 1rem; text-decoration: none; font-weight: 700; }
-    nav a:hover { text-decoration: underline; }
-    a { color: var(--accent); }
-    a:hover { opacity: 0.9; }
-    h1, h2, h3 { font-size: 1.25rem; margin: 0 0 1rem 0; color: var(--text); font-weight: 700; }
-    h2 { font-size: 1.1rem; }
-    h3 { font-size: 1rem; }
-    .muted { color: var(--muted); }
-    #restapiRequestInput::placeholder { color: var(--muted); opacity: 0.8; }
-    .card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 1.5rem; }
-    .selector {
-      display: flex; flex-wrap: wrap; gap: 1rem; align-items: center;
-      background: var(--card); border: 1px solid var(--border); border-radius: 10px;
-      padding: 1rem 1.25rem; margin-bottom: 0;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.06);
-    }
-    .selector label { display: flex; align-items: center; gap: 0.5rem; }
-    .selector select { padding: 0.4rem 0.6rem; min-width: 130px; background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 8px; }
-    .devices-actions {
-      display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem;
-      background: var(--card); border: 1px solid var(--border); border-radius: 10px;
-      padding: 0.85rem 1.25rem; margin-bottom: 0;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.06);
-    }
-    .devices-actions button { padding: 0.35rem 0.75rem; margin-right: 0; background: var(--card); color: var(--text); border: 1px solid var(--border); border-radius: 8px; cursor: pointer; font-size: 0.95em; }
-    .devices-actions button:hover { background: rgba(88, 166, 255, 0.15); border-color: var(--accent); }
-    .devices-actions .btn-run {
-      background: var(--accent); color: #fff; border-color: var(--accent); font-weight: 700; padding: 0.5rem 1.25rem; font-size: 1rem;
-    }
-    .devices-actions .btn-run:hover { background: #79b8ff; border-color: #79b8ff; color: #fff; }
-    .devices-actions .btn-run-post {
-      background: var(--success); color: #fff; border-color: var(--success); font-weight: 700; padding: 0.5rem 1.25rem; font-size: 1rem;
-    }
-    .devices-actions .btn-run-post:hover { background: #34d399; border-color: #34d399; color: #fff; }
-    .device-list {
-      border: 1px solid var(--border); border-radius: 10px;
-      max-height: 320px; overflow: auto; background: var(--card);
-      padding: 0.5rem; margin-top: 0.25rem;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.06);
-    }
-    .device-row { display: flex; align-items: center; padding: 0.4rem 0.6rem; border-bottom: 1px solid var(--border); }
-    .device-row:last-child { border-bottom: none; }
-    .device-row.unreachable { opacity: 0.65; }
-    .device-row input[type=checkbox] { margin-right: 0.5rem; }
-    .device-row input[type=checkbox]:disabled { cursor: not-allowed; }
-    .device-row .icon { width: 14px; height: 14px; border-radius: 50%; margin-right: 0.5rem; flex-shrink: 0; }
-    .device-row .icon.reachable { background: var(--success); }
-    .device-row .icon.unreachable { background: var(--danger); }
-    .device-row .icon.pending { background: var(--muted); }
-    .device-row .hostname { flex: 1; }
-    .device-row .ip { color: var(--muted); font-size: 0.9em; margin-left: 0.5rem; }
-    .ping-status { margin-top: 0.75rem; margin-bottom: 0.25rem; color: var(--muted); font-size: 0.9em; }
-    .search-highlight { background: rgba(255, 235, 0, 0.55); padding: 0.1em 0.2em; border-radius: 2px; }
-    .app-header { gap: 0.5rem; display: flex; align-items: center; }
-    .app-header .header-left { display: flex; align-items: center; gap: 0.5rem; }
-    .app-header .header-center { flex: 1; display: flex; justify-content: center; align-items: center; gap: 0.5rem; }
-    .app-header .header-right { display: flex; align-items: center; gap: 0.5rem; }
-    .app-header .header-nav-btn { padding: 0.35rem 0.75rem; background: var(--card); color: var(--text); border: 1px solid var(--border); border-radius: 8px; cursor: pointer; font-size: 0.9em; font-weight: 600; }
-    .app-header .header-nav-btn:hover { background: rgba(88, 166, 255, 0.15); border-color: var(--accent); }
-    .header-progress-wrap {
-      display: flex; align-items: center; gap: 0.5rem;
-      padding: 0.25rem 0.6rem; background: var(--card);
-      border: 1px solid var(--border); border-radius: 8px;
-      font-size: 0.8rem; color: var(--muted);
-    }
-    .header-progress-wrap .header-progress-bar {
-      width: 80px; height: 6px; background: var(--bg); border-radius: 3px; overflow: hidden;
-    }
-    .header-progress-wrap .header-progress-fill {
-      height: 100%; background: var(--accent); border-radius: 3px; transition: width 0.2s; width: 0%;
-    }
-    .header-progress-wrap.header-progress-clickable { cursor: pointer; }
-    .header-progress-wrap.header-progress-clickable:hover { border-color: var(--accent); background: rgba(88, 166, 255, 0.08); }
-    .header-progress-detail-popup {
-      display: none; position: fixed; top: 3.5rem; right: 1rem; z-index: 1002;
-      width: min(520px, 94vw); max-height: 72vh; overflow: hidden;
-      background: var(--card); border-radius: 8px; border: 1px solid var(--accent);
-      box-shadow: 0 4px 24px rgba(0,0,0,0.35); font-size: 0.82rem;
-    }
-    .header-progress-detail-popup.open { display: flex; flex-direction: column; }
-    .header-progress-detail-popup .event-popup-header { border-bottom: 1px solid var(--border); }
-    .header-progress-detail-body { overflow: auto; max-height: 58vh; padding: 0.35rem 0.5rem; }
-    .header-progress-detail-body table { width: 100%; font-size: 0.8rem; }
-    .header-progress-detail-body td { padding: 0.25rem 0.35rem; vertical-align: top; }
-    .header-progress-detail-body .ph-queued { color: var(--muted); }
-    .header-progress-detail-body .ph-running { color: var(--accent); font-weight: 600; }
-    .header-progress-detail-body .ph-done { color: var(--success); }
-    .header-progress-detail-body .ph-error { color: var(--danger); }
-    .device-error-icon { color: var(--danger); font-weight: bold; margin-right: 0.25rem; }
-    .results-table tr.row-error { background: rgba(244, 63, 94, 0.12) !important; }
-    .results-table .cell-error { color: var(--danger); font-size: 0.85em; max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .event-count-btn {
-      display: none; padding: 0.25rem 0.5rem; font-size: 0.8rem; font-weight: 600;
-      border-radius: 8px; cursor: pointer; min-width: 2rem;
-    }
-    .event-count-btn.event-success-btn {
-      background: rgba(16, 185, 129, 0.2); color: var(--success); border: 1px solid var(--success);
-    }
-    .event-count-btn.event-success-btn:hover { background: rgba(16, 185, 129, 0.35); }
-    .event-count-btn.event-warn-btn {
-      background: rgba(245, 158, 11, 0.2); color: var(--warn); border: 1px solid var(--warn);
-    }
-    .event-count-btn.event-warn-btn:hover { background: rgba(245, 158, 11, 0.35); }
-    .event-count-btn.event-fail-btn {
-      background: rgba(244, 63, 94, 0.2); color: var(--danger); border: 1px solid var(--danger);
-    }
-    .event-count-btn.event-fail-btn:hover { background: rgba(244, 63, 94, 0.35); }
-    .event-count-btn.pulse { animation: event-pulse 0.6s ease-out; }
-    @keyframes event-pulse { 0% { box-shadow: 0 0 0 0 rgba(244, 63, 94, 0.5); } 70% { box-shadow: 0 0 0 8px rgba(244, 63, 94, 0); } 100% { box-shadow: 0 0 0 0 transparent; } }
-    .event-popup {
-      display: none; position: fixed; top: 3.5rem; right: 1rem; z-index: 1001;
-      width: 320px; max-width: 90vw; max-height: 70vh; overflow: hidden;
-      background: var(--card); border-radius: 8px;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.3); font-size: 0.85rem;
-    }
-    .event-popup.open { display: flex; flex-direction: column; }
-    .event-popup.event-success-popup { border: 1px solid var(--success); }
-    .event-popup.event-success-popup .event-popup-header { background: rgba(16, 185, 129, 0.1); border-bottom: 1px solid var(--success); color: var(--success); }
-    .event-popup.event-warn-popup { border: 1px solid var(--warn); }
-    .event-popup.event-warn-popup .event-popup-header { background: rgba(245, 158, 11, 0.1); border-bottom: 1px solid var(--warn); color: var(--warn); }
-    .event-popup.event-fail-popup { border: 1px solid var(--danger); }
-    .event-popup.event-fail-popup .event-popup-header { background: rgba(244, 63, 94, 0.1); border-bottom: 1px solid var(--danger); color: var(--danger); }
-    .event-popup-header { display: flex; justify-content: space-between; align-items: center; padding: 0.5rem 0.75rem; font-weight: 600; }
-    .event-popup-close { background: none; border: none; color: var(--text); cursor: pointer; padding: 0.25rem; font-size: 1.2rem; line-height: 1; }
-    .event-popup-close:hover { color: var(--danger); }
-    .event-success-popup .event-popup-close:hover { color: var(--success); }
-    .event-warn-popup .event-popup-close:hover { color: var(--warn); }
-    .event-popup-list { padding: 0.5rem 0.75rem; overflow: auto; list-style: none; margin: 0; max-height: 50vh; }
-    .event-popup-list li { padding: 0.35rem 0; border-bottom: 1px solid var(--border); }
-    .event-popup-list li:last-child { border-bottom: none; }
-    .event-popup-list li.event-success { color: var(--success); }
-    .event-popup-list li.event-warn { color: var(--warn); }
-    .event-popup-list li.event-fail { color: var(--danger); }
-    .event-popup-list .event-time { color: var(--muted); font-size: 0.8em; font-weight: normal; margin-right: 0.35rem; }
-    .event-count-btn.command-logs-btn {
-      background: rgba(88, 166, 255, 0.12); color: var(--accent); border: 1px solid rgba(88, 166, 255, 0.45);
-    }
-    .event-count-btn.command-logs-btn:hover { background: rgba(88, 166, 255, 0.22); border-color: var(--accent); }
-    .command-logs-popup {
-      width: min(560px, 94vw); max-height: 76vh; z-index: 1003;
-      background: var(--card); border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-      border: 1px solid rgba(88, 166, 255, 0.45);
-    }
-    .command-logs-popup.open { display: flex; flex-direction: column; }
-    .command-logs-popup .command-logs-header-actions { display: flex; align-items: center; gap: 0.35rem; }
-    .command-logs-list { overflow: auto; max-height: 64vh; padding: 0.5rem 0.75rem; font-size: 0.8rem; }
-    .command-log-entry { margin-bottom: 1rem; padding-bottom: 0.75rem; border-bottom: 1px solid var(--border); }
-    .command-log-entry:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
-    .command-log-entry h4 { margin: 0 0 0.35rem 0; font-size: 0.85rem; font-weight: 600; }
-    .command-log-entry.ok h4 { color: var(--success); }
-    .command-log-entry.fail h4 { color: var(--danger); }
-    .command-log-entry .cmd-log-meta { color: var(--muted); font-size: 0.78em; margin-bottom: 0.35rem; }
-    .command-log-entry .cmd-log-block-title { font-size: 0.75rem; font-weight: 600; margin: 0.35rem 0 0.2rem 0; color: var(--text); }
-    .command-log-entry pre {
-      margin: 0; white-space: pre-wrap; word-break: break-word; font-family: "Roboto Mono", Consolas, monospace;
-      font-size: 0.76rem; background: rgba(0,0,0,0.12); padding: 0.4rem 0.5rem; border-radius: 6px; border: 1px solid var(--border);
-    }
-    body.theme-light .command-log-entry pre { background: rgba(0,0,0,0.04); }
-    .page { display: none; max-width: 1200px; margin-left: auto; margin-right: auto; padding: 1.5rem 1rem 0 1rem; box-sizing: border-box; }
-    .page.active { display: block; }
-    .page > * + * { margin-top: 1.5rem; }
-    .page > h1 { display: none; }
-    .page h2 { margin: 1.75rem 0 0.6rem 0; padding-bottom: 0.35rem; border-bottom: 1px solid var(--border); font-size: 1.15rem; color: var(--text); }
-    .page h3 { margin: 1.25rem 0 0.5rem 0; font-size: 1rem; color: var(--text); }
-    .page p { margin: 0 0 0.75rem 0; line-height: 1.55; color: var(--text); }
-    .panel {
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 1.25rem 1.5rem;
-      margin-top: 0.5rem;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
-    }
-    body.theme-light .panel { box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
-    .panel-title { font-size: 0.95rem; font-weight: 600; color: var(--muted); margin: 0 0 0.75rem 0; text-transform: uppercase; letter-spacing: 0.03em; }
-    #savedReportsWrapMain {
-      background: var(--card); border: 1px solid var(--border);
-      border-radius: 10px; padding: 1.25rem 1.5rem;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.06);
-    }
-    #savedReportsWrapMain h2 { margin-top: 0; }
-    #mainProgressWrap, #resultsProgressWrap, #transceiverProgressWrap {
-      background: var(--card); border: 1px solid var(--border);
-      border-radius: 10px; padding: 1rem 1.25rem;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.06);
-    }
-    #customCommandWrap {
-      background: var(--card); border: 1px solid var(--border);
-      border-radius: 10px; padding: 1rem 1.25rem;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.06);
-    }
-    #customCommandWrap label { display: block; margin-bottom: 0.35rem; }
-    #routerTableWrap, #transceiverTableWrap {
-      background: var(--card); border: 1px solid var(--border);
-      border-radius: 10px; padding: 1rem 1.25rem;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.06);
-    }
-    .transceiver-icon-btn {
-      padding: 0.4rem 0.5rem;
-      margin: 0 0.2rem;
-      border: 1px solid var(--border);
-      background: var(--card);
-      border-radius: 8px;
-      cursor: pointer;
-      vertical-align: middle;
-      line-height: 0;
-      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.06);
-      transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease, transform 0.08s ease;
-    }
-    body.theme-light .transceiver-icon-btn {
-      box-shadow: 0 1px 2px rgba(15, 23, 42, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.85);
-    }
-    .transceiver-icon-btn:hover:not(:disabled) {
-      background: rgba(59, 130, 246, 0.18);
-      border-color: rgba(96, 165, 250, 0.55);
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.1);
-    }
-    body.theme-light .transceiver-icon-btn:hover:not(:disabled) {
-      background: rgba(59, 130, 246, 0.14);
-      border-color: rgba(59, 130, 246, 0.45);
-      box-shadow: 0 2px 6px rgba(15, 23, 42, 0.12);
-    }
-    .transceiver-icon-btn:active:not(:disabled) {
-      transform: translateY(1px);
-      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18), inset 0 1px 2px rgba(0, 0, 0, 0.12);
-    }
-    .transceiver-icon-btn:focus-visible {
-      outline: 2px solid rgba(96, 165, 250, 0.75);
-      outline-offset: 2px;
-    }
-    .transceiver-icon-btn img { display: block; width: 26px; height: 26px; object-fit: contain; }
-    .transceiver-icon-btn:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-      box-shadow: none;
-      background: rgba(148, 163, 184, 0.12);
-    }
-    #natLookupResult, #findLeafResult {
-      background: var(--card); border: 1px solid var(--border);
-      border-radius: 10px; padding: 1rem 1.25rem;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.06);
-    }
-    .credential-list {
-      border: 1px solid var(--border); border-radius: 10px;
-      margin-top: 1rem; max-width: 560px; background: var(--card);
-      padding: 0.75rem; overflow: hidden;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.06);
-    }
-    .credential-list th, .credential-list td { padding: 0.5rem 0.75rem; text-align: left; border-bottom: 1px solid var(--border); }
-    .credential-form {
-      margin-top: 1rem; max-width: 480px;
-      background: var(--card); border: 1px solid var(--border);
-      border-radius: 10px; padding: 1.25rem 1.5rem;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.06);
-    }
-    .credential-form label { display: block; margin-top: 0.75rem; }
-    .credential-form label:first-of-type { margin-top: 0; }
-    .credential-form input, .credential-form select { padding: 0.45rem 0.6rem; min-width: 200px; background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 8px; margin-top: 0.25rem; display: block; }
-    .credential-form button { margin-top: 0.75rem; padding: 0.4rem 1rem; background: var(--card); color: var(--text); border: 1px solid var(--border); border-radius: 8px; cursor: pointer; }
-    .credential-form button:hover { border-color: var(--accent); background: rgba(88, 166, 255, 0.15); }
-    .credential-form .method-fields { margin-top: 0.5rem; }
-    .credential-msg { margin-top: 0.5rem; color: var(--muted); font-size: 0.9em; }
-    .credential-msg.error { color: var(--danger); }
-    .credential-msg.ok { color: var(--success); }
-    .results-toolbar {
-      position: relative; display: flex; align-items: center; gap: 0.5rem;
-      background: var(--card); border: 1px solid var(--border);
-      border-radius: 10px; padding: 0.6rem 1rem;
-      margin-top: 0.5rem; margin-bottom: 0.25rem;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.06);
-    }
-    .results-toolbar .gear-btn { background: var(--card); border: 1px solid var(--border); color: var(--muted); padding: 0.25rem 0.5rem; cursor: pointer; border-radius: 8px; }
-    .results-toolbar .gear-btn:hover { color: var(--text); border-color: var(--accent); }
-    .results-table-wrap {
-      overflow: auto; max-height: 360px;
-      border: 1px solid var(--border); border-radius: 10px;
-      background: var(--card); padding: 0.75rem;
-      margin-top: 0.5rem; box-shadow: 0 1px 3px rgba(0,0,0,0.06);
-    }
-    .results-table { width: 100%; border-collapse: collapse; font-size: 0.9em; font-family: 'Roboto Mono', 'Consolas', monospace; }
-    .results-table th, .results-table td { padding: 0.25rem 0.5rem; text-align: left; border-bottom: 1px solid var(--border); white-space: nowrap; color: var(--text); }
-    .results-table tbody tr:nth-child(odd) { background: var(--table-zebra-odd); }
-    .results-table tbody tr:nth-child(even) { background: var(--table-zebra-even); }
-    .results-table tbody tr:hover { background: rgba(88, 166, 255, 0.08); }
-    .results-table th { background: var(--table-header-bg); border-color: var(--border); }
-    .results-table thead tr:first-child th { position: sticky; top: 0; z-index: 2; box-shadow: 0 1px 0 var(--border); }
-    .results-table thead tr.filter-row th { position: sticky; top: 2.25rem; z-index: 2; box-shadow: 0 1px 0 var(--border); }
-    .results-table th.sortable { cursor: pointer; }
-    .results-table th .sort-icon { margin-left: 0.25rem; color: var(--muted); }
-    .results-table .filter-row th { padding: 0.2rem 0.4rem; background: var(--table-header-bg); }
-    .results-table .filter-row input { width: 100%; max-width: 120px; padding: 0.2rem 0.35rem; background: var(--card); color: var(--text); border: 1px solid var(--border); border-radius: 8px; font-size: 0.85em; }
-    .results-table .filter-row select { padding: 0.2rem; background: var(--card); color: var(--text); border: 1px solid var(--border); border-radius: 8px; font-size: 0.85em; }
-    .filter-chips-bar {
-      display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem;
-      padding: 0.5rem 0.75rem; min-height: 2.25rem;
-      background: var(--card); border: 1px solid var(--border);
-      border-radius: 8px; margin-bottom: 0.5rem;
-    }
-    .filter-chip { display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.2rem 0.5rem; background: rgba(88, 166, 255, 0.2); border: 1px solid var(--accent); border-radius: 8px; font-size: 0.8rem; color: var(--text); }
-    .filter-chip .filter-chip-remove { background: none; border: none; color: var(--muted); cursor: pointer; padding: 0 0.15rem; font-size: 1rem; line-height: 1; border-radius: 4px; }
-    .filter-chip .filter-chip-remove:hover { color: var(--danger); }
-    .results-table .diff-row-added { background: rgba(16, 185, 129, 0.2) !important; border-left: 4px solid #10b981; }
-    .results-table .diff-row-removed { background: rgba(244, 63, 94, 0.2) !important; border-left: 4px solid #f43f5e; }
-    .results-table .bgp-path-prev { background: rgba(245, 158, 11, 0.2); border-left: 4px solid var(--warn); }
-    .results-table .bgp-path-new { background: rgba(16, 185, 129, 0.2); border-left: 4px solid var(--success); }
-    .results-table .diff-cell-modified { background: rgba(245, 158, 11, 0.25); }
-    .results-table .diff-cell-same { background: rgba(16, 185, 129, 0.2); cursor: pointer; color: var(--accent); text-decoration: underline; }
-    .results-table .diff-cell-same:hover { text-decoration: underline; }
-    .results-table .diff-cell-changed { background: rgba(244, 63, 94, 0.2); cursor: pointer; color: var(--accent); text-decoration: underline; }
-    .results-table .diff-cell-changed:hover { text-decoration: underline; }
-    .results-table tbody tr.row-threshold-ok { }
-    .results-table tbody tr.row-threshold-warn { background: rgba(245, 158, 11, 0.25) !important; }
-    .results-table tbody tr.row-threshold-bad { background: rgba(244, 63, 94, 0.2) !important; }
-    .column-toggle-wrap { display: inline-block; position: relative; margin-left: 0.5rem; }
-    .column-toggle-btn { padding: 0.25rem 0.5rem; font-size: 0.85em; background: var(--card); border: 1px solid var(--border); border-radius: 6px; color: var(--text); cursor: pointer; }
-    .column-toggle-dropdown { position: absolute; top: 100%; left: 0; margin-top: 2px; padding: 0.5rem; background: var(--card); border: 1px solid var(--border); border-radius: 8px; z-index: 100; max-height: 240px; overflow-y: auto; box-shadow: 0 4px 12px rgba(0,0,0,0.15); display: none; }
-    .column-toggle-dropdown.open { display: block; }
-    .column-toggle-dropdown label { display: block; padding: 0.2rem 0; cursor: pointer; white-space: nowrap; }
-    .diff-popup {
-      display: none; position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 1100;
-      background: var(--card); border: 1px solid var(--border);
-      border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.3); padding: 1rem; max-width: 90vw; min-width: 200px;
-    }
-    .diff-popup.open { display: block; }
-    .diff-popup h3 { margin: 0 0 0.5rem 0; font-size: 0.95rem; color: var(--text); }
-    .diff-popup .diff-pre { margin-bottom: 0.5rem; }
-    .diff-popup .diff-pre strong { color: var(--muted); }
-    .diff-popup .diff-post strong { color: var(--muted); }
-    .diff-popup .diff-close { margin-top: 0.75rem; padding: 0.35rem 0.75rem; cursor: pointer; background: var(--card); border: 1px solid var(--border); border-radius: 8px; color: var(--text); }
-    .diff-popup .diff-close:hover { border-color: var(--accent); }
-    .gear-popup { display: none; position: absolute; background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 0.75rem; max-height: 220px; overflow-y: auto; z-index: 10; box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
-    .gear-popup.show { display: block; }
-    .gear-popup label { display: block; margin: 0.25rem 0; cursor: pointer; color: var(--text); }
-    .gear-popup input[type=checkbox] { margin-right: 0.5rem; }
-    .findleaf-form {
-      background: var(--card); border: 1px solid var(--border);
-      border-radius: 10px; padding: 1rem 1.25rem;
-      display: flex; flex-wrap: wrap; align-items: center; gap: 1rem;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.06);
-    }
-    .findleaf-form label { margin: 0; }
-    .findleaf-form input[type="text"] { padding: 0.45rem 0.6rem; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; color: var(--text); }
-    .page-actions {
-      display: flex; gap: 0.6rem; margin-bottom: 1rem; flex-wrap: wrap;
-      background: var(--card); border: 1px solid var(--border);
-      border-radius: 10px; padding: 0.85rem 1.25rem;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.06);
-    }
-    .page-actions button { padding: 0.4rem 0.85rem; background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 8px; cursor: pointer; font-size: 0.9em; }
-    .page-actions button:hover { background: rgba(88, 166, 255, 0.15); border-color: var(--accent); }
-    .home-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.25rem; margin-top: 1.5rem; }
-    @media (max-width: 900px) { .home-cards { grid-template-columns: repeat(2, 1fr); } }
-    .home-card {
-      display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
-      padding: 1.5rem; background: var(--card); border: 1px solid var(--border); border-radius: 10px;
-      text-decoration: none; color: var(--text); transition: background 0.15s, border-color 0.15s; min-height: 160px;
-      box-shadow: 0 1px 4px rgba(0,0,0,0.1);
-    }
-    body.theme-light .home-card { background: var(--card); }
-    .home-card:hover { background: rgba(30, 41, 59, 0.85); border-color: var(--accent); box-shadow: 0 2px 8px rgba(0,0,0,0.15); }
-    body.theme-light .home-card:hover { background: var(--card); border-color: var(--accent); box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
-    .bgp-aspath-viz { min-height: 56px; overflow-x: auto; overflow-y: hidden; padding: 0.5rem; display: flex; align-items: center; gap: 0; flex-wrap: nowrap; }
-    .bgp-aspath-node { flex-shrink: 0; min-width: 52px; display: inline-flex; flex-direction: column; align-items: center; cursor: pointer; padding: 4px 6px; border-radius: 8px; background: var(--card); border: 1px solid var(--border); transition: border-color 0.15s, background 0.15s; }
-    .bgp-aspath-node:hover { border-color: var(--accent); background: rgba(88, 166, 255, 0.1); }
-    .bgp-aspath-node svg.bgp-router-icon { width: 22px; height: 22px; flex-shrink: 0; color: var(--text); }
-    .bgp-aspath-node .bgp-aspath-as { font-size: 0.7rem; font-weight: 700; color: var(--text); margin-top: 2px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: center; }
-    .bgp-aspath-arrow { flex-shrink: 0; width: 20px; text-align: center; color: var(--muted); font-size: 0.9rem; }
-    .bgp-prefix-row { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.75rem; padding: 0.5rem; background: var(--bg); border-radius: 8px; border: 1px solid var(--border); flex-wrap: wrap; }
-    .bgp-prefix-row:last-child { margin-bottom: 0; }
-    .bgp-prefix-label { flex-shrink: 0; min-width: 120px; font-family: monospace; font-size: 0.85em; font-weight: 600; color: var(--text); }
-    .bgp-path-cell { flex: 1; min-width: 180px; }
-    .bgp-path-cell .bgp-aspath-viz { padding: 0.25rem 0; }
-    .bgp-path-cell-label { font-size: 0.7rem; color: var(--muted); margin-bottom: 0.15rem; }
-    .help-screenshot { max-width: 100%; height: auto; border-radius: 8px; border: 1px solid var(--border); box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-top: 0.5rem; margin-bottom: 0.5rem; display: block; }
-    .home-card img { width: 56px; height: 56px; object-fit: contain; margin-bottom: 0.75rem; }
-    .home-card-title { font-size: 1rem; font-weight: 700; text-align: center; line-height: 1.3; display: block; margin-bottom: 0.35rem; }
-    .home-card-desc { font-size: 0.8rem; text-align: center; line-height: 1.35; color: var(--muted); display: block; }
-    .theme-toggle {
-      display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.35rem 0.6rem;
-      background: var(--card); border: 1px solid var(--border); border-radius: 8px;
-      color: var(--text); font-size: 0.85rem; cursor: pointer; margin-left: auto;
-    }
-    .theme-toggle:hover { border-color: var(--accent); }
-    .device-check-list { list-style: none; padding: 0; margin: 0.5rem 0; max-height: 200px; overflow: auto; }
-    .device-check-list li { display: flex; align-items: center; gap: 0.75rem; padding: 0.35rem 0; border-bottom: 1px solid var(--border); }
-    .device-check-list li:last-child { border-bottom: none; }
-    .device-check-name { flex: 1; font-family: inherit; }
-    .device-check-status { flex-shrink: 0; min-width: 120px; display: flex; align-items: center; gap: 0.5rem; }
-    .device-check-loading { height: 6px; flex: 1; min-width: 80px; background: var(--card); border-radius: 3px; overflow: hidden; }
-    .device-check-loading::after { content: ""; display: block; height: 100%; width: 30%; background: var(--accent); border-radius: 3px; animation: device-loading 0.8s ease-in-out infinite; }
-    @keyframes device-loading { 0% { transform: translateX(-100%); } 100% { transform: translateX(350%); } }
-    .device-check-ok { color: var(--success); font-weight: bold; }
-    .device-check-fail { color: var(--danger); font-weight: bold; }
-    #shortfallWrap {
-      border: 1px solid var(--warn);
-      border-left: 4px solid var(--danger);
-      background: rgba(245, 158, 11, 0.08);
-      border-radius: 10px;
-      padding: 1rem 1.25rem;
-      overflow-x: auto;
-      max-width: 100%;
-    }
-    body.theme-light #shortfallWrap { background: rgba(245, 158, 11, 0.06); }
-    #shortfallWrap .shortfall-main-title {
-      display: flex; align-items: center; gap: 0.5rem;
-      font-size: 1.05rem; font-weight: 700; color: var(--danger);
-      margin: 0 0 0.35rem 0;
-    }
-    #shortfallWrap .shortfall-main-title .shortfall-icon { font-size: 1.35rem; }
-    #shortfallWrap .shortfall-desc { font-size: 0.9em; color: var(--muted); margin: 0 0 0.75rem 0; }
-    .shortfall-device-block {
-      border: 1px solid rgba(244, 63, 94, 0.4);
-      border-left: 4px solid var(--danger);
-      background: rgba(244, 63, 94, 0.06);
-      border-radius: 8px;
-      padding: 0.75rem 1rem;
-      margin-bottom: 1rem;
-      overflow-x: auto;
-      max-width: 100%;
-    }
-    .shortfall-device-block:last-child { margin-bottom: 0; }
-    body.theme-light .shortfall-device-block { background: rgba(244, 63, 94, 0.04); }
-    .shortfall-device-block .shortfall-device-title {
-      display: flex; align-items: center; gap: 0.4rem;
-      font-weight: 700; color: var(--danger); font-size: 0.95rem;
-      margin-bottom: 0.5rem;
-    }
-    .shortfall-device-block .shortfall-device-title .shortfall-device-icon { font-size: 1.1rem; }
-    .shortfall-device-block .shortfall-lines { color: var(--warn); font-size: 0.9em; margin-bottom: 0.5rem; }
-    .shortfall-device-block .results-table { margin-top: 0.5rem; }
-    #consistencyWrap {
-      border: 1px solid var(--warn);
-      border-left: 4px solid var(--warn);
-      background: rgba(245, 158, 11, 0.08);
-      border-radius: 10px;
-      padding: 1rem 1.25rem;
-      overflow-x: auto;
-      max-width: 100%;
-    }
-    #consistencyWrap .shortfall-main-title { color: var(--warn); }
-    .consistency-group-block {
-      border: 1px solid rgba(245, 158, 11, 0.5);
-      border-left: 4px solid var(--warn);
-      background: rgba(245, 158, 11, 0.06);
-      border-radius: 8px;
-      padding: 0.75rem 1rem;
-      margin-bottom: 1rem;
-      overflow-x: auto;
-      max-width: 100%;
-    }
-    .consistency-group-block .consistency-group-title { font-weight: 700; color: var(--warn); font-size: 0.95rem; margin-bottom: 0.5rem; }
-    .consistency-group-block .results-table .cell-diff { color: var(--danger); font-weight: 600; }
-    .consistency-table { margin-top: 0.5rem; }
-    .consistency-table th { white-space: nowrap; }
-    .consistency-cell-down { background: rgba(244, 63, 94, 0.2); color: var(--danger); font-weight: 600; }
-    .table-details { border: 1px solid var(--border); border-radius: 8px; padding: 0.5rem 0.75rem; background: var(--card); }
-    .table-details summary { list-style: none; user-select: none; }
-    .table-details summary::-webkit-details-marker { display: none; }
-    .table-details summary::before { content: "\25b8"; display: inline-block; min-width: 1.25em; font-size: 1.1em; margin-right: 0.5rem; transition: transform 0.15s; color: var(--muted); text-align: center; }
-    .table-details[open] summary::before { transform: rotate(90deg); }
-  </style>
+  <link rel="stylesheet" href="/static/css/extracted-inline.css">
+  <link rel="stylesheet" href="/static/css/components.css">
+  <!-- Wave-6 Phase D: inline stylesheet block extracted to /static/css/extracted-inline.css.
+       Component-specific class names (replacing inline style attributes) live in components.css.
+       Together these allow CSP style-src self with no unsafe-inline. -->
 </head>
 <body>
   <script src="/static/js/theme-init.js"></script>
@@ -560,14 +23,14 @@
       <button type="button" class="header-nav-btn" id="headerBackBtn">Back</button>
     </div>
     <div class="header-right event-bar-counters">
-      <div id="headerProgressWrap" class="header-progress-wrap" style="display: none;" title="">
+      <div id="headerProgressWrap" class="header-progress-wrap u-hidden" title="">
         <span id="headerProgressText">0/0 devices</span>
         <div class="header-progress-bar"><div id="headerProgressBar" class="header-progress-fill"></div></div>
       </div>
-      <button type="button" id="eventSuccessBtn" class="event-count-btn event-success-btn" style="display: none;" title="Successful operations — click to view" aria-label="Successful">🟢 <span id="eventSuccessCount">0</span></button>
-      <button type="button" id="eventWarnBtn" class="event-count-btn event-warn-btn" style="display: none;" title="Warnings (e.g. missed credentials, rate limits) — click to view" aria-label="Warnings">🟠 <span id="eventWarnCount">0</span></button>
-      <button type="button" id="eventFailBtn" class="event-count-btn event-fail-btn" style="display: none;" title="Errors (e.g. login failed, connection timeout) — click to view" aria-label="Errors">🔴 <span id="eventFailCount">0</span></button>
-      <button type="button" id="commandLogsBtn" class="event-count-btn command-logs-btn" style="display: none;" title="Command logs (recover CLI and output) — click to view" aria-label="Command logs">📋 <span id="commandLogsCount">0</span></button>
+      <button type="button" id="eventSuccessBtn" class="event-count-btn event-success-btn u-hidden" title="Successful operations — click to view" aria-label="Successful">🟢 <span id="eventSuccessCount">0</span></button>
+      <button type="button" id="eventWarnBtn" class="event-count-btn event-warn-btn u-hidden" title="Warnings (e.g. missed credentials, rate limits) — click to view" aria-label="Warnings">🟠 <span id="eventWarnCount">0</span></button>
+      <button type="button" id="eventFailBtn" class="event-count-btn event-fail-btn u-hidden" title="Errors (e.g. login failed, connection timeout) — click to view" aria-label="Errors">🔴 <span id="eventFailCount">0</span></button>
+      <button type="button" id="commandLogsBtn" class="event-count-btn command-logs-btn u-hidden" title="Command logs (recover CLI and output) — click to view" aria-label="Command logs">📋 <span id="commandLogsCount">0</span></button>
       <button type="button" class="theme-toggle" id="themeToggle" aria-label="Toggle theme" title="Dark / Light"><span id="themeIcon">🌙</span> <span id="themeLabel">Dark</span></button>
     </div>
   </header>
@@ -594,7 +57,7 @@
     <div class="event-popup-header">
       <span id="commandLogsPopupTitle">Command logs</span>
       <div class="command-logs-header-actions">
-        <button type="button" class="header-nav-btn" id="commandLogsClearBtn" style="padding: 0.25rem 0.5rem; font-size: 0.8rem;">Clear</button>
+        <button type="button" id="commandLogsClearBtn" class="header-nav-btn btn-mini-clear">Clear</button>
         <button type="button" class="event-popup-close" id="commandLogsPopupClose" aria-label="Close">×</button>
       </div>
     </div>
@@ -641,28 +104,28 @@
 
   <section id="page-prepost" class="page">
   <h1>Pre/Post Check — Device selection</h1>
-  <details id="savedReportsDetails" class="panel" style="margin-bottom:1rem;">
-    <summary style="cursor:pointer; font-size:1rem; padding:0.5rem 0;">Saved reports</summary>
-    <div id="savedReportsWrapMain" style="padding-top:0.75rem;">
-    <div style="display:flex; flex-wrap:wrap; gap:1rem; align-items:flex-end;">
+  <details id="savedReportsDetails" class="panel panel-mb-1">
+    <summary class="summary-saved-reports">Saved reports</summary>
+    <div id="savedReportsWrapMain" class="u-pt-sm">
+    <div class="u-row-wrap-end">
       <div>
-        <label style="display:block; font-size:0.9em; margin-bottom:0.25rem;">PRE report</label>
-        <select id="savedReportsPreSelect" style="min-width:220px; padding:0.4rem; background:var(--card); color:var(--text); border:1px solid var(--border); border-radius:8px;">
+        <label class="u-form-label">PRE report</label>
+        <select id="savedReportsPreSelect" class="select-card">
           <option value="">— Select —</option>
         </select>
-        <button type="button" id="savedReportsPreOpen" style="margin-left:0.5rem; padding:0.35rem 0.75rem; background:var(--card); color:var(--text); border:1px solid var(--border); border-radius:8px; cursor:pointer;">Open</button>
-        <button type="button" id="savedReportsPreDelete" class="btn-delete-report" style="margin-left:0.35rem; padding:0.35rem 0.75rem; background:var(--card); color:var(--danger); border:1px solid var(--border); border-radius:8px; cursor:pointer;">Delete</button>
+        <button type="button" id="savedReportsPreOpen" class="btn-sm-card-card">Open</button>
+        <button type="button" id="savedReportsPreDelete" class="btn-delete-report btn-sm-card-danger">Delete</button>
       </div>
       <div>
-        <label style="display:block; font-size:0.9em; margin-bottom:0.25rem;">POST report (PRE+POST)</label>
-        <select id="savedReportsPostSelect" style="min-width:220px; padding:0.4rem; background:var(--card); color:var(--text); border:1px solid var(--border); border-radius:8px;">
+        <label class="u-form-label">POST report (PRE+POST)</label>
+        <select id="savedReportsPostSelect" class="select-card">
           <option value="">— Select —</option>
         </select>
-        <button type="button" id="savedReportsPostOpen" style="margin-left:0.5rem; padding:0.35rem 0.75rem; background:var(--card); color:var(--text); border:1px solid var(--border); border-radius:8px; cursor:pointer;">Open</button>
-        <button type="button" id="savedReportsPostDelete" class="btn-delete-report" style="margin-left:0.35rem; padding:0.35rem 0.75rem; background:var(--card); color:var(--danger); border:1px solid var(--border); border-radius:8px; cursor:pointer;">Delete</button>
+        <button type="button" id="savedReportsPostOpen" class="btn-sm-card-card">Open</button>
+        <button type="button" id="savedReportsPostDelete" class="btn-delete-report btn-sm-card-danger">Delete</button>
       </div>
     </div>
-    <p id="savedReportsEmpty" style="color:var(--muted); font-size:0.9em; margin:0.5rem 0 0 0; display:none;">No saved reports yet. Run PRE to create a report.</p>
+    <p id="savedReportsEmpty" class="u-color-muted u-fs-090 u-hidden">No saved reports yet. Run PRE to create a report.</p>
     </div>
   </details>
   <div class="selector">
@@ -671,9 +134,9 @@
     <label>Site <select id="site"><option value="">—</option></select></label>
     <label>Hall <select id="hall"><option value="">—</option></select></label>
     <label>Role <select id="role"><option value="">—</option></select></label>
-    <span id="expectedCountsWrap" style="display:none;">
-      <label>Expected BGP <input type="number" id="expectedBgp" min="0" placeholder="—" style="width:70px; padding:0.35rem; background:var(--card); color:var(--text); border:1px solid var(--border); border-radius:4px;" /></label>
-      <label>Expected IS-IS <input type="number" id="expectedIsis" min="0" placeholder="—" style="width:70px; padding:0.35rem; background:var(--card); color:var(--text); border:1px solid var(--border); border-radius:4px;" /></label>
+    <span id="expectedCountsWrap" class="u-hidden">
+      <label>Expected BGP <input type="number" id="expectedBgp" min="0" placeholder="—" class="input-num-narrow" /></label>
+      <label>Expected IS-IS <input type="number" id="expectedIsis" min="0" placeholder="—" class="input-num-narrow" /></label>
     </span>
   </div>
 
@@ -682,56 +145,56 @@
     <button type="button" id="selectAll">Select all</button>
     <button type="button" id="selectNone">Select none</button>
     <button type="button" id="runBtn" class="btn-run">Run</button>
-    <button type="button" id="runPostBtn" class="btn-run-post" style="display:none;">Run POST for these devices</button>
+    <button type="button" id="runPostBtn" class="btn-run-post u-hidden">Run POST for these devices</button>
   </div>
-  <div style="margin-top: 0.5rem;">
-    <div id="customCommandWrap" class="panel" style="display: none; margin-top: 0;">
+  <div class="u-mt-sm">
+    <div id="customCommandWrap" class="panel custom-command-wrap-hidden">
     <label>Command (show or dir only)</label>
-    <input type="text" id="customCommandInput" placeholder="e.g. show version" style="margin-left: 0.5rem; width: 280px; padding: 0.35rem; background: var(--card); color: var(--text); border: 1px solid var(--border); border-radius: 4px;" />
+    <input type="text" id="customCommandInput" placeholder="e.g. show version" class="input-card-280-margin" />
   </div>
   </div>
   <div class="ping-status" id="pingStatus"></div>
   <div class="device-list" id="deviceList"></div>
-  <div id="mainProgressWrap" style="display:none; margin:1rem 0;">
+  <div id="mainProgressWrap" class="progress-wrap">
     <p id="mainProgressText">0/0 devices checked</p>
-    <div style="max-width:400px; height:20px; background:var(--card); border-radius:4px; overflow:hidden;">
-      <div id="mainProgressBar" style="height:100%; width:0%; background:var(--accent); transition:width 0.2s;"></div>
+    <div class="progress-track">
+      <div id="mainProgressBar" class="progress-fill"></div>
     </div>
   </div>
-  <div id="runStatus" class="ping-status" style="margin-top:1rem;"></div>
-  <div class="results-toolbar" id="resultsToolbar" style="display:none;">
+  <div id="runStatus" class="ping-status u-mt-lg"></div>
+  <div id="resultsToolbar" class="results-toolbar u-hidden">
     <button type="button" class="gear-btn" id="gearBtn" title="Choose columns">&#9881; Columns</button>
     <div class="gear-popup" id="gearPopup">
       <div id="gearFieldList"></div>
     </div>
   </div>
-  <div id="resultsExportWrap" class="results-report-actions" style="display:none; flex-wrap:wrap; align-items:center; gap:0.75rem; margin-bottom:0.75rem;">
-    <label style="display:inline-flex; align-items:center; gap:0.35rem;">Report name <input type="text" id="mainReportNameInput" placeholder="Report name" style="width:180px; padding:0.4rem; background:var(--card); color:var(--text); border:1px solid var(--border); border-radius:6px;" /></label>
-    <button type="button" id="mainExportZipBtn" style="padding:0.4rem 0.75rem; background:var(--card); color:var(--text); border:1px solid var(--border); border-radius:6px; cursor:pointer;">Export as ZIP (HTML + styles)</button>
+  <div id="resultsExportWrap" class="results-report-actions results-export-wrap">
+    <label class="u-row-inline-mid">Report name <input type="text" id="mainReportNameInput" placeholder="Report name" class="input-card-180" /></label>
+    <button type="button" id="mainExportZipBtn" class="btn-card-6">Export as ZIP (HTML + styles)</button>
   </div>
-  <details id="resultsTableDetails" class="table-details" open style="display:none; margin-top:1rem;">
-    <summary style="cursor:pointer; font-weight:600;">Results table</summary>
-    <div class="results-table-wrap" id="resultsTableWrap" style="margin-top:0.5rem;">
+  <details id="resultsTableDetails" open class="table-details u-hidden u-mt-lg">
+    <summary class="summary-bold">Results table</summary>
+    <div id="resultsTableWrap" class="results-table-wrap u-mt-sm">
       <table class="results-table" id="resultsTable">
         <thead id="resultsThead"></thead>
         <tbody id="resultsTbody"></tbody>
       </table>
     </div>
   </details>
-  <details id="shortfallWrap" class="table-details" open style="display:none; margin-top:1rem;">
-    <summary style="cursor:pointer;" class="shortfall-main-title"><span class="shortfall-icon" aria-hidden="true">⚠️</span> BGP / IS-IS shortfall — DOWN interfaces with IS-IS or BGP config</summary>
+  <details id="shortfallWrap" open class="table-details u-hidden u-mt-lg">
+    <summary class="shortfall-main-title u-cursor-pointer"><span class="shortfall-icon" aria-hidden="true">⚠️</span> BGP / IS-IS shortfall — DOWN interfaces with IS-IS or BGP config</summary>
     <p class="shortfall-desc">Only interfaces that have IS-IS or BGP configuration (from run config or IS-IS interface list) and are currently DOWN are listed.</p>
     <div id="shortfallContent"></div>
   </details>
-  <details id="consistencyWrap" class="table-details" open style="display:none; margin-top:1rem;">
-    <summary style="cursor:pointer;" class="shortfall-main-title"><span class="shortfall-icon" aria-hidden="true">🔀</span> Interface consistency — same fabric+site (DCI, Border-Leaf, Spine, Wan-Edge, Wan-Router)</summary>
+  <details id="consistencyWrap" open class="table-details u-hidden u-mt-lg">
+    <summary class="shortfall-main-title u-cursor-pointer"><span class="shortfall-icon" aria-hidden="true">🔀</span> Interface consistency — same fabric+site (DCI, Border-Leaf, Spine, Wan-Edge, Wan-Router)</summary>
     <p class="shortfall-desc">Groups with different up-interface count or different interface state. Shows interface, status, peer-group, route-map (IP and description excluded).</p>
     <div id="consistencyContent"></div>
   </details>
-  <details id="flappedPortsWrap" class="table-details" open style="display:none; margin-top:1rem;">
-    <summary style="cursor:pointer;" class="shortfall-main-title"><span class="shortfall-icon" aria-hidden="true">📡</span> Ports flapped in last 24 hours — input errors</summary>
+  <details id="flappedPortsWrap" open class="table-details u-hidden u-mt-lg">
+    <summary class="shortfall-main-title u-cursor-pointer"><span class="shortfall-icon" aria-hidden="true">📡</span> Ports flapped in last 24 hours — input errors</summary>
     <p class="shortfall-desc">Interfaces that had a link state change in the last 24 hours (from interface status). Input errors column shows per-interface error count.</p>
-    <div class="results-table-wrap" style="max-height:400px; overflow:auto; margin-top:0.5rem;">
+    <div class="results-table-wrap tbl-wrap-400">
       <table class="results-table" id="flappedPortsTable">
         <thead><tr id="flappedPortsThead"></tr></thead>
         <tbody id="flappedPortsTbody"></tbody>
@@ -744,19 +207,19 @@
     <div class="diff-post"><strong>POST:</strong> <span id="diffPopupPost"></span></div>
     <button type="button" class="diff-close" id="diffPopupClose">Close</button>
   </div>
-  <details style="margin-top:0.5rem;"><summary style="cursor:pointer; color:#888;">Raw JSON</summary>
-  <pre id="runResult" style="max-height:180px; overflow:auto; font-size:0.8em; background:var(--card); padding:0.5rem; border-radius:4px; white-space:pre-wrap; word-break:break-all;"></pre>
+  <details class="u-mt-sm"><summary class="summary-raw">Raw JSON</summary>
+  <pre id="runResult" class="pre-card-180"></pre>
   </details>
-  <details id="showRunDiffWrap" style="margin-top:0.5rem; display:none;">
-    <summary style="cursor:pointer; color:#888;">Show run diff (PRE vs POST) — git diff</summary>
-    <div style="margin-top:0.5rem;">
-      <label>Device <select id="showRunDiffSelect" style="padding:0.35rem; min-width:200px; background:var(--card); color:var(--text); border:1px solid var(--border); border-radius:4px;"></select></label>
-      <pre id="showRunDiffOut" style="max-height:320px; overflow:auto; font-size:0.8em; background:var(--card); padding:0.5rem; border-radius:4px; white-space:pre-wrap; word-break:break-all; margin-top:0.5rem; border:1px solid var(--border);"></pre>
+  <details id="showRunDiffWrap" class="u-hidden u-mt-sm">
+    <summary class="summary-raw">Show run diff (PRE vs POST) — git diff</summary>
+    <div class="u-mt-sm">
+      <label>Device <select id="showRunDiffSelect" class="input-card-200"></select></label>
+      <pre id="showRunDiffOut" class="pre-card-320"></pre>
     </div>
   </details>
-  <div id="customCommandOutputWrap" style="display: none; margin-top: 1rem;">
-    <h2 style="font-size: 1rem;">CLI output (custom command)</h2>
-    <div class="results-table-wrap" style="max-height: 55vh;">
+  <div id="customCommandOutputWrap" class="u-hidden u-mt-lg">
+    <h2 class="u-fs-1rem">CLI output (custom command)</h2>
+    <div class="results-table-wrap tbl-wrap-55vh">
       <table class="results-table" id="customCommandTable">
         <thead id="customCommandThead"></thead>
         <tbody id="customCommandTbody"></tbody>
@@ -767,51 +230,51 @@
 
   <section id="page-prepost-results" class="page">
   <h1>Pre Check — Results</h1>
-  <p style="margin-bottom:1rem;"><a href="#prepost" style="color:var(--accent);">Back to Pre/Post Check</a></p>
-  <div id="resultsProgressWrap" style="margin:1rem 0;">
+  <p class="panel-mb-1"><a href="#prepost" class="u-color-accent">Back to Pre/Post Check</a></p>
+  <div id="resultsProgressWrap" class="u-my-lg">
     <p id="resultsProgressText">0/0 devices checked</p>
-    <div style="max-width:400px; height:20px; background:var(--card); border-radius:4px; overflow:hidden;">
-      <div id="resultsProgressBar" style="height:100%; width:0%; background:var(--accent); transition:width 0.2s;"></div>
+    <div class="progress-track">
+      <div id="resultsProgressBar" class="progress-fill"></div>
     </div>
   </div>
-  <div id="resultsDoneWrap" style="display:none;">
-    <p id="resultsSavedName" style="color:#888; font-size:0.9em;"></p>
-    <div class="results-report-actions" style="display:flex; flex-wrap:wrap; align-items:center; gap:0.75rem; margin-bottom:0.75rem;">
-      <label style="display:inline-flex; align-items:center; gap:0.35rem;">Report name <input type="text" id="resultsReportNameInput" placeholder="Report name" style="width:180px; padding:0.4rem; background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:6px;" /></label>
-      <button type="button" id="resultsSaveNameBtn" style="padding:0.4rem 0.75rem; background:var(--accent); color:var(--text); border:1px solid var(--border); border-radius:6px; cursor:pointer;">Save with this name</button>
-      <button type="button" id="resultsExportZipBtn" style="padding:0.4rem 0.75rem; background:var(--card); color:var(--text); border:1px solid var(--border); border-radius:6px; cursor:pointer;">Export as ZIP (HTML + styles)</button>
+  <div id="resultsDoneWrap" class="u-hidden">
+    <p id="resultsSavedName" class="u-color-muted u-fs-090"></p>
+    <div class="results-report-actions results-export-wrap-flex">
+      <label class="u-row-inline-mid">Report name <input type="text" id="resultsReportNameInput" placeholder="Report name" class="input-bg-180" /></label>
+      <button type="button" id="resultsSaveNameBtn" class="btn-accent-text-6">Save with this name</button>
+      <button type="button" id="resultsExportZipBtn" class="btn-card-6">Export as ZIP (HTML + styles)</button>
     </div>
-    <div class="results-toolbar" id="resultsToolbar2" style="margin-bottom:0.5rem;">
+    <div id="resultsToolbar2" class="results-toolbar u-mb-sm">
       <button type="button" class="gear-btn" id="gearBtn2" title="Select columns">&#9881; Columns</button>
-      <div class="gear-popup" id="gearPopup2" style="display:none; position:absolute; background:var(--card); border:1px solid var(--border); border-radius:4px; padding:0.75rem; z-index:10;">
+      <div id="gearPopup2" class="gear-popup gear-popup-absolute">
         <div id="gearFieldList2"></div>
       </div>
     </div>
-    <details class="table-details" open style="margin-top:0.5rem;">
-      <summary style="cursor:pointer; font-weight:600;">Results table</summary>
-      <div class="results-table-wrap" style="max-height:400px; overflow:auto; border:1px solid var(--border); border-radius:4px; margin-top:0.5rem;">
+    <details open class="table-details u-mt-sm">
+      <summary class="summary-bold">Results table</summary>
+      <div class="results-table-wrap tbl-wrap-400-bord">
         <table class="results-table" id="resultsTable2">
           <thead id="resultsThead2"></thead>
           <tbody id="resultsTbody2"></tbody>
         </table>
       </div>
     </details>
-    <details id="flappedPortsWrapResults" class="table-details" open style="display:none; margin-top:1rem;">
-      <summary style="cursor:pointer; font-size:0.95rem;" class="shortfall-main-title"><span class="shortfall-icon" aria-hidden="true">📡</span> Ports flapped in last 24 hours — input errors</summary>
-      <p class="shortfall-desc" style="font-size:0.85em; color:var(--muted); margin:0 0 0.5rem 0;">Interfaces that had a link state change in the last 24 hours. Input errors column shows per-interface error count.</p>
-      <div class="results-table-wrap" style="max-height:300px; overflow:auto; border:1px solid var(--border); border-radius:4px; margin-top:0.5rem;">
+    <details id="flappedPortsWrapResults" open class="table-details u-hidden u-mt-lg">
+      <summary class="shortfall-main-title summary-shortfall"><span class="shortfall-icon" aria-hidden="true">📡</span> Ports flapped in last 24 hours — input errors</summary>
+      <p class="shortfall-desc shortfall-desc-mini">Interfaces that had a link state change in the last 24 hours. Input errors column shows per-interface error count.</p>
+      <div class="results-table-wrap tbl-wrap-300">
         <table class="results-table" id="flappedPortsTableResults">
           <thead><tr id="flappedPortsTheadResults"></tr></thead>
           <tbody id="flappedPortsTbodyResults"></tbody>
         </table>
       </div>
     </details>
-    <div style="margin-top:1rem;">
-      <button type="button" id="postCheckBtn" style="padding:0.5rem 1rem; background:var(--accent); color:var(--text); border:1px solid var(--border); border-radius:4px; cursor:pointer;">Post Check (compare with last saved report)</button>
+    <div class="u-mt-lg">
+      <button type="button" id="postCheckBtn" class="btn-accent-text-4">Post Check (compare with last saved report)</button>
     </div>
-    <div id="postResultWrap" style="display:none; margin-top:1rem;">
-      <h2 style="font-size:1rem;">Comparison</h2>
-      <pre id="postComparison" style="max-height:200px; overflow:auto; font-size:0.8em; background:var(--card); padding:0.5rem; border-radius:4px; white-space:pre-wrap;"></pre>
+    <div id="postResultWrap" class="u-hidden u-mt-lg">
+      <h2 class="u-fs-1rem">Comparison</h2>
+      <pre id="postComparison" class="pre-card-200"></pre>
     </div>
   </div>
   </section>
@@ -831,14 +294,14 @@
         <label>Username <input type="text" id="credUsername" /></label>
         <label>Password <input type="password" id="credPassword" /></label>
       </div>
-      <div id="credApiKeyFields" class="method-fields" style="display:none;">
+      <div id="credApiKeyFields" class="method-fields u-hidden">
         <label>API key <input type="password" id="credApiKey" placeholder="API key" /></label>
       </div>
       <button type="button" id="credSubmit">Add / Update credential</button>
     </div>
     <div id="credMsg" class="credential-msg"></div>
     <div class="credential-list">
-      <table class="results-table" style="width:100%;">
+      <table class="results-table u-w-100">
         <thead id="credThead"><tr><th>Name</th><th>Method</th><th></th></tr></thead>
         <tbody id="credListBody"></tbody>
       </table>
@@ -850,25 +313,25 @@
   <p>Uses Find Leaf to get fabric/site of the source IP, then queries Palo Alto firewalls (tag <code>natlookup</code>) in the same fabric and site. Protocol: TCP 443.</p>
   <div class="findleaf-form">
     <label>Source IP</label>
-    <input type="text" id="natSrcIp" placeholder="e.g. 10.1.2.3" style="margin-left:0.5rem; width:140px; padding:0.4rem; background:var(--card); color:var(--text); border:1px solid var(--border); border-radius:4px;" />
-    <label style="margin-left:1rem;">Destination IP</label>
-    <input type="text" id="natDestIp" placeholder="8.8.8.8" value="8.8.8.8" style="margin-left:0.5rem; width:140px; padding:0.4rem; background:var(--card); color:var(--text); border:1px solid var(--border); border-radius:4px;" />
-    <label style="margin-left:1rem;"><input type="checkbox" id="natLookupDebug" /> Debug (show API responses)</label>
-    <button type="button" id="natLookupBtn" style="margin-left:1rem; padding:0.4rem 1rem;">Lookup</button>
+    <input type="text" id="natSrcIp" placeholder="e.g. 10.1.2.3" class="input-narrow-card-margin" />
+    <label class="u-ml-lg">Destination IP</label>
+    <input type="text" id="natDestIp" placeholder="8.8.8.8" value="8.8.8.8" class="input-narrow-card-margin" />
+    <label class="u-ml-lg"><input type="checkbox" id="natLookupDebug" /> Debug (show API responses)</label>
+    <button type="button" id="natLookupBtn" class="btn-margin-1rem-sm">Lookup</button>
   </div>
-  <div id="natLookupStatus" class="ping-status" style="margin-top:0.5rem;"></div>
-  <ul id="natLookupDeviceList" class="device-check-list" style="display:none;"></ul>
-  <div id="natLookupResult" style="margin-top:1rem; display:none;">
-    <table class="results-table" style="max-width:640px;">
+  <div id="natLookupStatus" class="ping-status u-mt-sm"></div>
+  <ul id="natLookupDeviceList" class="device-check-list u-hidden"></ul>
+  <div id="natLookupResult" class="u-hidden u-mt-lg">
+    <table class="results-table u-max-w-640">
       <thead><tr><th>Field</th><th>Value</th></tr></thead>
       <tbody id="natLookupResultBody"></tbody>
     </table>
-    <div id="natLookupDebugOut" style="display:none; margin-top:1rem;">
-      <h3 style="font-size:1rem; margin-bottom:0.5rem;">Firewall API responses (debug)</h3>
-      <p style="margin-bottom:0.25rem;"><strong>NAT policy match</strong></p>
-      <pre id="natLookupDebugMatch" style="max-height:200px; overflow:auto; font-size:0.75rem; background:var(--card); padding:0.5rem; border-radius:4px; border:1px solid var(--border); white-space:pre-wrap; word-break:break-all;"></pre>
-      <p style="margin:0.5rem 0 0.25rem;"><strong>NAT rule config</strong></p>
-      <pre id="natLookupDebugConfig" style="max-height:200px; overflow:auto; font-size:0.75rem; background:var(--card); padding:0.5rem; border-radius:4px; border:1px solid var(--border); white-space:pre-wrap; word-break:break-all;"></pre>
+    <div id="natLookupDebugOut" class="u-hidden u-mt-lg">
+      <h3 class="u-mb-sm-fs-1rem">Firewall API responses (debug)</h3>
+      <p class="u-mb-xs"><strong>NAT policy match</strong></p>
+      <pre id="natLookupDebugMatch" class="pre-card-200-debug"></pre>
+      <p class="u-mt-sm"><strong>NAT rule config</strong></p>
+      <pre id="natLookupDebugConfig" class="pre-card-200-debug"></pre>
     </div>
   </div>
   </section>
@@ -877,13 +340,13 @@
   <p>Search by IP only. Uses devices with tag <code>leaf-search</code> in inventory.</p>
   <div class="findleaf-form">
     <label>IP address</label>
-    <input type="text" id="findLeafIp" placeholder="e.g. 10.1.2.3" style="margin-left:0.5rem; width:180px; padding:0.4rem; background:var(--card); color:var(--text); border:1px solid var(--border); border-radius:4px;" />
-    <button type="button" id="findLeafBtn" style="margin-left:0.5rem; padding:0.4rem 1rem;">Search</button>
+    <input type="text" id="findLeafIp" placeholder="e.g. 10.1.2.3" class="input-card-180-margin" />
+    <button type="button" id="findLeafBtn" class="btn-margin-half-sm">Search</button>
   </div>
-  <div id="findLeafStatus" class="ping-status" style="margin-top:0.5rem;"></div>
-  <ul id="findLeafDeviceList" class="device-check-list" style="display:none;"></ul>
-  <div id="findLeafResult" style="margin-top:1rem; display:none;">
-    <table class="results-table" style="max-width:640px;">
+  <div id="findLeafStatus" class="ping-status u-mt-sm"></div>
+  <ul id="findLeafDeviceList" class="device-check-list u-hidden"></ul>
+  <div id="findLeafResult" class="u-hidden u-mt-lg">
+    <table class="results-table u-max-w-640">
       <thead><tr><th>Field</th><th>Value</th></tr></thead>
       <tbody id="findLeafResultBody"></tbody>
     </table>
@@ -892,79 +355,79 @@
   <section id="page-bgp" class="page">
   <h1>BGP / Looking Glass</h1>
   <p>Look up prefix or AS via RIPEStat: routing status, RPKI, visibility, and history diff.</p>
-  <div class="card" style="margin-bottom:1rem;">
+  <div class="card panel-mb-1">
     <label>Prefix (e.g. 1.1.1.0/24) or AS (e.g. AS13335)</label>
-    <input type="text" id="bgpResourceInput" placeholder="1.1.1.0/24 or AS13335" style="width:220px; padding:0.4rem; margin-left:0.5rem; background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:8px;" />
-    <button type="button" id="bgpLookupBtn" class="btn-run" style="margin-left:0.5rem;">Lookup</button>
-    <span id="bgpLookupStatus" class="ping-status" style="margin-left:0.5rem;"></span>
+    <input type="text" id="bgpResourceInput" placeholder="1.1.1.0/24 or AS13335" class="input-bg-220-margin" />
+    <button type="button" id="bgpLookupBtn" class="btn-run u-ml-sm">Lookup</button>
+    <span id="bgpLookupStatus" class="ping-status u-ml-sm"></span>
   </div>
-  <div id="bgpFavouritesWrap" class="card" style="margin-bottom:1rem;">
-    <span class="muted" style="font-size:0.9em;">Favourites:</span>
-    <span id="bgpFavouritesList" style="margin-left:0.5rem;"></span>
-    <button type="button" id="bgpAddFavBtn" style="display:none; margin-left:0.5rem; padding:0.25rem 0.5rem; font-size:0.85em; background:var(--card); color:var(--text); border:1px solid var(--border); border-radius:6px; cursor:pointer;">Add to favourites</button>
-    <button type="button" id="bgpRemoveFavBtn" style="display:none; margin-left:0.25rem; padding:0.25rem 0.5rem; font-size:0.85em; background:var(--card); color:var(--danger); border:1px solid var(--border); border-radius:6px; cursor:pointer;">Remove from favourites</button>
+  <div id="bgpFavouritesWrap" class="card panel-mb-1">
+    <span class="muted u-fs-090">Favourites:</span>
+    <span id="bgpFavouritesList" class="u-ml-sm"></span>
+    <button type="button" id="bgpAddFavBtn" class="btn-mini-card">Add to favourites</button>
+    <button type="button" id="bgpRemoveFavBtn" class="btn-mini-danger">Remove from favourites</button>
   </div>
-  <div id="bgpExpectedOriginWrap" class="card" style="margin-bottom:1rem;">
+  <div id="bgpExpectedOriginWrap" class="card panel-mb-1">
     <label>Expected Origin AS (optional, for hijack check)</label>
-    <input type="text" id="bgpExpectedOrigin" placeholder="e.g. 13335" style="width:120px; padding:0.4rem; margin-left:0.5rem; background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:8px;" />
+    <input type="text" id="bgpExpectedOrigin" placeholder="e.g. 13335" class="input-bg-120-margin" />
   </div>
-  <div id="bgpStatusCards" style="display:none; grid-template-columns:repeat(auto-fill, minmax(180px, 1fr)); gap:1rem; margin-bottom:1rem;"></div>
-  <div id="bgpWanRtrWrap" style="display:none; margin-bottom:1rem;" class="card">
-    <h3 style="font-size:1rem; margin-bottom:0.5rem;">WAN RTR — router bgp match</h3>
-    <p class="muted" style="font-size:0.9em; margin-bottom:0.5rem;">Devices (WAN Router) that have this AS in <code>router bgp &lt;AS&gt;</code>. Fabric / Site from inventory.</p>
-    <p id="bgpWanRtrStatus" class="muted" style="font-size:0.9em; margin-bottom:0.5rem;"></p>
-    <div class="results-table-wrap" style="max-height:240px; overflow:auto;">
+  <div id="bgpStatusCards" class="card-status-grid"></div>
+  <div id="bgpWanRtrWrap" class="card u-hidden u-mb-lg">
+    <h3 class="u-mb-sm-fs-1rem">WAN RTR — router bgp match</h3>
+    <p class="muted muted-090 u-mb-sm">Devices (WAN Router) that have this AS in <code>router bgp &lt;AS&gt;</code>. Fabric / Site from inventory.</p>
+    <p id="bgpWanRtrStatus" class="muted muted-090 u-mb-sm"></p>
+    <div class="results-table-wrap tbl-wrap-240">
       <table class="results-table" id="bgpWanRtrTable">
         <thead><tr><th>Hostname</th><th>Fabric</th><th>Site</th></tr></thead>
         <tbody id="bgpWanRtrBody"></tbody>
       </table>
     </div>
   </div>
-  <div id="bgpHijackAlert" style="display:none; margin-bottom:1rem; border-left:4px solid var(--danger); background:rgba(244,63,94,0.15);" class="card"></div>
-  <div id="bgpVisibilityWrap" style="display:none; margin-bottom:1rem;" class="card">
+  <div id="bgpHijackAlert" class="card card-hijack-alert"></div>
+  <div id="bgpVisibilityWrap" class="card u-hidden u-mb-lg">
     <strong>Visibility</strong>
-    <p id="bgpVisibilityText" class="muted" style="font-size:0.9em; margin:0.25rem 0;"></p>
-    <div class="bgp-vis-bar" style="max-width:320px; height:12px; background:var(--bg); border-radius:6px; overflow:hidden; margin-top:0.25rem;">
-      <div id="bgpVisFill" class="bgp-vis-fill" style="height:100%; width:0%; background:var(--accent); border-radius:6px; transition:width 0.3s;"></div>
+    <p id="bgpVisibilityText" class="muted u-fs-090 u-mt-xs"></p>
+    <div class="bgp-vis-bar bgp-vis-bar-track">
+      <div id="bgpVisFill" class="bgp-vis-fill bgp-vis-bar-fill"></div>
     </div>
   </div>
-  <div id="bgpAsPathWrap" style="display:none; margin-bottom:1rem; position:relative;" class="card">
-    <h3 style="font-size:1rem; margin-bottom:0.25rem;">Per-prefix paths (from one router)</h3>
-    <p id="bgpAsPathRouterLabel" class="muted" style="font-size:0.85em; margin-bottom:0.5rem;"></p>
+  <div id="bgpAsPathWrap" class="card card-hidden-mb-rel">
+    <h3 class="u-mb-xs-fs-1rem">Per-prefix paths (from one router)</h3>
+    <p id="bgpAsPathRouterLabel" class="muted muted-085 u-mb-sm"></p>
     <div id="bgpAsPathPerPrefix"></div>
-    <div id="bgpAsTooltip" style="display:none; position:fixed; z-index:1100; max-width:320px; padding:0.5rem 0.75rem; background:var(--card); border:1px solid var(--border); border-radius:8px; font-size:0.9em; box-shadow:0 4px 12px rgba(0,0,0,0.2); pointer-events:none;"></div>
+    <div id="bgpAsTooltip" class="tooltip-fixed"></div>
   </div>
-  <div id="bgpHistoryDiffWrap" style="display:none; margin-bottom:1rem;" class="card">
-    <h3 style="font-size:1rem; margin-bottom:0.5rem;">History diff (current vs previous)</h3>
-    <pre id="bgpHistoryDiffOut" style="white-space:pre-wrap; font-family:monospace; font-size:0.85em; max-height:300px; overflow:auto; padding:0.5rem; background:var(--bg); border-radius:4px; border:1px solid var(--border);"></pre>
+  <div id="bgpHistoryDiffWrap" class="card u-hidden u-mb-lg">
+    <h3 class="u-mb-sm-fs-1rem">History diff (current vs previous)</h3>
+    <pre id="bgpHistoryDiffOut" class="pre-card-300"></pre>
   </div>
-  <div id="bgpLookingGlassWrap" style="display:none; margin-bottom:1rem;" class="card">
-    <h3 style="font-size:1rem; margin-bottom:0.5rem;">Looking Glass (RIS peers)</h3>
-    <p id="bgpLookingGlassStatus" class="muted" style="font-size:0.9em; margin-bottom:0.5rem;"></p>
-    <div class="results-table-wrap" style="max-height:320px; overflow:auto;">
+  <div id="bgpLookingGlassWrap" class="card u-hidden u-mb-lg">
+    <h3 class="u-mb-sm-fs-1rem">Looking Glass (RIS peers)</h3>
+    <p id="bgpLookingGlassStatus" class="muted muted-090 u-mb-sm"></p>
+    <div class="results-table-wrap tbl-wrap-320">
       <table class="results-table" id="bgpLookingGlassTable">
         <thead><tr><th>RRC</th><th>Location</th><th>Peer IP</th><th>AS</th><th>Prefix</th></tr></thead>
         <tbody id="bgpLookingGlassBody"></tbody>
       </table>
     </div>
   </div>
-  <div id="bgpBgplayWrap" style="display:none; margin-bottom:1rem;" class="card">
-    <h3 style="font-size:1rem; margin-bottom:0.5rem;">BGP play (path changes)</h3>
-    <div style="display:flex; flex-wrap:wrap; align-items:center; gap:0.5rem; margin-bottom:0.5rem;">
-      <span id="bgpBgplayTimeRange" class="muted" style="font-size:0.9em;"></span>
-      <button type="button" id="bgpBgplayPrevBtn" style="padding:0.35rem 0.75rem; background:var(--card); color:var(--text); border:1px solid var(--border); border-radius:8px; cursor:pointer;">Prev</button>
-      <button type="button" id="bgpBgplayNextBtn" style="padding:0.35rem 0.75rem; background:var(--card); color:var(--text); border:1px solid var(--border); border-radius:8px; cursor:pointer;">Next</button>
-      <span id="bgpBgplayStatus" class="ping-status" style="margin-left:0.5rem;"></span>
+  <div id="bgpBgplayWrap" class="card u-hidden u-mb-lg">
+    <h3 class="u-mb-sm-fs-1rem">BGP play (path changes)</h3>
+    <div class="u-row-center-baseline">
+      <span id="bgpBgplayTimeRange" class="muted u-fs-090"></span>
+      <button type="button" id="bgpBgplayPrevBtn" class="btn-card-8-cursor">Prev</button>
+      <button type="button" id="bgpBgplayNextBtn" class="btn-card-8-cursor">Next</button>
+      <span id="bgpBgplayStatus" class="ping-status u-ml-sm"></span>
     </div>
-    <div class="results-table-wrap" style="max-height:360px; overflow:auto;">
+    <div class="results-table-wrap tbl-wrap-360">
       <table class="results-table" id="bgpBgplayTable">
         <thead><tr><th>Time</th><th>Target prefix</th><th>Previous path</th><th>New path</th><th>Source (AS / owner / IP)</th></tr></thead>
         <tbody id="bgpBgplayBody"></tbody>
       </table>
     </div>
   </div>
-  <div style="margin-bottom:1rem;">
-    <button type="button" id="bgpExportJsonBtn" style="display:none; padding:0.4rem 0.75rem; background:var(--card); color:var(--text); border:1px solid var(--border); border-radius:8px; cursor:pointer;">Export JSON</button>
+  <div class="panel-mb-1">
+    <button type="button" id="bgpExportJsonBtn" class="btn-card-8-cursor-hidden">Export JSON</button>
   </div>
   </section>
   <section id="page-custom" class="page">
@@ -974,47 +437,47 @@
   <section id="page-transceiver" class="page">
   <h1>Transceiver Check</h1>
   <p>Select fabric, site, and role to list devices, then run transceiver check. Supports Arista EOS and Cisco NX-OS (API).</p>
-  <div class="selector" style="margin:1rem 0;">
+  <div class="selector u-my-lg">
     <label>Fabric <select id="transceiverFabric"><option value="">—</option></select></label>
     <label>Site <select id="transceiverSite"><option value="">—</option></select></label>
     <label>Hall <select id="transceiverHall"><option value="">—</option></select></label>
     <label>Role <select id="transceiverRole"><option value="">—</option></select></label>
   </div>
-  <div class="devices-actions" style="margin-bottom:0.5rem;">
+  <div class="devices-actions u-mb-sm">
     <a href="javascript:void(0)" id="transceiverSelectAll">Select all</a>
-    <span style="margin:0 0.5rem;">|</span>
+    <span class="u-mx-sm">|</span>
     <a href="javascript:void(0)" id="transceiverSelectNone">Select none</a>
     <button type="button" id="transceiverRunBtn" class="btn-run">Run</button>
   </div>
-  <div id="transceiverProgressWrap" style="display:none; margin:1rem 0;">
+  <div id="transceiverProgressWrap" class="progress-wrap">
     <p id="transceiverProgressText">0/0 devices</p>
-    <div style="max-width:400px; height:20px; background:var(--card); border-radius:4px; overflow:hidden;">
-      <div id="transceiverProgressBar" style="height:100%; width:0%; background:var(--accent); transition:width 0.2s;"></div>
+    <div class="progress-track">
+      <div id="transceiverProgressBar" class="progress-fill"></div>
     </div>
   </div>
-  <p id="transceiverStatus" class="ping-status" style="margin-top:0.5rem;"></p>
-  <details id="transceiverInterfaceStatusTrace" style="display:none; margin-top:0.75rem;">
-    <summary style="cursor:pointer; font-size:0.9em; color:var(--muted);">Interface status — CLI command &amp; parser (debug)</summary>
-    <p style="font-size:0.82em; color:var(--muted); margin:0.35rem 0 0 0;">Shows which <code>interface_status</code> command ran, <code>parsers.yaml</code> custom parser name, row count, sample flap fields, and top-level keys of raw JSON from the device.</p>
-    <pre id="transceiverInterfaceStatusTracePre" style="font-size:0.78rem; max-height:42vh; overflow:auto; margin:0.5rem 0 0 0; padding:0.5rem; background:rgba(0,0,0,0.12); border-radius:8px; border:1px solid var(--border); white-space:pre-wrap; word-break:break-word;"></pre>
+  <p id="transceiverStatus" class="ping-status u-mt-sm"></p>
+  <details id="transceiverInterfaceStatusTrace" class="u-hidden u-mt-md">
+    <summary class="summary-debug">Interface status — CLI command &amp; parser (debug)</summary>
+    <p class="shortfall-desc-mini">Shows which <code>interface_status</code> command ran, <code>parsers.yaml</code> custom parser name, row count, sample flap fields, and top-level keys of raw JSON from the device.</p>
+    <pre id="transceiverInterfaceStatusTracePre" class="pre-trace"></pre>
   </details>
-  <div class="device-list" id="transceiverDeviceList" style="max-height:280px;"></div>
-  <div id="transceiverErrWrap" style="display:none; margin-top:1.25rem;">
-    <h2 style="font-size:1rem; margin-bottom:0.35rem;">Interfaces with error in status</h2>
-    <p style="font-size:0.88em; color:var(--muted); margin-bottom:0.5rem;">Status contains <code>err</code> (case-insensitive), e.g. errdisabled, err-disable, Error. <strong>Recover</strong> and <strong>clear counters</strong> are only offered for <strong>Leaf</strong> devices on host ports <strong>Ethernet1/1</strong>–<strong>Ethernet1/48</strong> (or <code>1/1</code>–<code>1/48</code>); other interfaces (e.g. spine uplinks) show actions disabled. <strong>Recover</strong> runs configure, interface, shutdown, no shutdown. Clear counters runs <code>clear counters interface &lt;name&gt;</code> in privileged exec. Requires username/password credential (not API-key-only).</p>
-    <div style="margin-bottom:0.5rem;">
+  <div id="transceiverDeviceList" class="device-list tbl-wrap-280"></div>
+  <div id="transceiverErrWrap" class="u-hidden u-mt-xl">
+    <h2 class="u-mb-035-fs-1rem">Interfaces with error in status</h2>
+    <p class="shortfall-desc-mini">Status contains <code>err</code> (case-insensitive), e.g. errdisabled, err-disable, Error. <strong>Recover</strong> and <strong>clear counters</strong> are only offered for <strong>Leaf</strong> devices on host ports <strong>Ethernet1/1</strong>–<strong>Ethernet1/48</strong> (or <code>1/1</code>–<code>1/48</code>); other interfaces (e.g. spine uplinks) show actions disabled. <strong>Recover</strong> runs configure, interface, shutdown, no shutdown. Clear counters runs <code>clear counters interface &lt;name&gt;</code> in privileged exec. Requires username/password credential (not API-key-only).</p>
+    <div class="u-mb-sm">
       <button type="button" id="transceiverRecoverAllBtn" class="btn-run">Recovery all</button>
-      <span id="transceiverRecoverStatus" class="ping-status" style="margin-left:0.75rem;"></span>
+      <span id="transceiverRecoverStatus" class="ping-status u-ml-md"></span>
     </div>
-    <div id="transceiverErrTableOuter" class="results-table-wrap" style="max-height:40vh; overflow:auto; border-color:rgba(245,158,11,0.45);">
+    <div id="transceiverErrTableOuter" class="results-table-wrap tbl-wrap-flapped">
       <table class="results-table" id="transceiverErrTable">
         <thead><tr><th>Hostname</th><th>Interface</th><th>TX</th><th>RX</th><th>Flap</th><th>Last Flap</th><th>CRC/Input Err</th><th>Status</th><th>Action</th></tr></thead>
         <tbody id="transceiverErrTbody"></tbody>
       </table>
     </div>
   </div>
-  <div id="transceiverTableWrap" style="display:none; margin-top:1.5rem;">
-    <div style="display:flex; align-items:center; flex-wrap:wrap; gap:0.5rem; margin-bottom:0.5rem;">
+  <div id="transceiverTableWrap" class="u-hidden u-mt-xl">
+    <div class="u-row-center-baseline">
       <span class="column-toggle-wrap">
         <button type="button" class="column-toggle-btn" id="transceiverColumnToggleBtn">Columns</button>
         <div class="column-toggle-dropdown" id="transceiverColumnToggleDropdown">
@@ -1035,7 +498,7 @@
         </div>
       </span>
     </div>
-    <div class="results-table-wrap" style="max-height:55vh; overflow:auto;">
+    <div class="results-table-wrap tbl-wrap-55vh">
       <table class="results-table" id="transceiverTable">
         <thead id="transceiverThead"></thead>
         <tbody id="transceiverTbody"></tbody>
@@ -1046,27 +509,27 @@
   <section id="page-routemap" class="page">
   <h1>DCI / WAN Routers</h1>
   <p>Compare route-map config on DCI or WAN routers (Arista EOS). Select scope, pick devices, then Compare or Search by prefix.</p>
-  <div class="panel" style="margin-bottom:0;">
+  <div class="panel u-mb-none">
     <label>Prefix search (IP/CIDR)</label>
-    <input type="text" id="routerPrefixInput" placeholder="e.g. 192.168.0.0/24" style="width:180px; padding:0.4rem; margin-left:0.5rem; background:var(--card); color:var(--text); border:1px solid var(--border); border-radius:4px;" />
-    <button type="button" id="routerPrefixSearchBtn" style="margin-left:0.5rem; padding:0.4rem 0.75rem;">Search</button>
-    <span id="routerPrefixStatus" class="ping-status" style="margin-left:0.5rem;"></span>
+    <input type="text" id="routerPrefixInput" placeholder="e.g. 192.168.0.0/24" class="input-card-180-search" />
+    <button type="button" id="routerPrefixSearchBtn" class="btn-margin-half-narrow">Search</button>
+    <span id="routerPrefixStatus" class="ping-status u-ml-sm"></span>
   </div>
-  <div class="selector" style="margin:1rem 0;">
+  <div class="selector u-my-lg">
     <label>Scope <select id="routerScope"><option value="">— Select —</option><option value="dci">DCI Routers</option><option value="wan">WAN Routers</option><option value="all">All (DCI + WAN)</option></select></label>
   </div>
-  <div style="margin-bottom:0.5rem;">
+  <div class="u-mb-sm">
     <a href="javascript:void(0)" id="routerSelectAll">Select all</a>
-    <span style="margin:0 0.5rem;">|</span>
+    <span class="u-mx-sm">|</span>
     <a href="javascript:void(0)" id="routerSelectNone">Select none</a>
   </div>
-  <div class="device-list" id="routerDeviceList" style="max-height:220px; overflow-y:auto;"></div>
-  <div style="margin-top:0.75rem;">
+  <div id="routerDeviceList" class="device-list tbl-wrap-220"></div>
+  <div class="u-mt-md">
     <button type="button" id="routerCompareBtn" disabled>Compare</button>
   </div>
-  <p class="ping-status" id="routerStatus" style="margin-top:0.5rem;"></p>
-  <div id="routerTableWrap" style="display:none; margin-top:1.5rem;">
-    <div style="display:flex; align-items:center; flex-wrap:wrap; gap:0.5rem; margin-bottom:0.5rem;">
+  <p id="routerStatus" class="ping-status u-mt-sm"></p>
+  <div id="routerTableWrap" class="u-hidden u-mt-xl">
+    <div class="u-row-center-baseline">
       <span class="column-toggle-wrap">
         <button type="button" class="column-toggle-btn" id="routerColumnToggleBtn">Columns</button>
         <div class="column-toggle-dropdown" id="routerColumnToggleDropdown">
@@ -1077,7 +540,7 @@
         </div>
       </span>
     </div>
-    <div class="results-table-wrap" style="max-height:55vh; overflow:auto;">
+    <div class="results-table-wrap tbl-wrap-55vh">
       <table class="results-table" id="routerTable">
         <thead id="routerThead"><tr><th>Peer group</th><th>Route-map IN</th><th>Route-map OUT</th><th>Devices</th></tr></thead>
         <tbody id="routerTableBody"></tbody>
@@ -1094,13 +557,13 @@
     <label>Hall <select id="invHall"><option value="">— All —</option></select></label>
     <label>Role <select id="invRole"><option value="">— All —</option></select></label>
   </div>
-  <div class="devices-actions" style="margin-bottom: 0.5rem;">
+  <div class="devices-actions u-mb-sm">
     <button type="button" id="invAddBtn">Add device</button>
     <button type="button" id="invEditBtn" disabled>Edit</button>
     <button type="button" id="invImportBtn">Import</button>
     <button type="button" id="invExportBtn">Export</button>
-    <input type="file" id="invFileInput" accept=".csv" style="display: none;" />
-    <span class="column-toggle-wrap" style="margin-left:0.5rem;">
+    <input type="file" id="invFileInput" accept=".csv" class="u-hidden" />
+    <span class="column-toggle-wrap u-ml-sm">
       <button type="button" class="column-toggle-btn" id="invColumnToggleBtn">Columns</button>
       <div class="column-toggle-dropdown" id="invColumnToggleDropdown">
         <label><input type="checkbox" data-col="hostname" /> Hostname</label>
@@ -1116,17 +579,17 @@
       </div>
     </span>
   </div>
-  <div class="results-table-wrap" style="max-height: 55vh;">
+  <div class="results-table-wrap tbl-wrap-55vh">
     <table class="results-table" id="invTable">
       <thead id="invTheadWrap"></thead>
       <tbody id="invTbody"></tbody>
     </table>
   </div>
-  <p class="ping-status" id="invCount" style="margin-top: 0.5rem;"></p>
+  <p id="invCount" class="ping-status u-mt-sm"></p>
 
-  <div id="invModal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 200; align-items: center; justify-content: center;" class="inv-modal-wrap">
-    <div style="background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 1.5rem; max-width: 480px; width: 90%; max-height: 90vh; overflow: auto;">
-      <h2 style="margin: 0 0 1rem 0; font-size: 1.1rem;" id="invModalTitle">Add device</h2>
+  <div id="invModal" class="inv-modal-wrap">
+    <div class="inv-modal-card">
+      <h2 class="inv-modal-title" id="invModalTitle">Add device</h2>
       <div class="credential-form" id="invDeviceForm">
         <label>Hostname <input type="text" id="invFormHostname" required /></label>
         <label>IP <input type="text" id="invFormIp" /></label>
@@ -1139,9 +602,9 @@
         <label>Tag <input type="text" id="invFormTag" /></label>
         <label>Credential <input type="text" id="invFormCredential" /></label>
       </div>
-      <div style="margin-top: 1rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
+      <div class="inv-modal-actions">
         <button type="button" id="invModalSave" class="credential-form button">Save</button>
-        <button type="button" id="invModalDelete" style="display: none; background: #a33;">Delete</button>
+        <button type="button" id="invModalDelete" class="inv-modal-delete">Delete</button>
         <button type="button" id="invModalCancel">Cancel</button>
       </div>
     </div>
@@ -1150,66 +613,66 @@
 
   <section id="page-notepad" class="page">
   <h1>Live Notepad</h1>
-  <p class="muted" style="margin-bottom:0.5rem;">Single shared notepad. Everyone sees the same content; changes sync live. Plain text only.</p>
-  <div style="margin-bottom:0.75rem; display:flex; align-items:center; gap:0.5rem;">
-    <label style="font-size:0.9em;">Your name</label>
-    <input type="text" id="notepadUserName" placeholder="Enter your name" maxlength="80" style="width:180px; padding:0.4rem 0.5rem; background:var(--card); color:var(--text); border:1px solid var(--border); border-radius:6px; font-size:1rem;" />
+  <p class="muted u-mb-sm">Single shared notepad. Everyone sees the same content; changes sync live. Plain text only.</p>
+  <div class="u-row-mid-md">
+    <label class="u-fs-090">Your name</label>
+    <input type="text" id="notepadUserName" placeholder="Enter your name" maxlength="80" class="input-notepad-name" />
   </div>
-  <div id="notepadWrap" style="display:flex; gap:0; min-height:320px; max-height:65vh;">
-    <div id="notepadLeftCol" style="width:7rem; flex-shrink:0; overflow-y:auto; overflow-x:hidden; background:var(--card); border:1px solid var(--border); border-right:none; border-radius:8px 0 0 8px; font-size:1rem; color:var(--muted); line-height:1.5; padding:0.75rem 0.4rem 0.75rem 0.5rem; font-family:inherit;"></div>
-    <textarea id="notepadText" placeholder="Type here…" style="flex:1; box-sizing:border-box; padding:0.75rem 0.5rem; background:var(--card); color:var(--text); border:1px solid var(--border); border-radius:0 8px 8px 0; font-family:inherit; font-size:1rem; line-height:1.5em; resize:vertical; min-height:320px;"></textarea>
+  <div id="notepadWrap" class="notepad-wrap">
+    <div id="notepadLeftCol" class="notepad-left-col"></div>
+    <textarea id="notepadText" placeholder="Type here…" class="notepad-textarea"></textarea>
   </div>
-  <p class="muted" style="margin-top:0.5rem; font-size:0.85em;" id="notepadStatus">Loading…</p>
+  <p class="muted u-mt-sm muted-085" id="notepadStatus">Loading…</p>
   </section>
 
   <section id="page-diff" class="page">
   <h1>Diff Checker</h1>
-  <p class="muted" style="margin-bottom:1rem;">Paste or type text in the left and right boxes, then click Diff check. Uses line alignment like Git: matching lines are paired, so a deleted line does not shift the rest. − removed (red, left only), + added (green, right only).</p>
-  <div style="display:flex; gap:1rem; flex-wrap:wrap;">
-    <div style="flex:1; min-width:280px;">
-      <label style="display:block; font-size:0.9em; margin-bottom:0.35rem;">Left (before)</label>
-      <textarea id="diffLeft" rows="14" style="width:100%; box-sizing:border-box; padding:0.6rem; background:var(--card); color:var(--text); border:1px solid var(--border); border-radius:8px; font-family:monospace; font-size:0.9rem; line-height:1.4; resize:vertical;"></textarea>
+  <p class="muted panel-mb-1">Paste or type text in the left and right boxes, then click Diff check. Uses line alignment like Git: matching lines are paired, so a deleted line does not shift the rest. − removed (red, left only), + added (green, right only).</p>
+  <div class="u-row-wrap-1rem">
+    <div class="u-flex-1-min-280">
+      <label class="u-form-label-md">Left (before)</label>
+      <textarea id="diffLeft" rows="14" class="diff-textarea"></textarea>
     </div>
-    <div style="flex:1; min-width:280px;">
-      <label style="display:block; font-size:0.9em; margin-bottom:0.35rem;">Right (after)</label>
-      <textarea id="diffRight" rows="14" style="width:100%; box-sizing:border-box; padding:0.6rem; background:var(--card); color:var(--text); border:1px solid var(--border); border-radius:8px; font-family:monospace; font-size:0.9rem; line-height:1.4; resize:vertical;"></textarea>
+    <div class="u-flex-1-min-280">
+      <label class="u-form-label-md">Right (after)</label>
+      <textarea id="diffRight" rows="14" class="diff-textarea"></textarea>
     </div>
   </div>
-  <div style="margin-top:1rem; text-align:center;">
-    <button type="button" id="diffCheckBtn" style="padding:0.5rem 1.25rem; background:var(--accent); color:#fff; border:none; border-radius:8px; font-size:1rem; cursor:pointer;">Diff check</button>
+  <div class="u-mt-lg u-text-center">
+    <button type="button" id="diffCheckBtn" class="btn-accent-fff-lg">Diff check</button>
   </div>
-  <div id="diffResultWrap" style="margin-top:1.5rem; display:none;">
-    <h2 style="font-size:1rem; margin-bottom:0.5rem;">Result (same line aligned)</h2>
-    <div id="diffSummaryBar" style="display:flex; flex-wrap:wrap; gap:0.5rem; margin-bottom:0.5rem; align-items:center;"></div>
-    <div id="diffResultContainer" style="display:flex; gap:0; max-height:60vh;">
-      <div id="diffResult" style="flex:1; overflow-x:auto; overflow-y:auto; border:1px solid var(--border); border-right:none; border-radius:8px 0 0 8px; background:var(--card); font-family:monospace; font-size:0.9rem; line-height:1.4;"></div>
-      <div id="diffGuide" style="width:20px; flex-shrink:0; border:1px solid var(--border); border-radius:0 8px 8px 0; background:rgba(0,0,0,0.03); position:relative; cursor:pointer;"></div>
+  <div id="diffResultWrap" class="u-hidden u-mt-xl">
+    <h2 class="u-mb-sm-fs-1rem">Result (same line aligned)</h2>
+    <div id="diffSummaryBar" class="diff-summary-bar"></div>
+    <div id="diffResultContainer" class="diff-result-container">
+      <div id="diffResult" class="diff-result-pane"></div>
+      <div id="diffGuide" class="diff-guide-col"></div>
     </div>
   </div>
   </section>
 
   <section id="page-subnet" class="page">
   <h1>Subnet Divide Calculator</h1>
-  <p class="muted" style="margin-bottom:0.5rem;">Enter a network; the table shows one row per subnet. Click <strong>Divide</strong> to split a row into two subnets (one level deeper). Click a grey <strong>Join</strong> cell to merge subnets back into one.</p>
-  <p class="muted" style="margin-bottom:1rem; font-size:0.85em;">Visual subnet calculator inspired by <a href="https://github.com/davidc/subnets" target="_blank" rel="noopener noreferrer" style="color:var(--accent);">davidc/subnets</a> (thank you).</p>
-  <div style="display:flex; flex-wrap:wrap; gap:1rem; align-items:flex-end; margin-bottom:1rem;">
+  <p class="muted u-mb-sm">Enter a network; the table shows one row per subnet. Click <strong>Divide</strong> to split a row into two subnets (one level deeper). Click a grey <strong>Join</strong> cell to merge subnets back into one.</p>
+  <p class="muted u-mb-lg muted-085">Visual subnet calculator inspired by <a href="https://github.com/davidc/subnets" target="_blank" rel="noopener noreferrer" class="u-color-accent">davidc/subnets</a> (thank you).</p>
+  <div class="u-row-wrap-end-mb">
     <div>
-      <label style="display:block; font-size:0.9em; margin-bottom:0.25rem;">Network address</label>
-      <input type="text" id="subnetNetwork" placeholder="192.168.0.0" value="192.168.0.0" style="width:140px; padding:0.5rem; background:var(--card); color:var(--text); border:1px solid var(--border); border-radius:6px; font-family:monospace;" />
+      <label class="u-form-label">Network address</label>
+      <input type="text" id="subnetNetwork" placeholder="192.168.0.0" value="192.168.0.0" class="input-card-140-mono" />
     </div>
     <div>
-      <label style="display:block; font-size:0.9em; margin-bottom:0.25rem;">Mask bits</label>
-      <input type="number" id="subnetMask" min="0" max="32" value="16" style="width:50px; padding:0.5rem; background:var(--card); color:var(--text); border:1px solid var(--border); border-radius:6px;" />
+      <label class="u-form-label">Mask bits</label>
+      <input type="number" id="subnetMask" min="0" max="32" value="16" class="input-card-50" />
     </div>
-    <button type="button" id="subnetUpdateBtn" style="padding:0.5rem 1rem; background:var(--accent); color:#fff; border:none; border-radius:6px; cursor:pointer;">Update</button>
-    <button type="button" id="subnetResetBtn" style="padding:0.5rem 1rem; background:var(--card); color:var(--text); border:1px solid var(--border); border-radius:6px; cursor:pointer;">Reset</button>
+    <button type="button" id="subnetUpdateBtn" class="btn-accent-fff">Update</button>
+    <button type="button" id="subnetResetBtn" class="btn-card-text-6-l">Reset</button>
   </div>
-  <p class="muted" style="font-size:0.85em; margin-bottom:1rem;" id="subnetStatus">Enter network and mask, then click Update.</p>
-  <div id="subnetResultWrap" style="display:none;">
-    <div class="results-table-wrap" style="max-height:60vh; overflow:auto;">
-      <table class="results-table calc" id="subnetCalcTable" style="width:100%; border-collapse:collapse;">
+  <p class="muted muted-085 u-mb-lg" id="subnetStatus">Enter network and mask, then click Update.</p>
+  <div id="subnetResultWrap" class="u-hidden">
+    <div class="results-table-wrap tbl-wrap-60vh">
+      <table class="results-table calc" id="subnetCalcTable">
         <thead><tr>
-          <th>Subnet address</th><th>Range of addresses</th><th>Useable IPs</th><th>Hosts</th><th>Divide</th><th id="subnetJoinHeader" style="min-width:80px;">Join</th>
+          <th>Subnet address</th><th>Range of addresses</th><th>Useable IPs</th><th>Hosts</th><th>Divide</th><th id="subnetJoinHeader" class="u-min-w-80">Join</th>
         </tr></thead>
         <tbody id="subnetCalcBody"></tbody>
       </table>
@@ -1219,7 +682,7 @@
 
   <section id="page-help" class="page">
   <h1>Help</h1>
-  <p class="muted" style="margin-bottom: 1.5rem;">This panel helps you run pre/post checks, look up NAT and BGP, find leaves, and manage inventory. All tables support sorting and export (CSV/Excel) where indicated.</p>
+  <p class="muted u-mb-xl">This panel helps you run pre/post checks, look up NAT and BGP, find leaves, and manage inventory. All tables support sorting and export (CSV/Excel) where indicated.</p>
 
   <h2>Home</h2>
   <p>The dashboard shows all features in a 3×3 grid. Use the menu (hamburger icon) or cards to navigate.</p>
@@ -1227,7 +690,7 @@
 
   <h2>Navigation</h2>
   <p>Use the <strong>menu</strong> (hamburger icon) to switch between pages. The top <strong>event bar</strong> shows counts of successful operations, warnings, and errors; click a counter to see the event list. Use <strong>Home</strong> / <strong>Back</strong> in the header to return to the dashboard or go back.</p>
-  <p><img src="/static/screenshots/success-popup.png" alt="Successful operations popup" class="help-screenshot" /><img src="/static/screenshots/errors-popup.png" alt="Errors popup" class="help-screenshot" style="margin-left:0.5rem;" /></p>
+  <p><img src="/static/screenshots/success-popup.png" alt="Successful operations popup" class="help-screenshot" /><img src="/static/screenshots/errors-popup.png" alt="Errors popup" class="help-screenshot u-ml-sm" /></p>
 
   <h2>Pre/Post Check</h2>
   <p>Capture device state before and after a change, then compare results.</p>
@@ -1291,7 +754,7 @@
   <p>One shared plain-text notepad for everyone. Open <strong>Live Notepad</strong> from the menu; type in the text area. Changes are saved automatically and synced every few seconds. Everyone sees the same content; no formatting, just text.</p>
 
   <h2>Diff Checker</h2>
-  <p>Compare two texts like Git/GitHub diff. Paste in <strong>Left (before)</strong> and <strong>Right (after)</strong>, then click <strong>Diff check</strong>. Matching lines are found automatically (LCS), so deleting one line does not mark everything below as changed. Table: <span style="color:#f43f5e;">−</span> removed (red, left column only), <span style="color:#10b981;">+</span> added (green, right column only). Left # and Right # are line numbers in each file.</p>
+  <p>Compare two texts like Git/GitHub diff. Paste in <strong>Left (before)</strong> and <strong>Right (after)</strong>, then click <strong>Diff check</strong>. Matching lines are found automatically (LCS), so deleting one line does not mark everything below as changed. Table: <span class="text-danger-bold">−</span> removed (red, left column only), <span class="text-success-bold">+</span> added (green, right column only). Left # and Right # are line numbers in each file.</p>
 
   <h2>Subnet Divide Calculator</h2>
   <p>Enter network and mask, click <strong>Update</strong>. Table shows one row per subnet. <strong>Divide</strong> splits a row into two (prefix+1). <strong>Join</strong> column: grey cells merge subnets back; <strong>Reset</strong> clears divisions.</p>
@@ -1306,10 +769,10 @@
   <section id="page-restapi" class="page">
   <h1>REST API</h1>
   <p class="muted">Select fabric, site, hall and role to list devices. Currently: Arista eAPI; Cisco and Palo Alto support coming later.</p>
-  <div class="panel" style="margin-bottom:1rem;">
+  <div class="panel panel-mb-1">
     <p class="panel-title">eAPI Explorer</p>
-    <p style="margin:0 0 0.75rem 0; font-size:0.95em;">This page lets you craft a single or multi eAPI request, and explore the returned JSON. Note that this form creates real eAPI requests, so any configuration you perform will apply to the switch. Don't know where to start? Try one of these examples:</p>
-    <div style="display:flex; flex-wrap:wrap; gap:0.5rem;">
+    <p class="u-mb-md u-fs-090">This page lets you craft a single or multi eAPI request, and explore the returned JSON. Note that this form creates real eAPI requests, so any configuration you perform will apply to the switch. Don't know where to start? Try one of these examples:</p>
+    <div class="u-row-wrap-sm">
       <button type="button" class="btn-run restapi-example-btn" data-example="version">Check version</button>
       <button type="button" class="btn-run restapi-example-btn" data-example="idle-timeout">Set idle-timeout</button>
       <button type="button" class="btn-run restapi-example-btn" data-example="running-config">View running-config</button>
@@ -1323,19 +786,19 @@
   </div>
   <div class="devices-actions">
     <a href="javascript:void(0)" id="restapiSelectAll">Select all</a>
-    <span style="margin:0 0.5rem;">|</span>
+    <span class="u-mx-sm">|</span>
     <a href="javascript:void(0)" id="restapiSelectNone">Select none</a>
   </div>
-  <div class="device-list" id="restapiDeviceList" style="max-height:200px;"></div>
-  <div class="panel" style="margin-top:1rem;">
+  <div id="restapiDeviceList" class="device-list tbl-wrap-200"></div>
+  <div class="panel u-mt-lg">
     <p class="panel-title">Request (one command per line; first line can be enable with password — password is filled from credential)</p>
-    <textarea id="restapiRequestInput" rows="8" placeholder="Enter Commands" style="width:100%; max-width:640px; font-family:'Roboto Mono',Consolas,monospace; font-size:0.9em; padding:0.5rem; background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:8px; resize:vertical; min-height:120px;"></textarea>
-    <div style="margin-top:0.75rem;">
+    <textarea id="restapiRequestInput" rows="8" placeholder="Enter Commands" class="restapi-textarea"></textarea>
+    <div class="u-mt-md">
       <button type="button" id="restapiSubmitBtn" class="btn-run">Submit POST request</button>
     </div>
   </div>
-  <p class="ping-status" id="restapiStatus" style="margin-top:0.5rem;"></p>
-  <div id="restapiResultWrap" style="display:none; margin-top:1rem;" class="panel">
+  <p id="restapiStatus" class="ping-status u-mt-sm"></p>
+  <div id="restapiResultWrap" class="panel u-hidden u-mt-lg">
     <p class="panel-title">Responses (per device)</p>
     <div class="results-table-wrap">
       <table class="results-table" id="restapiResultsTable">

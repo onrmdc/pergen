@@ -615,7 +615,7 @@
       }
       wrap.style.display = "block";
       if (!errRows || !errRows.length) {
-        tbody.innerHTML = "<tr class=\"transceiver-err-empty\"><td colspan=\"9\" style=\"text-align:center; color:var(--muted); padding:0.75rem 0.5rem;\">No ports in an error-disabled or other <code>err</code> status (no matching interfaces in this result set).</td></tr>";
+        tbody.innerHTML = "<tr class=\"transceiver-err-empty\"><td colspan=\"9\" class=\"empty-cell\">No ports in an error-disabled or other <code>err</code> status (no matching interfaces in this result set).</td></tr>";
         if (recoverAllBtn) recoverAllBtn.disabled = true;
         return;
       }
@@ -628,7 +628,7 @@
             "<img src=\"/static/assets/transceiver-recover.png\" alt=\"\" width=\"28\" height=\"28\" /></button>" +
             "<button type=\"button\" class=\"btn-clear-counters-one transceiver-icon-btn\" title=\"clear counters\" aria-label=\"clear counters\">" +
             "<img src=\"/static/assets/transceiver-clear-counters.png\" alt=\"\" width=\"28\" height=\"28\" /></button>"
-          : "<span class=\"muted\" style=\"font-size:0.85em;\" title=\"Recovery only on Leaf, Ethernet1/1-1/48 host ports.\">&mdash;</span>";
+          : "<span class=\"muted muted-085\" title=\"Recovery only on Leaf, Ethernet1/1-1/48 host ports.\">&mdash;</span>";
         return "<tr data-hostname=\"" + escapeHtml(r.hostname || "") + "\" data-ip=\"" + escapeHtml(r.ip || "") + "\" data-interface=\"" + escapeHtml(r.interface || "") + "\">" +
           "<td>" + escapeHtml(r.hostname || "") + "</td><td>" + escapeHtml(r.interface || "") + "</td>" +
           "<td>" + escapeHtml(r.tx_power != null ? String(r.tx_power) : "") + "</td><td>" + escapeHtml(r.rx_power != null ? String(r.rx_power) : "") + "</td>" +
@@ -1658,7 +1658,7 @@
         if (shortfallBgp > 0) lines.push("BGP: expected " + expectedBgp + ", actual " + actualBgp + ", shortfall " + shortfallBgp);
         if (shortfallIsis > 0) lines.push("IS-IS: expected " + expectedIsis + " (ready), actual " + (actualIsis != null && !isNaN(actualIsis) ? actualIsis : "?") + " (up), shortfall " + shortfallIsis);
         var tableRows = downIfaces.length ? downIfaces.map(function(d) {
-          return "<tr><td>" + escapeHtml(d.interface) + "</td><td><span style=\"color:var(--danger);\">" + escapeHtml(d.status) + "</span></td><td>" + escapeHtml(d.description) + "</td></tr>";
+          return "<tr><td>" + escapeHtml(d.interface) + "</td><td><span class=\"danger-cell\">" + escapeHtml(d.status) + "</span></td><td>" + escapeHtml(d.description) + "</td></tr>";
         }).join("") : "<tr><td colspan=\"3\" class=\"muted\">No DOWN interfaces with IS-IS/BGP config (or run config / interface status not available).</td></tr>";
         blocks.push("<div class=\"shortfall-device-block\"><p class=\"shortfall-device-title\"><span class=\"shortfall-device-icon\" aria-hidden=\"true\">🔴</span> " + escapeHtml(hostname) + "</p><p class=\"shortfall-lines\">" + escapeHtml(lines.join("; ")) + "</p><table class=\"results-table\"><thead><tr><th>Interface</th><th>Status</th><th>Description</th></tr></thead><tbody>" + tableRows + "</tbody></table></div>");
       });
@@ -2090,7 +2090,7 @@
       thead.appendChild(filterTr);
       tbody.innerHTML = rows.map(function(row) {
         const deviceCell = escapeHtml(row.hostname || "") + (row.ip ? " (" + escapeHtml(row.ip) + ")" : "");
-        const outputCell = "<pre style=\"margin:0; padding:0.25rem 0; font-size:0.85em; white-space:pre-wrap; word-break:break-all; max-height:240px; overflow:auto;\">" + escapeHtml(row.output || "") + "</pre>";
+        const outputCell = "<pre class=\"cell-pre-wrap-output\">" + escapeHtml(row.output || "") + "</pre>";
         return "<tr><td>" + deviceCell + "</td><td>" + outputCell + "</td></tr>";
       }).join("");
     }
@@ -2367,26 +2367,26 @@
       Object.keys(byCompany).sort().forEach(function(company) {
         var values = byCompany[company];
         var nameShort = company.length > 25 ? company.slice(0, 25) + "…" : company;
-        html += "<details class=\"bgp-fav-group\" style=\"display:block; margin:0 0 0.5rem 0;\"><summary style=\"cursor:pointer; padding:0.25rem 0.5rem; background:var(--card); border:1px solid var(--border); border-radius:6px; font-size:0.85em; list-style:none;\">" + String(nameShort).replace(/</g, "&lt;") + " (" + values.length + ")</summary>";
-        html += "<div class=\"bgp-fav-group-chips\" style=\"margin-top:0.25rem; margin-left:0.5rem;\">";
+        html += "<details class=\"bgp-fav-group bgp-fav-group-block\"><summary class=\"bgp-fav-group-summary\">" + String(nameShort).replace(/</g, "&lt;") + " (" + values.length + ")</summary>";
+        html += "<div class=\"bgp-fav-group-chips\">";
         values.forEach(function(val) {
           var valEsc = String(val).replace(/"/g, "&quot;");
           var valSafe = String(val).replace(/</g, "&lt;");
           var isAsn = /^AS?\s*\d+$/i.test(String(val).replace(/\s/g, ""));
           var asnParam = isAsn ? String(val).replace(/^AS\s*/i, "").trim() : "";
           if (isAsn && asnParam) {
-            html += "<div class=\"bgp-fav-as-row\" style=\"margin-bottom:0.35rem;\">";
-            html += "<span class=\"bgp-fav-chip\" data-value=\"" + valEsc + "\" style=\"display:inline-flex; align-items:center; margin:0 0.25rem 0.25rem 0; padding:0.2rem 0.4rem; background:var(--card); border:1px solid var(--border); border-radius:6px; font-size:0.85em; cursor:pointer;\"><span class=\"bgp-fav-label\">" + valSafe + "</span><span class=\"bgp-fav-remove\" style=\"margin-left:0.35rem; color:var(--muted);\" title=\"Remove\">×</span></span>";
-            html += "<button type=\"button\" class=\"bgp-fav-as-toggle\" data-asn=\"" + asnParam.replace(/"/g, "&quot;") + "\" style=\"padding:0.15rem 0.4rem; font-size:0.8em; background:var(--card); border:1px solid var(--border); border-radius:4px; cursor:pointer; color:var(--text);\" title=\"Show announced prefixes\">▼ Prefixes</button>";
-            html += "<div class=\"bgp-fav-prefix-list\" data-asn=\"" + asnParam.replace(/"/g, "&quot;") + "\" style=\"display:none; margin-top:0.25rem; margin-left:0.5rem;\"></div>";
+            html += "<div class=\"bgp-fav-as-row\">";
+            html += "<span class=\"bgp-fav-chip\" data-value=\"" + valEsc + "\"><span class=\"bgp-fav-label\">" + valSafe + "</span><span class=\"bgp-fav-remove\" title=\"Remove\">×</span></span>";
+            html += "<button type=\"button\" class=\"bgp-fav-as-toggle\" data-asn=\"" + asnParam.replace(/"/g, "&quot;") + "\" title=\"Show announced prefixes\">▼ Prefixes</button>";
+            html += "<div class=\"bgp-fav-prefix-list\" data-asn=\"" + asnParam.replace(/"/g, "&quot;") + "\"></div>";
             html += "</div>";
           } else {
-            html += "<span class=\"bgp-fav-chip\" data-value=\"" + valEsc + "\" style=\"display:inline-flex; align-items:center; margin:0 0.25rem 0.25rem 0; padding:0.2rem 0.4rem; background:var(--card); border:1px solid var(--border); border-radius:6px; font-size:0.85em; cursor:pointer;\"><span class=\"bgp-fav-label\">" + valSafe + "</span><span class=\"bgp-fav-remove\" style=\"margin-left:0.35rem; color:var(--muted);\" title=\"Remove\">×</span></span>";
+            html += "<span class=\"bgp-fav-chip\" data-value=\"" + valEsc + "\"><span class=\"bgp-fav-label\">" + valSafe + "</span><span class=\"bgp-fav-remove\" title=\"Remove\">×</span></span>";
           }
         });
         html += "</div></details>";
       });
-      listEl.innerHTML = html || "<span class=\"muted\" style=\"font-size:0.9em;\">None. Add after a lookup.</span>";
+      listEl.innerHTML = html || "<span class=\"muted muted-090\">None. Add after a lookup.</span>";
       listEl.querySelectorAll(".bgp-fav-chip").forEach(function(chip) {
         var val = chip.getAttribute("data-value");
         if (!val) return;
@@ -2409,22 +2409,22 @@
             listDiv.textContent = "Loading…";
             fetch(API + "/api/bgp/announced-prefixes?asn=" + encodeURIComponent(asn)).then(function(r) { return r.json(); }).then(function(d) {
               var prefixes = (d.prefixes || []).slice(0, 100);
-              if (d.error) listDiv.innerHTML = "<span class=\"muted\" style=\"font-size:0.85em;\">" + escapeHtml(d.error || "Error") + "</span>";
-              else if (prefixes.length === 0) listDiv.innerHTML = "<span class=\"muted\" style=\"font-size:0.85em;\">No prefixes</span>";
+              if (d.error) listDiv.innerHTML = "<span class=\"muted muted-085\">" + escapeHtml(d.error || "Error") + "</span>";
+              else if (prefixes.length === 0) listDiv.innerHTML = "<span class=\"muted muted-085\">No prefixes</span>";
               else {
                 listDiv.innerHTML = prefixes.map(function(p) {
                   // Wave-6 Phase C: ad-hoc partial-replace was unsafe
                   // (missed `>`, `&`, `'`). escapeHtml covers all five
                   // entities AND attribute context.
                   var pEsc = escapeHtml(p);
-                  return "<span class=\"bgp-fav-chip bgp-fav-prefix-chip\" data-value=\"" + pEsc + "\" style=\"display:inline-flex; align-items:center; margin:0 0.2rem 0.2rem 0; padding:0.15rem 0.35rem; background:var(--bg); border:1px solid var(--border); border-radius:4px; font-size:0.8em; cursor:pointer;\">" + pEsc + "</span>";
+                  return "<span class=\"bgp-fav-chip bgp-fav-prefix-chip\" data-value=\"" + pEsc + "\">" + pEsc + "</span>";
                 }).join("");
                 listDiv.querySelectorAll(".bgp-fav-prefix-chip").forEach(function(c) {
                   var pVal = c.getAttribute("data-value");
                   c.addEventListener("click", function() { var inp = document.getElementById("bgpResourceInput"); if (inp) { inp.value = pVal; bgpLookup(); } });
                 });
               }
-            }).catch(function() { listDiv.innerHTML = "<span class=\"muted\" style=\"font-size:0.85em;\">Failed to load</span>"; });
+            }).catch(function() { listDiv.innerHTML = "<span class=\"muted muted-085\">Failed to load</span>"; });
           }
         });
       });
@@ -2566,7 +2566,7 @@
           var pEsc = escapeHtml(resource || "—").replace(/"/g, "&quot;");
           var html = "<div class=\"bgp-prefix-row\"><span class=\"bgp-prefix-label\">" + pEsc + "</span>";
           html += "<div class=\"bgp-path-cell\"><span class=\"bgp-path-cell-label\">Path 1</span><div class=\"bgp-aspath-viz\">" + bgpPathToVizHtml(fallbackPath) + "</div></div>";
-          html += "<div class=\"bgp-path-cell\"><span class=\"bgp-path-cell-label\">Path 2</span><div class=\"bgp-aspath-viz\"><span class=\"muted\" style=\"font-size:0.85em;\">—</span></div></div></div>";
+          html += "<div class=\"bgp-path-cell\"><span class=\"bgp-path-cell-label\">Path 2</span><div class=\"bgp-aspath-viz\"><span class=\"muted muted-085\">—</span></div></div></div>";
           perPrefixEl.innerHTML = html;
           perPrefixEl.querySelectorAll(".bgp-aspath-viz").forEach(bgpBindAsPathNodeListeners);
         } else {
@@ -2584,7 +2584,7 @@
         var path1 = (item.paths && item.paths[0]) || [];
         var path2 = (item.paths && item.paths[1]) || [];
         html += "<div class=\"bgp-path-cell\"><span class=\"bgp-path-cell-label\">Path 1</span><div class=\"bgp-aspath-viz\">" + bgpPathToVizHtml(path1) + "</div></div>";
-        html += "<div class=\"bgp-path-cell\"><span class=\"bgp-path-cell-label\">Path 2</span><div class=\"bgp-aspath-viz\">" + (path2.length ? bgpPathToVizHtml(path2) : "<span class=\"muted\" style=\"font-size:0.85em;\">—</span>") + "</div></div>";
+        html += "<div class=\"bgp-path-cell\"><span class=\"bgp-path-cell-label\">Path 2</span><div class=\"bgp-aspath-viz\">" + (path2.length ? bgpPathToVizHtml(path2) : "<span class=\"muted muted-085\">—</span>") + "</div></div>";
         html += "</div>";
       });
       perPrefixEl.innerHTML = html;
@@ -2637,7 +2637,7 @@
         var prevPath = Array.isArray(c.previous_path) ? c.previous_path.join(" ") : (c.previous_path || "");
         var newPath = Array.isArray(c.new_path) ? c.new_path.join(" ") : (c.new_path || "");
         var src = [c.source_as, c.source_owner, c.source_ip].filter(Boolean).join(" / ") || "—";
-        return "<tr><td>" + escapeHtml(c.timestamp || "—") + "</td><td>" + escapeHtml(c.target_prefix || "—") + "</td><td class=\"bgp-path-prev\" style=\"word-break:break-all;\">" + escapeHtml(prevPath) + "</td><td class=\"bgp-path-new\" style=\"word-break:break-all;\">" + escapeHtml(newPath) + "</td><td>" + escapeHtml(src) + "</td></tr>";
+        return "<tr><td>" + escapeHtml(c.timestamp || "—") + "</td><td>" + escapeHtml(c.target_prefix || "—") + "</td><td class=\"bgp-path-prev cell-bgp-path\">" + escapeHtml(prevPath) + "</td><td class=\"bgp-path-new cell-bgp-path\">" + escapeHtml(newPath) + "</td><td>" + escapeHtml(src) + "</td></tr>";
       }).join("");
       wrap.style.display = "block";
     }
@@ -2724,10 +2724,10 @@
         }
         cardsEl.style.display = "grid";
         var html = "";
-        html += "<div class=\"card\" style=\"padding:0.75rem;\"><strong>Announced</strong><br><span style=\"color:var(--success);\">" + (status.announced ? "Yes" : "No") + "</span></div>";
-        html += "<div class=\"card\" style=\"padding:0.75rem;\"><strong>Withdrawn</strong><br><span>" + (status.withdrawn ? "Yes" : "No") + "</span></div>";
-        html += "<div class=\"card\" style=\"padding:0.75rem;\"><strong>Origin AS</strong><br>" + escapeHtml(status.origin_as || "—") + (status.as_name ? " <span class=\"muted\">(" + escapeHtml(status.as_name) + ")</span>" : "") + "</div>";
-        html += "<div class=\"card\" style=\"padding:0.75rem;\"><strong>RPKI</strong><br>" + escapeHtml(status.rpki_status || "Unknown") + "</div>";
+        html += "<div class=\"card card-status-cell\"><strong>Announced</strong><br><span class=\"u-color-success\">" + (status.announced ? "Yes" : "No") + "</span></div>";
+        html += "<div class=\"card card-status-cell\"><strong>Withdrawn</strong><br><span>" + (status.withdrawn ? "Yes" : "No") + "</span></div>";
+        html += "<div class=\"card card-status-cell\"><strong>Origin AS</strong><br>" + escapeHtml(status.origin_as || "—") + (status.as_name ? " <span class=\"muted\">(" + escapeHtml(status.as_name) + ")</span>" : "") + "</div>";
+        html += "<div class=\"card card-status-cell\"><strong>RPKI</strong><br>" + escapeHtml(status.rpki_status || "Unknown") + "</div>";
         cardsEl.innerHTML = html;
         var pct = (visibility && visibility.percentage != null) ? visibility.percentage : null;
         var seeing = (visibility && visibility.probes_seeing != null) ? visibility.probes_seeing : (status.visibility_summary && status.visibility_summary.peers_seeing);
@@ -2972,10 +2972,10 @@
         function cellHtml(hier, name) {
           if (!hier.length) return "<span>" + escapeHtml(name || "—") + "</span>";
           var openOuter = highlightPrefix && hier.some(function(pl) { return (pl.prefixes || []).indexOf(highlightPrefix) !== -1; });
-          var parts = ["<span" + (openOuter ? " class=\"search-highlight\"" : "") + ">" + escapeHtml(name || "—") + "</span>", "<details" + (openOuter ? " open" : "") + " style=\"cursor:pointer; margin-top:0.25rem;\"><summary>Prefix-lists (" + hier.length + ")</summary><ul style=\"margin:0.25rem 0 0 0; padding-left:1rem; list-style:none;\">"];
+          var parts = ["<span" + (openOuter ? " class=\"search-highlight\"" : "") + ">" + escapeHtml(name || "—") + "</span>", "<details" + (openOuter ? " open" : "") + " class=\"summary-details-pl-mt\"><summary>Prefix-lists (" + hier.length + ")</summary><ul class=\"ul-pl-list\">"];
           hier.forEach(function(pl) {
             var plOpen = highlightPrefix && (pl.prefixes || []).indexOf(highlightPrefix) !== -1;
-            parts.push("<li><details" + (plOpen ? " open" : "") + " style=\"cursor:pointer;\"><summary" + (plOpen ? " class=\"search-highlight\"" : "") + ">" + escapeHtml(pl.prefix_list || "—") + "</summary><ul style=\"margin:0.15rem 0 0 1rem; padding:0; list-style:disc; font-size:0.8rem;\">");
+            parts.push("<li><details" + (plOpen ? " open" : "") + " class=\"summary-details-pl\"><summary" + (plOpen ? " class=\"search-highlight\"" : "") + ">" + escapeHtml(pl.prefix_list || "—") + "</summary><ul class=\"ul-pl-sub\">");
             (pl.prefixes || []).forEach(function(p) {
               parts.push("<li" + (highlightPrefix && p === highlightPrefix ? " class=\"search-highlight\"" : "") + ">" + escapeHtml(p) + "</li>");
             });
@@ -3115,11 +3115,10 @@
       function renderLineEditors(lineEditors) {
         if (!leftCol || !Array.isArray(lineEditors)) return;
         var lines = lineEditors.length ? lineEditors : [""];
-        var rowStyle = "height:1.5em; line-height:1.5em; box-sizing:border-box; border-bottom:1px solid rgba(128,128,128,0.12); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-size:1rem;";
         leftCol.innerHTML = lines.map(function(u, i) {
           var num = i + 1;
           var who = (u && u.trim()) ? u : "—";
-          return "<div style=\"" + rowStyle + "\" title=\"" + escapeHtml(who) + "\"><span style=\"opacity:0.7;\">" + num + "</span> " + escapeHtml(who) + "</div>";
+          return "<div class=\"diff-row-content\" title=\"" + escapeHtml(who) + "\"><span class=\"diff-row-prefix\">" + num + "</span> " + escapeHtml(who) + "</div>";
         }).join("");
       }
       function applyNotepadData(d) {
@@ -3241,15 +3240,15 @@
           else if (rows[i].kind === "mod") { countMod++; modIndices.push(i); changeRowIndices.push({ i: i, kind: "mod" }); }
         }
         var addIdx = 0, remIdx = 0, modIdx = 0;
-        var rowStyle = { add: "background:rgba(16,185,129,0.18); border-left:4px solid #10b981;", rem: "background:rgba(244,63,94,0.18); border-left:4px solid #f43f5e;", mod: "background:rgba(245,158,11,0.18); border-left:4px solid #f59e0b;", same: "" };
-        var table = "<table style=\"width:100%; border-collapse:collapse;\"><thead><tr><th style=\"width:2.5rem; text-align:right; padding:0.35rem 0.5rem; border-bottom:1px solid var(--border); color:var(--muted);\">Left #</th><th style=\"width:2rem; text-align:center; padding:0.35rem; border-bottom:1px solid var(--border);\"></th><th style=\"text-align:left; padding:0.35rem 0.5rem; border-bottom:1px solid var(--border);\">Left (before)</th><th style=\"width:2.5rem; text-align:right; padding:0.35rem 0.5rem; border-bottom:1px solid var(--border); color:var(--muted);\">Right #</th><th style=\"text-align:left; padding:0.35rem 0.5rem; border-bottom:1px solid var(--border);\">Right (after)</th></tr></thead><tbody>";
+        var rowClassMap = { add: "row-add", rem: "row-rem", mod: "row-mod", same: "" };
+        var table = "<table class=\"diff-table-v2\"><thead><tr><th class=\"col-num\">Left #</th><th class=\"col-ind\"></th><th>Left (before)</th><th class=\"col-num\">Right #</th><th>Right (after)</th></tr></thead><tbody>";
         for (var i = 0; i < rows.length; i++) {
           var r = rows[i];
-          var style = rowStyle[r.kind] ? " style=\"" + rowStyle[r.kind] + "\"" : "";
+          var rowCls = rowClassMap[r.kind] ? (" " + rowClassMap[r.kind]) : "";
           var leftNum = r.leftNum != null ? r.leftNum : "";
           var rightNum = r.rightNum != null ? r.rightNum : "";
-          var ind = r.kind === "add" ? "<span style=\"color:#10b981;\">+</span>" : r.kind === "rem" ? "<span style=\"color:#f43f5e;\">−</span>" : r.kind === "mod" ? "<span style=\"color:#f59e0b;\">≠</span>" : "";
-          table += "<tr id=\"diff-row-" + i + "\"" + style + "><td style=\"text-align:right; padding:0.35rem 0.5rem; border-bottom:1px solid rgba(128,128,128,0.2); color:var(--muted);\">" + leftNum + "</td><td style=\"text-align:center; padding:0.35rem; border-bottom:1px solid rgba(128,128,128,0.2);\">" + ind + "</td><td style=\"padding:0.35rem 0.5rem; border-bottom:1px solid rgba(128,128,128,0.2); white-space:pre-wrap; word-break:break-all;\">" + escapeHtml(r.left != null ? r.left : "") + "</td><td style=\"text-align:right; padding:0.35rem 0.5rem; border-bottom:1px solid rgba(128,128,128,0.2); color:var(--muted);\">" + rightNum + "</td><td style=\"padding:0.35rem 0.5rem; border-bottom:1px solid rgba(128,128,128,0.2); white-space:pre-wrap; word-break:break-all;\">" + escapeHtml(r.right != null ? r.right : "") + "</td></tr>";
+          var ind = r.kind === "add" ? "<span class=\"diff-ind-add\">+</span>" : r.kind === "rem" ? "<span class=\"diff-ind-rem\">−</span>" : r.kind === "mod" ? "<span class=\"diff-ind-mod\">≠</span>" : "";
+          table += "<tr id=\"diff-row-" + i + "\" class=\"diff-table-v2-row" + rowCls + "\"><td class=\"cell-num\">" + leftNum + "</td><td class=\"cell-ind\">" + ind + "</td><td class=\"cell-text\">" + escapeHtml(r.left != null ? r.left : "") + "</td><td class=\"cell-num\">" + rightNum + "</td><td class=\"cell-text\">" + escapeHtml(r.right != null ? r.right : "") + "</td></tr>";
         }
         table += "</tbody></table>";
         resultEl.innerHTML = table;
@@ -3257,19 +3256,19 @@
           summaryBar.innerHTML = "";
           var addBtn = document.createElement("button");
           addBtn.type = "button";
-          addBtn.style.cssText = "padding:0.35rem 0.75rem; background:rgba(16,185,129,0.25); color:#10b981; border:1px solid #10b981; border-radius:6px; cursor:pointer; font-size:0.9rem;";
+          addBtn.className = "diff-summary-btn is-add";
           addBtn.textContent = "Added " + countAdd;
           addBtn.addEventListener("click", function() { if (addIndices.length) { diffScrollToRow(addIndices[addIdx % addIndices.length]); addIdx++; } });
           summaryBar.appendChild(addBtn);
           var remBtn = document.createElement("button");
           remBtn.type = "button";
-          remBtn.style.cssText = "padding:0.35rem 0.75rem; background:rgba(244,63,94,0.25); color:#f43f5e; border:1px solid #f43f5e; border-radius:6px; cursor:pointer; font-size:0.9rem;";
+          remBtn.className = "diff-summary-btn is-rem";
           remBtn.textContent = "Deleted " + countRem;
           remBtn.addEventListener("click", function() { if (remIndices.length) { diffScrollToRow(remIndices[remIdx % remIndices.length]); remIdx++; } });
           summaryBar.appendChild(remBtn);
           var modBtn = document.createElement("button");
           modBtn.type = "button";
-          modBtn.style.cssText = "padding:0.35rem 0.75rem; background:rgba(245,158,11,0.25); color:#f59e0b; border:1px solid #f59e0b; border-radius:6px; cursor:pointer; font-size:0.9rem;";
+          modBtn.className = "diff-summary-btn is-mod";
           modBtn.textContent = "Changed " + countMod;
           modBtn.addEventListener("click", function() { if (modIndices.length) { diffScrollToRow(modIndices[modIdx % modIndices.length]); modIdx++; } });
           summaryBar.appendChild(modBtn);
@@ -3281,7 +3280,11 @@
           changeRowIndices.forEach(function(o) {
             var m = document.createElement("div");
             var pct = total > 0 ? (o.i / total * 100) : 0;
-            m.style.cssText = "position:absolute; left:2px; width:10px; height:10px; top:" + pct + "%; margin-top:-5px; background:" + (o.kind === "add" ? "rgba(16,185,129,0.7)" : o.kind === "rem" ? "rgba(244,63,94,0.7)" : "rgba(245,158,11,0.7)") + "; cursor:pointer; border-radius:2px; transform:rotate(45deg);";
+            // Static styles via class; only the dynamic `top` stays as a CSSOM
+            // property assignment (CSP3: direct CSSOM property writes are not
+            // governed by style-src-attr in any major browser).
+            m.className = "diff-guide-marker " + (o.kind === "add" ? "is-add" : o.kind === "rem" ? "is-rem" : "is-mod");
+            m.style.top = pct + "%";
             m.title = (o.kind === "add" ? "Added" : o.kind === "rem" ? "Deleted" : "Changed") + " (row " + (o.i + 1) + ")";
             m.addEventListener("click", (function(idx) { return function() { diffScrollToRow(idx); }; })(o.i));
             guideEl.appendChild(m);
@@ -3622,7 +3625,7 @@
             resultsTbody.innerHTML = results.map(function(r) {
               var name = (r.device && (r.device.hostname || r.device.ip)) || "";
               var text = r.error ? ("Error: " + r.error) : (r.result != null ? JSON.stringify(r.result, null, 2) : "");
-              return "<tr><td>" + escapeHtml(name) + "</td><td style=\"white-space:pre-wrap; word-break:break-all; max-width:480px; max-height:200px; overflow:auto; font-size:0.85em;\">" + escapeHtml(text) + "</td></tr>";
+              return "<tr><td>" + escapeHtml(name) + "</td><td class=\"cell-cred-text\">" + escapeHtml(text) + "</td></tr>";
             }).join("");
           }
           var ok = results.filter(function(r) { return !r.error; }).length;
@@ -4310,7 +4313,7 @@
                 resultBody.innerHTML = rows.map(function(r) { return "<tr><td>" + escapeHtml(r[0]) + "</td><td>" + (r[1] ? escapeHtml(String(r[1])) : "") + "</td></tr>"; }).join("");
                 var firstIp = data.translated_ips && data.translated_ips.length ? data.translated_ips[0].trim() : "";
                 if (firstIp) {
-                  var pathRow = "<tr><td>BGP path (Looking Glass)</td><td id=\"natBgpPathCell\" class=\"muted\" style=\"font-size:0.9em;\">Loading…</td></tr>";
+                  var pathRow = "<tr><td>BGP path (Looking Glass)</td><td id=\"natBgpPathCell\" class=\"muted cell-nat-bgp-loading\">Loading…</td></tr>";
                   resultBody.insertAdjacentHTML("beforeend", pathRow);
                   fetch(API + "/api/bgp/looking-glass?prefix=" + encodeURIComponent(firstIp + "/32")).then(function(res) { return res.json(); }).then(function(lg) {
                     var cell = document.getElementById("natBgpPathCell");

@@ -97,16 +97,40 @@ class RequestLogger:
                     "Strict-Transport-Security",
                     "max-age=63072000; includeSubDomains",
                 )
+            # Wave-6 Phase D: tightened from the original Phase-13 baseline.
+            #
+            # Directive rationale (one line each, ordered alphabetically by
+            # directive for diff readability):
+            #
+            #   base-uri 'self'              — block <base href> injection.
+            #   connect-src 'self'           — pin XHR/fetch/WS origin.
+            #   default-src 'self'           — fail-closed fallback.
+            #   form-action 'self'           — block form-jacking redirects.
+            #   frame-ancestors 'none'       — pairs with X-Frame-Options: DENY.
+            #   img-src 'self' data:         — `data:` for inline favicons/SPA.
+            #   object-src 'none'            — kill Flash/legacy plugins.
+            #   script-src 'self'            — no inline scripts, no eval, no CDN.
+            #   style-src 'self'             — no inline styles (Wave-6 Phase D).
+            #   upgrade-insecure-requests    — defends against mixed content.
+            #
+            # The Wave-6 Phase D removal of `'unsafe-inline'` from `style-src`
+            # required the SPA's inline `<style>` block + 239 inline
+            # `style="..."` attributes to be moved to external CSS classes
+            # (see `backend/static/css/extracted-inline.css` and
+            # `backend/static/css/components.css`).
             response.headers.setdefault(
                 "Content-Security-Policy",
                 (
                     "default-src 'self'; "
                     "img-src 'self' data:; "
                     "script-src 'self'; "
-                    "style-src 'self' 'unsafe-inline'; "
+                    "style-src 'self'; "
                     "object-src 'none'; "
                     "base-uri 'self'; "
-                    "frame-ancestors 'none'"
+                    "frame-ancestors 'none'; "
+                    "form-action 'self'; "
+                    "connect-src 'self'; "
+                    "upgrade-insecure-requests"
                 ),
             )
 
