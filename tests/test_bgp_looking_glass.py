@@ -4,6 +4,10 @@ import sys
 import unittest
 from unittest.mock import patch
 
+import pytest as _pytest_for_marker  # noqa: F401
+
+pytestmark = [_pytest_for_marker.mark.integration]
+
 # Ensure project root is on path so "backend" can be imported
 _root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _root not in sys.path:

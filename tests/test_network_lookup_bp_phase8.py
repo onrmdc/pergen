@@ -10,6 +10,10 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
+import pytest as _pytest_for_marker  # noqa: F401
+
+pytestmark = [_pytest_for_marker.mark.integration]
+
 
 def test_find_leaf_requires_ip(client):
     r = client.post("/api/find-leaf", json={})

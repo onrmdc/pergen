@@ -9,6 +9,10 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
+import pytest as _pytest_for_marker  # noqa: F401
+
+pytestmark = [_pytest_for_marker.mark.integration]
+
 
 # =========================================================================== #
 # transceiver_bp.api_transceiver_recover — happy paths                         #

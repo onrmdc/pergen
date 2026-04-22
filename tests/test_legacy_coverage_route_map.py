@@ -10,6 +10,10 @@ We feed minimal-but-realistic payloads to drive coverage.
 """
 from __future__ import annotations
 
+import pytest as _pytest_for_marker  # noqa: F401
+
+pytestmark = [_pytest_for_marker.mark.unit]
+
 
 def _eos_config(*, peer_groups=None, neighbors=None, route_maps=None, prefix_lists=None):
     """Build a minimal EOS show-running-config-json structure."""

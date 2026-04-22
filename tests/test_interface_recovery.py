@@ -4,6 +4,10 @@ import sys
 import unittest
 from unittest.mock import patch
 
+import pytest as _pytest_for_marker  # noqa: F401
+
+pytestmark = [_pytest_for_marker.mark.integration]
+
 _root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _root not in sys.path:
     sys.path.insert(0, _root)

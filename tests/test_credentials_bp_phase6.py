@@ -10,6 +10,10 @@ separate, riskier swap deferred until after the decomposition is done.
 """
 from __future__ import annotations
 
+import pytest as _pytest_for_marker  # noqa: F401
+
+pytestmark = [_pytest_for_marker.mark.integration]
+
 
 def test_credentials_list_returns_array(client):
     r = client.get("/api/credentials")
