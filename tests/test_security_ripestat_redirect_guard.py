@@ -20,10 +20,6 @@ import pytest
 pytestmark = [pytest.mark.security]
 
 
-@pytest.mark.xfail(
-    reason="audit M-01 — bgp_looking_glass.requests.get follows redirects by default",
-    strict=True,
-)
 def test_ripestat_call_does_not_follow_redirects() -> None:
     """A 302 from RIPEStat must not be auto-followed to an internal endpoint."""
     from backend import bgp_looking_glass as lg

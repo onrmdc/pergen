@@ -107,7 +107,9 @@ def test_create_app_registers_health_blueprint(tmp_path, monkeypatch):
     body = r.get_json()
     assert body["service"] == "pergen"
     assert body["status"] == "ok"
-    assert body["config"] == "testing"
+    # Audit (wave-3 Phase 11): /api/v2/health no longer echoes CONFIG_NAME.
+    # Internal posture checks should read app.config directly.
+    assert "config" not in body
     assert body["request_id"]
     assert "T" in body["timestamp"]  # ISO-8601
 

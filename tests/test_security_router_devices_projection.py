@@ -17,10 +17,6 @@ import pytest
 pytestmark = [pytest.mark.security]
 
 
-@pytest.mark.xfail(
-    reason="audit gap — /api/router-devices returns raw inventory rows incl. credential",
-    strict=False,
-)
 def test_router_devices_response_omits_credential_field(
     tmp_path,
     monkeypatch: pytest.MonkeyPatch,

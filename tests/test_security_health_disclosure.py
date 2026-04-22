@@ -35,10 +35,6 @@ def _boot(config_name: str, secret_key: str | None = None):
     return app
 
 
-@pytest.mark.xfail(
-    reason="audit gap — /api/v2/health currently echoes CONFIG_NAME",
-    strict=False,
-)
 @pytest.mark.parametrize("config_name", ["testing", "production"])
 def test_v2_health_does_not_leak_config_name(
     config_name: str,

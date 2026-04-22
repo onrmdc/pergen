@@ -48,8 +48,25 @@ def normalize_resource(raw: str) -> tuple[str, str]:
 
 
 def _get_json(url: str, params: dict | None = None, timeout: int = DEFAULT_TIMEOUT) -> dict | None:
+    """Fetch JSON from a known LG endpoint with SSRF defences.
+
+    Audit M-01: ``allow_redirects=False`` so a 302 from upstream cannot
+    redirect us to an internal IP (e.g. cloud-metadata 169.254.169.254).
+    The hostname pin is enforced at the call-site by using only the
+    hard-coded RIPESTAT_BASE / PEERINGDB_BASE constants — there is no
+    operator-supplied URL path here.
+    """
     try:
-        r = requests.get(url, params=params or {}, timeout=timeout)
+        r = requests.get(
+            url,
+            params=params or {},
+            timeout=timeout,
+            allow_redirects=False,  # audit M-01 — SSRF-via-redirect defence
+        )
+        # Treat any redirect as a hard failure: a legitimate stat.ripe.net
+        # / peeringdb.com response is always 200 with the JSON body inline.
+        if 300 <= r.status_code < 400:
+            return {"_error": f"refused redirect from {url} → {r.headers.get('Location')!r}"}
         r.raise_for_status()
         return r.json()
     except (requests.RequestException, ValueError) as e:

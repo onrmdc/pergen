@@ -126,7 +126,16 @@ def api_arista_run_cmds():
 
 @device_commands_bp.route("/api/router-devices", methods=["GET"])
 def api_router_devices():
-    """Return DCI and/or WAN routers for route-map compare."""
+    """Return DCI and/or WAN routers for route-map compare.
+
+    Audit (wave-3 Phase 11): the response is now projected to a
+    minimal field set — hostname + ip + display metadata. The
+    ``credential`` column is intentionally stripped because it names a
+    server-side credential bucket and leaks the lookup target to
+    unauthenticated SPA callers. ``/api/route-map/run`` re-resolves
+    credentials from inventory by hostname, not from this payload, so
+    no functional regression.
+    """
     scope = (request.args.get("scope") or "all").strip().lower()
     inv_svc = current_app.extensions.get("inventory_service")
     if inv_svc is None:
@@ -142,7 +151,18 @@ def api_router_devices():
         devices = [d for d in devs if _role_lower(d) == "wan-router"]
     else:
         devices = [d for d in devs if _role_lower(d) in ("dci-router", "wan-router")]
-    return jsonify({"devices": devices})
+
+    # Field projection: keep what the SPA actually renders / filters on,
+    # strip everything else (notably ``credential``). The "vendor" and
+    # "model" fields are kept because the route-map page uses them as
+    # display metadata; the SPA's submit path no longer needs them.
+    _SAFE_FIELDS = ("hostname", "ip", "fabric", "site", "hall", "role", "vendor", "model")
+    projected = [
+        {k: d[k] for k in _SAFE_FIELDS if k in d}
+        for d in devices
+        if isinstance(d, dict)
+    ]
+    return jsonify({"devices": projected})
 
 
 # --------------------------------------------------------------------------- #

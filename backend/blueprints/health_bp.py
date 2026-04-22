@@ -43,12 +43,16 @@ def api_v2_health():
     Returns no environment variables, no version strings beyond a
     constant, no stack info.  Safe for unauthenticated probing.
     """
+    # Audit (wave-3 Phase 11): the ``config`` field used to echo
+    # ``app.config["CONFIG_NAME"]`` back to anonymous callers. That
+    # disclosed environment posture (production vs testing) to anyone
+    # who could probe /api/v2/health and was deemed unnecessary.
+    # Internal posture checks should read app.config directly.
     return jsonify(
         {
             "service": "pergen",
             "status": "ok",
             "timestamp": datetime.now(UTC).isoformat(),
-            "config": current_app.config.get("CONFIG_NAME", ""),
             "request_id": getattr(g, "request_id", ""),
         }
     )

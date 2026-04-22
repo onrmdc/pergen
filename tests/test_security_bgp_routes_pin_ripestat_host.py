@@ -30,6 +30,7 @@ def _capture_urls(monkeypatched_get: MagicMock) -> list[str]:
 
 def test_bgp_helpers_only_call_pinned_upstream_hosts() -> None:
     fake_resp = MagicMock()
+    fake_resp.status_code = 200  # audit M-01: helper now checks for redirects
     fake_resp.json.return_value = {"data": {}}
     fake_resp.raise_for_status.return_value = None
 
