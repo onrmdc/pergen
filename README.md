@@ -1,50 +1,57 @@
 # Pergen — Network device panel
 
-> **`refactor/ood-tdd` branch — phases 0–13 complete + post-audit batches 1–4 + audit-wave-1.**
+> **`refactor/ood-tdd` branch — phases 0–13 + audit-wave-1 + parse_output
+> refactor (8 phases) + audit-wave-2.**
 >
 > Pergen has been migrated to a strict OOD layout (App Factory +
 > 12 Blueprints + service layer + RunnerFactory + ParserEngine) on top
 > of a TDD safety net. The legacy 1,577-line `backend/app.py` monolith
-> is now an **87-line shim** holding only the Flask global, SECRET_KEY
-> wiring, and legacy helper aliases. Every route lives in a per-domain
-> blueprint registered through `create_app()`.
+> is an **87-line shim**; the legacy 1,552-line `backend/parse_output.py`
+> god module is now a **151-line shim** delegating to the
+> 31-module `backend/parsers/` package via a vendor-routed `Dispatcher`.
+> Every route lives in a per-domain blueprint registered through
+> `create_app()`.
 >
 > Post-decomposition, four parallel audits (`security-reviewer`,
-> `python-reviewer`, `coverage analysis`, batch-4 sweep) surfaced
-> **38 findings** spanning 7 CRITICAL, 14 HIGH, and 17 MEDIUM. **All
-> are remediated** in batches 1–4 with focused fixes and contract-pinning
-> regression tests. The follow-up **audit-wave-1** (`security-reviewer` +
-> `python-reviewer` + `e2e-runner`) added 7 frontend XSS fixes,
-> 21 new security tests (12 pass / 9 xfail audit-trackers), 8 Python
-> quick-win cleanups (ruff 53 → 44), and a full Playwright E2E layer
-> (62 tests / ~8 s). Every existing API still ships unchanged —
-> **861 tests** (852 passed + 9 xfailed) lock the response shapes
-> byte-for-byte.
+> `python-reviewer`, `coverage analysis`, `e2e-runner`) surfaced
+> **38 findings** in wave 1 (all remediated) and an additional
+> **49 findings in wave 2** (5 NEW HIGH security + 6 HIGH code-review +
+> 23 endpoint-level coverage gaps + 9 missing E2E flows). Wave 2's
+> mitigations: a full parser-package refactor (1,552 → 151 LOC, +33 pp
+> parser coverage), 16 vendor parser unit test files (+196 tests),
+> 12 new security test files (+44 pass + 15 strict-xfail trackers),
+> 4 new Playwright specs (including the previously missing
+> `#inventory` CRUD round-trip), a Vitest scaffold for frontend unit
+> tests (+16 tests), and the Playwright harness fix that prevents flow
+> specs from polluting the operator's real `instance/` dir.
 >
-> **Coverage:** 94 % on the new OOD layer / **74.94 %** whole-project
-> (legacy parsers + RIPEStat helpers drag the average; their public
-> APIs are all covered, only deep parser branches are uncovered).
+> Every existing API still ships unchanged — **1,368 pytest tests +
+> 16 Vitest + 69 Playwright** lock the response shapes byte-for-byte
+> across all 28 golden parser snapshots.
+>
+> **Coverage:** **87 %** on the parser surface (was 67 % pre-wave-2);
+> **78.33 %** whole-project (line 82.47 %, branch 68.13 %); 94 % on
+> the new OOD layer.
 >
 > **Recent UI/Boot work** (post-batch-4): the Phase-13 CSP
 > (`script-src 'self'`) was silently blocking the SPA. Inline `<script>`
 > blocks were extracted to `backend/static/js/{theme-init,app}.js` and
 > JSZip was vendored to `backend/static/vendor/jszip.min.js` (commit
 > `c997fe0`). `run.sh` now boots through `backend.app_factory:create_app`
-> by default (commits `182eafb` / `c997fe0`); booting `FLASK_APP=backend.app`
-> directly serves 404 on every URL because the shim has zero routes.
-> See [`patch_notes.md` v0.1.2](./patch_notes.md) for the full entry.
+> by default; booting `FLASK_APP=backend.app` directly serves 404 on
+> every URL because the shim has zero routes.
 >
-> **Latest:** [`patch_notes.md` v0.2.0-audit-wave-1](./patch_notes.md)
-> — frontend XSS sweep (7 sites), Playwright E2E (62 tests), new
-> security tests (12 pass + 9 xfail audit-trackers), Python quick wins.
+> **Latest:** [`patch_notes.md` v0.3.0-audit-wave-2](./patch_notes.md)
+> — parse_output refactor (8 phases), four-track audit, +516 pytest
+> tests, +16 Vitest tests, Vitest scaffold, Playwright harness fix.
 >
 > See [`patch_notes.md`](./patch_notes.md) for the per-phase log,
 > [`ARCHITECTURE.md`](./ARCHITECTURE.md) for the layered design,
 > [`HOWTOUSE.md`](./HOWTOUSE.md) for the operational guide,
 > [`FUNCTIONS_EXPLANATIONS.md`](./FUNCTIONS_EXPLANATIONS.md) for the
-> per-class reference, and [`TEST_RESULTS.md`](./TEST_RESULTS.md) for
-> the full test matrix and the phase-13 + audit-batch security
-> regression matrix.
+> per-class reference, [`TEST_RESULTS.md`](./TEST_RESULTS.md) for
+> the full test matrix, and `docs/refactor/parse_output_split.md` +
+> `docs/security/audit_2026-04-22.md` for the wave-2 deep-dive reports.
 
 ## Refactor at a glance (Phase 12 final shape)
 
@@ -55,7 +62,7 @@
 | Services    | `backend/services/` (device / credential / inventory / notepad / report / transceiver / run_state_store) | 90–100 % |
 | Repositories | `backend/repositories/` (credential / inventory / notepad / report) | 88–98 % |
 | Runners | `backend/runners/` (Arista eAPI, Cisco NX-API, SSH, interface_recovery) | 51–86 % |
-| Parsers | `backend/parsers/engine.py` + `backend/parse_output.py` | 53–90 % |
+| Parsers | `backend/parsers/` (31 modules: `common/`, `arista/`, `cisco_nxos/`, `generic/`, `dispatcher.py`, `engine.py`) + `backend/parse_output.py` (151-line shim) | **87 %** (was 53 % pre-wave-2) |
 | Pure utils | `backend/utils/` (interface_status, transceiver_display, bgp_helpers, ping) | 87–97 % |
 | Security | `backend/security/` (sanitizer / validator / encryption — PBKDF2 ≥ 600k, AES-128-CBC + HMAC) | 90–92 % |
 | Logging | `backend/logging_config.py` + `backend/request_logging.py` (CSP + HSTS) | 82–95 % |

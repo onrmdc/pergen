@@ -259,8 +259,10 @@ byte-for-byte against the pre-refactor baseline.
 ## 10. Tests
 
 ```bash
-make test                          # full suite (852 passed + 9 xfailed, ~70 s)
-make cov                           # whole-project coverage report (gate 45 %, currently 74.94 %)
+make test                          # full suite (1368 passed + 24 xfailed, ~73 s)
+make cov                           # whole-project coverage report (gate 45 %, currently 78.33 %)
+npm run test:frontend              # Vitest frontend unit tests (16 tests, <1 s)
+npx playwright test                # Playwright E2E (24 specs, ~10–30 s)
 make cov-new                       # OOD-layer-only coverage report (gate 85 %, currently 94 %)
 venv/bin/python -m pytest tests/golden/ -q                # golden / characterisation
 venv/bin/python -m pytest -k phase9 -q                    # phase-9 only

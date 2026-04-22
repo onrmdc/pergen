@@ -17,6 +17,12 @@ playwright-report/
 test-results/
 playwright/.cache/
 
+# Coverage build artifacts
+coverage_audit.json
+.coverage
+htmlcov/
+coverage.xml
+
 
 # ECC (Everything Claude Code)
 .cursor/hooks/

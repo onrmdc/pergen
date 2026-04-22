@@ -47,7 +47,7 @@ business logic, inline credential handling, and inline runner dispatch. After th
 | Vendor runner classes | 0 (procedural) | **3** (Cisco, Arista, SSH) + factory + base | new abstraction |
 | Test files | 6 | **58** | +52 (≈ 9.7×) |
 | Test functions | unknown | **861** (852 pass + 9 xfail) | new TDD safety net |
-| Coverage (line %) | not measured | **74.94 %** | enforced via `Makefile cov` (gate 45 %) and `cov-new` (gate 85 %) |
+| Coverage (line %) | not measured | **78.33 %** combined / **82.47 %** line | enforced via `Makefile cov` (gate 45 %) and `cov-new` (gate 85 %); +20 pp parser surface from wave-2 |
 | End-to-end suite | none | **62 Playwright tests** in 20 specs | Chromium, ~8 s, real Flask boot |
 | Top-level docs | 1 (`README.md`) | **8** (+ARCHITECTURE, HOWTOUSE, FUNCTIONS_EXPLANATIONS, TEST_RESULTS, patch_notes…) | +7 |
 | Tooling files | `run.sh` only | `Makefile`, `pyproject.toml`, `pytest.ini`, `requirements-dev.txt` | full dev loop |
@@ -430,8 +430,8 @@ tests/                                          (44 test modules + helpers)
 | Metric | Value |
 |---|---|
 | Total test modules | **58** |
-| Total test functions | **861** — 852 passed + 9 xfailed (per `TEST_RESULTS.md`) |
-| Coverage — line | **74.94 %** |
+| Total test functions | **1392 pytest** — 1368 passed + 24 xfailed (per `TEST_RESULTS.md`) + 16 Vitest + 69 Playwright |
+| Coverage — line | **82.47 %** (combined 78.33 %) |
 | Coverage — branch | **64 %** (1,449 / 2,270 branches) |
 | Coverage — new OOD layer (blueprints + services + utils) | **94 %** (target gate: 90 %) |
 | Coverage — whole-project gate | 45 % (legacy modules drag the average down) |

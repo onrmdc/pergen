@@ -2,10 +2,13 @@
 
 Generated for the refactor branch after **phases 1–12 decomposition** +
 **audit batches 1–4 remediation** + **UI/CSP/boot-path alignment** +
-**audit-wave-1** (`v0.2.0` — frontend XSS sweep, Playwright E2E,
-Python quick wins).
+**audit-wave-1** + **parse_output refactor (8 phases)** + **audit-wave-2**
+(`v0.3.0` — security audit + Python review + coverage audit + E2E gap
+analysis + 16 vendor parser unit tests + 11 new security tests + 4 new
+Playwright specs + Vitest scaffold).
 All numbers are reproducible by running `python -m pytest -q`,
-`npx playwright test`, and the `coverage` commands shown below.
+`npx playwright test`, `npm run test:frontend`, and the `coverage`
+commands shown below.
 
 ---
 
@@ -13,17 +16,18 @@ All numbers are reproducible by running `python -m pytest -q`,
 
 | Metric | Value |
 |--------|-------|
-| Tests passing (pytest) | **852 / 852** + **9 xfailed** (audit-tracker placeholders) |
-| Total test functions | **861** (852 pass + 9 xfail) |
-| Test files | **58** |
-| Time to run full pytest suite | ~70 s on an M-series Mac (mostly mocked-network blueprint tests) |
-| End-to-end tests (Playwright) | **62 / 62** in ~6–8 s (20 spec files) |
-| Lint (`ruff check`) on new code | **0 errors** (12 blueprints + 7 services + 4 utils + factory + app.py + config + 2 hardened runners + security + request_logging) |
-| Lint (`ruff check`) whole-backend | **44 findings** (down from 53 in audit-wave-1; remainder concentrated in deferred `parse_output.py`) |
-| Coverage — new OOD layer (blueprints + services + utils) | **94 %** (target: 90 %) |
-| Coverage — whole-project | **74.94 %** (was 74.82 % pre-wave-1) |
+| Tests passing (pytest) | **1368 / 1368** + **24 xfailed** (audit-tracker placeholders) |
+| Total test functions | **1392** (1368 pass + 24 xfail) |
+| Test files (Python) | **74** (was 58 pre-wave-2 — +16 vendor parser units, +11 new security tests) |
+| Time to run full pytest suite | ~73 s on an M-series Mac |
+| End-to-end tests (Playwright) | **65 + 4 new** = 69 in 24 spec files (4 new: inventory CRUD, error paths, XSS defence, harness fix) |
+| Frontend unit tests (Vitest) | **16 / 16** in <1 s — new `tests/frontend/unit/` |
+| Lint (`ruff check`) on new code | **0 errors** |
+| Coverage — parser surface (`backend.parsers/*` + shim) | **87 %** (was 67 % pre-wave-2 — +20 pp from 196 vendor unit tests) |
+| Coverage — whole-project | **78.33 %** combined (line 82.47 %, branch 68.13 %) |
 | Audit findings remediated | **38 / 38** (batches 1–4) + **7 frontend XSS** (audit-wave-1) |
-| Audit findings tracked via `xfail` | **9** (await architectural follow-up) |
+| Audit findings tracked via `xfail` | **24** total (9 from wave-1 + 15 new from wave-2 audit) |
+| `backend/parse_output.py` size | **151 lines** (was 1,552 — 90 % reduction; now a back-compat shim over `backend/parsers/*` package, 31 modules) |
 | `backend/app.py` size | **87 lines** (was 1,577 — 95 % reduction) |
 | Routes registered through factory | **55** across **12 blueprints** |
 
@@ -51,7 +55,12 @@ All numbers are reproducible by running `python -m pytest -q`,
 | Legacy coverage (bgp_lg, route_map, find_leaf, nat_lookup, parse_output, runner, loader) | 5 | 152 |
 | Pre-existing unit/integration | 9 | 216 |
 | **Audit-wave-1** (XSS lint guards, vendor integrity, CSP/JSON, BGP host pin, token-gate parsing, /api/diff DoS, audit-log coverage, /api/v2/health, router-devices projection, legacy credstore deprecation, token-gate immutability) | 11 | 12 + 9 xfail = 21 |
-| **Total** | **58** | **861** (852 pass + 9 xfail) |
+| **Audit-wave-2 — vendor parser unit tests** (8 Arista + 8 Cisco NX-OS, lifted parser coverage from 67 → 87 %) | 16 | 196 |
+| **Audit-wave-2 — new security tests** (CSRF, XSS dropdowns, XSS findleaf/NAT, diff line DoS, dev-boot open API, run-result IDOR, report restore method, report empty-id, inventory enum, ssh leak, RIPEStat redirect, parsers no-IO) | 12 | 44 + 15 xfail = 59 |
+| **Audit-wave-2 — parser shim contract** | 1 | 83 |
+| **Audit-wave-2 — parsers/common + dispatcher unit tests** | 9 | 256 |
+| **Vitest frontend unit tests** (escapeHtml, formatBytes, isValidIPv4, parseHash) | 1 | 16 |
+| **Total** | **74** | **1392** (1368 pass + 24 xfail) — pytest only; +16 Vitest |
 
 ### Coverage by layer (new OOD code)
 
@@ -98,7 +107,7 @@ Run: `python -m coverage run --source=backend -m pytest && python -m coverage re
 | Parsers (engine + parse_output) | 53–90 % |
 | Helpers (bgp_looking_glass, route_map_analysis, find_leaf, nat_lookup) | 36–74 % |
 | Other (logging, config, request_logging) | 82–98 % |
-| **WHOLE-PROJECT** | **74.94 %** |
+| **WHOLE-PROJECT** | **78.33 %** (line 82.47 %, branch 68.13 %; was 74.94 % pre-wave-2) |
 
 The legacy parsers (`parse_output.py` 53 %, `find_leaf.py` 36 %,
 `nat_lookup.py` 42 %, `route_map_analysis.py` 51 %) drag the average

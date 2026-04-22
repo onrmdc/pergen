@@ -152,14 +152,61 @@ All runners are stateless; credentials and timeouts are passed per call.
 
 ---
 
-## 10. `backend/parsers/engine.py`
+## 10. `backend/parsers/` package
+
+The 1,552-line `backend/parse_output.py` god module was split into a 31-module
+package in audit-wave-2 (see `docs/refactor/parse_output_split.md`). The
+legacy file is now a 151-line back-compat shim that re-exports every symbol
+from its new home.
+
+### `backend/parsers/dispatcher.py` (NEW in wave-2)
+
+| Symbol | Description |
+|--------|-------------|
+| `Dispatcher(registry=None, field_engine=None)` | Constructor; defaults pull the 16-entry `_DEFAULT_REGISTRY` mapping `custom_parser` strings → vendor parser callables. |
+| `Dispatcher.parse(command_id, raw, parser_config) -> dict` | Routes to the registered vendor callable, or to `GenericFieldEngine` for the field-config branch, or returns `{}` for `parser_config is None`. |
+| `Dispatcher.has(name)` / `Dispatcher.custom_parsers()` | Introspection helpers. |
+
+### `backend/parsers/engine.py`
 
 | Symbol | Description |
 |--------|-------------|
 | `ParserEngine(registry=None)` | Constructor accepts a dict of `{command_id: parser_config}` or builds an empty registry. |
 | `ParserEngine.from_yaml(path)` | Loads the registry from a YAML file (dict-of-dicts shape). |
-| `parse(command_id, raw) -> dict` | Looks up the parser config; delegates to `backend.parse_output.parse_output`.  Unknown command ids return `{}` instead of crashing. |
+| `parse(command_id, raw) -> dict` | Looks up the parser config; delegates to the lazy trampoline `_legacy_parse_output` which forwards to `Dispatcher().parse(...)`. Unknown command ids return `{}` instead of crashing. |
 | `known_command_ids() -> list[str]` | Sorted list of registered ids — useful for `/api/commands`. |
+
+### `backend/parsers/common/*.py`
+
+Pure-utility modules shared across vendor parsers. Each is tested in
+`tests/parsers/common/`.
+
+| Module | Helpers |
+|--------|---------|
+| `json_path.py` | `_get_path`, `_flatten_nested_list`, `_find_key`, `_find_key_containing`, `_find_list`, `_get_val` |
+| `counters.py` | `_count_from_json`, `_count_where`, `_get_from_dict_by_key_prefix` |
+| `regex_helpers.py` | `_extract_regex`, `_count_regex_lines` |
+| `formatting.py` | `_apply_value_subtract_and_suffix`, `_format_power_two_decimals` |
+| `duration.py` | `_parse_relative_seconds_ago`, `_parse_hhmmss_to_seconds` |
+| `arista_envelope.py` | `_arista_result_obj`, `_arista_result_to_dict` |
+
+### `backend/parsers/arista/*.py` and `backend/parsers/cisco_nxos/*.py`
+
+One module per logical parser, named after the operation (uptime, cpu,
+disk, power, transceiver, interface_status, interface_description,
+isis, arp, bgp for Arista; system_uptime, power, transceiver,
+interface_status, interface_detailed, interface_mtu, interface_description,
+isis_brief, arp, arp_suppression for Cisco NX-OS). Each is unit-tested
+in the matching `tests/parsers/<vendor>/test_<name>.py` (16 files,
+196 tests, lifted parser surface coverage from 67 → 87 %).
+
+### `backend/parsers/generic/field_engine.py`
+
+`GenericFieldEngine.apply(raw_output, parser_config) -> dict` — extracted
+from the legacy `else` branch of `parse_output()`. Handles `json_path`
+(with optional `count`/`count_where`/`key_prefix`+`value_key`), `regex`
+(with optional `count`), and the `format_template` second pass. Tested
+in `tests/parsers/generic/test_field_engine.py`.
 
 ---
 

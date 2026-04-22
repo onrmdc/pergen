@@ -2,14 +2,20 @@
   "name": "pergen-e2e",
   "private": true,
   "version": "0.1.0",
-  "description": "End-to-end Playwright tests for the Pergen SPA + Flask backend.",
+  "description": "End-to-end Playwright tests + Vitest frontend unit tests for the Pergen SPA + Flask backend.",
   "scripts": {
     "e2e": "playwright test",
     "e2e:headed": "playwright test --headed",
-    "e2e:report": "playwright show-report"
+    "e2e:report": "playwright show-report",
+    "test:frontend": "vitest run",
+    "test:frontend:watch": "vitest",
+    "test:frontend:coverage": "vitest run --coverage"
   },
   "devDependencies": {
     "@playwright/test": "^1.49.0",
-    "typescript": "^5.4.0"
+    "@vitest/coverage-v8": "^2.1.0",
+    "jsdom": "^25.0.0",
+    "typescript": "^5.4.0",
+    "vitest": "^2.1.0"
   }
 }

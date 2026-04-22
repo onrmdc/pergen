@@ -8,6 +8,121 @@ return shape. Behaviour changes are explicitly noted; otherwise none.
 
 ---
 
+## v0.3.0 — Audit-wave-2: parser refactor + security audit + coverage push
+
+**Scope:** mechanical refactor of the 1,552-line `backend/parse_output.py`
+god module into a 31-module `backend/parsers/` package, plus a four-track
+audit (security, code review, coverage, E2E gap) and the test additions
+that close the gaps the audits surfaced. Zero production-code behaviour
+changes; every audit finding is either fixed in this wave or pinned by a
+new strict-`xfail` test that locks the desired contract for a future PR.
+
+**Refactor — parse_output split (8 phases)**
+
+- `backend/parse_output.py`: 1,552 → **151 LOC** (−90 %, now a back-compat shim).
+- New package `backend/parsers/` with **31 modules** across `common/`,
+  `arista/`, `cisco_nxos/`, `generic/`, plus `dispatcher.py` and the
+  existing `engine.py`. Every legacy import path still resolves via the
+  shim; the contract is locked by `tests/test_parse_output_shim.py`
+  (83 tests covering 36 symbols).
+- Vendor-routed `Dispatcher` registry replaces the if/elif ladder
+  (16 registered `custom_parser` callables; falls back to
+  `GenericFieldEngine` for the field-config branch).
+- `ParserEngine` now depends on `Dispatcher` directly via a lazy
+  trampoline (`_legacy_parse_output`) preserved for the existing test
+  patch target.
+- Plan + final metrics: `docs/refactor/parse_output_split.md`.
+
+**Audits — read-only, four parallel agents**
+
+- `docs/security/audit_2026-04-22.md` (security-reviewer): 7 HIGH /
+  12 MED / 9 LOW. **5 NEW HIGH** beyond the 9 already-tracked xfails:
+  H-01/H-02 XSS in dropdowns + find-leaf, H-03 CSRF (already mitigated
+  in practice — see test_security_csrf_unsafe_methods.py), H-04 diff
+  line-count DoS, H-05 dev/test open-API boot.
+- `docs/code-review/python_review_2026-04-22.md` (python-reviewer):
+  parser refactor graded **A−**; 6 HIGH / 18 MED / 14 LOW / 11 NIT.
+  Top items: silent `except Exception: pass` in 14 parser modules,
+  `Any`-heavy parser signatures, duplicated Cisco envelope unwrap.
+- `docs/test-coverage/coverage_audit_2026-04-22.md`: 78.33 % combined
+  coverage (line 82.47 %, branch 68.13 %); 23 files <80 %; 19 functions
+  with 0 % executed body. **No file at 0 % overall.**
+- `docs/test-coverage/e2e_gap_analysis_2026-04-22.md`: Playwright
+  already wired; 21 specs cover ~5/52 endpoints UI-driven.
+  `#inventory` had **zero** specs — closed in this wave.
+
+**Test additions**
+
+- **16 vendor parser unit test files** in `tests/parsers/arista/` and
+  `tests/parsers/cisco_nxos/` — 196 new tests, lifts parser surface
+  coverage from 67 → **87 %**.
+- **12 new security test files** (44 passing + 15 strict-xfail tracking
+  audit findings):
+  - `test_security_diff_line_dos.py` (H-04, xfail)
+  - `test_security_csrf_unsafe_methods.py` (H-03, **all pass** —
+    routes already reject `text/plain` JSON)
+  - `test_security_xss_dropdown_columns.py` (H-01, xfail × 4)
+  - `test_security_xss_findleaf_natlookup.py` (H-02, xfail × 2)
+  - `test_security_dev_boot_open_api.py` (H-05, 1 xfail + 2 pass)
+  - `test_security_run_result_actor_scoping.py` (M-02, xfail)
+  - `test_security_report_restore_method.py` (M-03, 1 xfail + 1 xfail)
+  - `test_security_report_repo_empty_id.py` (M-05, xfail × 2)
+  - `test_security_inventory_no_enumeration.py` (M-08, **passes** —
+    error message already sanitised)
+  - `test_security_ssh_runner_no_credential_leak.py` (M-11, xfail)
+  - `test_security_ripestat_redirect_guard.py` (M-01, xfail)
+  - `test_security_parsers_no_io.py` (I-04, **17 pass** — pins parser
+    package's no-I/O contract)
+- **4 new Playwright specs** + **harness fix**:
+  - `flow-inventory-crud.spec.ts` — full add → edit → delete round-trip
+    (the P0 gap: `#inventory` had no spec at all).
+  - `flow-error-paths.spec.ts` — 4xx/5xx mock for find-leaf and diff,
+    asserts no SPA crash.
+  - `flow-xss-defence.spec.ts` — regression test for H-02 (`.fail()`
+    until escapeHtml lands in the result tables).
+  - `playwright.config.ts` — webServer now boots with a per-run tmp
+    `PERGEN_INSTANCE_DIR` and `PERGEN_INVENTORY_PATH` so flow specs
+    don't pollute the operator's real `instance/`.
+- **Vitest scaffold** for frontend unit tests:
+  - `vitest.config.ts` (jsdom env, 80 % coverage thresholds).
+  - `backend/static/js/lib/utils.js` — first batch of pure helpers
+    extracted from the SPA IIFE (`escapeHtml`, `formatBytes`,
+    `isValidIPv4`, `parseHash`).
+  - `tests/frontend/unit/utils.spec.ts` — **16 tests, all pass**.
+  - `package.json` adds `npm run test:frontend{,:watch,:coverage}`.
+
+**Numbers**
+
+- pytest: **852 → 1,368 passing** (+516), **9 → 24 xfailed** (+15
+  audit-tracker placeholders).
+- Vitest: **0 → 16 passing** (new framework wired).
+- Combined parser-surface coverage: **54 % → 87 %** (+33 pp).
+- Whole-project coverage: **74.94 % → 78.33 %** (+3.4 pp; the policy
+  target is 80 % and is within striking distance once the deferred
+  vendor modules close their last-mile branches).
+- New documentation: 4 plan docs + 2 audit reports + 1 review report
+  in `docs/security/`, `docs/code-review/`, `docs/test-coverage/`,
+  and `docs/refactor/`.
+
+**Behaviour changes**
+
+- None. All 28 golden snapshots remained byte-identical at every
+  parser-refactor phase gate. The shim re-exports every previously
+  importable symbol (see `tests/test_parse_output_shim.py` — 83
+  contract tests).
+
+**Migration notes**
+
+- New code SHOULD prefer the new package paths
+  (`from backend.parsers.arista.uptime import _parse_arista_uptime`)
+  over the shim (`from backend.parse_output import _parse_arista_uptime`).
+- The shim is intentionally retained for at least one full release
+  cycle to give external callers a migration window.
+- Adding a new vendor parser: see the migration guide at the bottom
+  of `docs/refactor/parse_output_split.md`.
+
+---
+
 ## v0.0.0-phase-0 — Tooling & guardrails
 
 **Scope:** repository tooling only. No backend behaviour changes.

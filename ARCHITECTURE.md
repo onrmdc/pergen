@@ -51,9 +51,20 @@ backend/
 │   └── loader.py                # Pure-function inventory helpers (legacy)
 ├── logging_config.py            # JSON / Colour formatters, redaction
 ├── request_logging.py           # Per-request middleware + CSP/HSTS/X-Frame headers
-├── parsers/
-│   └── engine.py                # ParserEngine class
-├── parse_output.py              # Legacy parser dispatcher
+├── parsers/                     # 31-module parser package (audit-wave-2)
+│   ├── __init__.py
+│   ├── engine.py                # ParserEngine + lazy _legacy_parse_output trampoline
+│   ├── dispatcher.py            # Vendor-routed Dispatcher (16 registered custom_parsers)
+│   ├── common/                  # Shared helpers (json_path, counters, regex_helpers,
+│   │                            # formatting, duration, arista_envelope) — 6 modules
+│   ├── arista/                  # 10 vendor parsers (uptime, cpu, disk, power,
+│   │                            # transceiver, interface_status, interface_description,
+│   │                            # isis, arp, bgp)
+│   ├── cisco_nxos/              # 10 vendor parsers (system_uptime, power, transceiver,
+│   │                            # interface_status, interface_detailed, interface_mtu,
+│   │                            # interface_description, isis_brief, arp, arp_suppression)
+│   └── generic/                 # GenericFieldEngine (field-config fallback)
+├── parse_output.py              # 151-line back-compat shim (was 1,552-line god module)
 ├── repositories/                # Persistence façades
 │   ├── credential_repository.py # encrypted SQLite + 0o600 chmod + secure_delete
 │   ├── inventory_repository.py  # CSV file-backed + csv_path public property
@@ -123,7 +134,7 @@ tests/                           # 861 tests (852 pass + 9 xfail) across 58 file
 └── test_runner_dispatch_coverage.py    # 13 runner.run_device_commands branches
 ```
 
-**Total tests: 861** — 852 passed + 9 xfailed (audit-tracker placeholders),
+**Total tests: 1392 pytest (1368 passed + 24 xfailed) + 16 Vitest + 69 Playwright** — audit-tracker `xfail` count grew to 24 in wave-2,
 all green. Lint clean on every blueprint, service, util, factory,
 app.py, config, hardened runner, security module, and request_logging.
 Audit batch 4 added 24 security-regression tests
@@ -296,7 +307,7 @@ blueprints incrementally.
 The test suite is now stratified across three runtimes, each with
 a different feedback loop and ownership boundary.
 
-### 7.1 Python — pytest (852 passed + 9 xfailed in ~70 s)
+### 7.1 Python — pytest (1368 passed + 24 xfailed in ~73 s)
 
 The classical layer. Owned by every code change. Three sub-tiers:
 
@@ -379,7 +390,7 @@ module split is queued); audit-wave-1 dropped the count from
 ### 7.4 Coverage gates (Makefile)
 
 - `make cov` — whole-project line coverage (gate 45 %, current
-  74.94 %). Legacy parsers / RIPEStat helpers drag the average; their
+  78.33 % post-wave-2; legacy RIPEStat helpers drag the average; their
   public APIs are all covered, only deep parser branches remain.
 - `make cov-new` — new-OOD-layer-only coverage (gate 85 %, current
   94 %). This is the gate that *must* hold green; the global gate
