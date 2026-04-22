@@ -1,5 +1,102 @@
     const API = window.location.origin;
     const $ = (id) => document.getElementById(id);
+    /**
+     * Wave-6 Phase F: single API fetch wrapper.
+     *
+     * All SPA → backend HTTP traffic flows through this function. Phase F.1
+     * is a pure-passthrough refactor (no behaviour change). Phase F.3 grows
+     * it to inject `X-CSRF-Token` from the `<meta name="pergen-csrf">` tag
+     * on unsafe HTTP methods so the dual-path token gate
+     * (X-API-Token OR cookie+CSRF) accepts SPA requests once
+     * `PERGEN_AUTH_COOKIE_ENABLED=1`. Phase F.8 grows it again to redirect
+     * to `/login?next=...` on 401.
+     *
+     * Inputs:
+     *   path : string — absolute path beginning with `/api/...` (the wrapper
+     *          prepends `API` for the operator). May also be a fully-qualified
+     *          URL — used in one inventory edit branch where the URL is built
+     *          before the call.
+     *   opts : standard `fetch` init dict (method/headers/body/credentials/...).
+     *
+     * Outputs: same `Response` Promise as `window.fetch`.
+     *
+     * Security: never logs the body, never logs headers, never reads cookies
+     * from JS (the session cookie is HttpOnly).
+     */
+    async function pergenFetch(path, opts) {
+      opts = opts || {};
+      // Always send the session cookie with same-origin requests so the
+      // cookie path of the gate sees it. (`same-origin` is the fetch
+      // default in modern browsers, but we set it explicitly for clarity
+      // and so the contract holds under any future API URL change.)
+      if (opts.credentials === undefined) opts.credentials = "same-origin";
+      const method = (opts.method || "GET").toUpperCase();
+      // CSRF: inject X-CSRF-Token on state-changing methods if a token is
+      // available. The meta tag is empty string when the cookie path is
+      // disabled, so this is a no-op in legacy X-API-Token mode.
+      if (method !== "GET" && method !== "HEAD" && method !== "OPTIONS") {
+        let csrf = "";
+        try {
+          const meta = document.querySelector('meta[name="pergen-csrf"]');
+          if (meta) csrf = meta.getAttribute("content") || "";
+        } catch (_) { /* no DOM in some test contexts */ }
+        if (csrf) {
+          const headers = new Headers(opts.headers || {});
+          if (!headers.has("X-CSRF-Token")) headers.set("X-CSRF-Token", csrf);
+          opts.headers = headers;
+        }
+      }
+      // Resolve relative paths against the API origin; pass absolute URLs through.
+      const url = (typeof path === "string" && /^https?:\/\//i.test(path)) ? path : (API + path);
+      const res = await fetch(url, opts);
+      // Phase F.8: cookie-mode 401 → redirect to /login?next=<currentHash>
+      // (only when the cookie meta tag is present, indicating the cookie
+      // path is enabled by the server). Legacy token-only deployments
+      // never set the meta tag, so this branch never fires for them.
+      if (res.status === 401) {
+        try {
+          const meta = document.querySelector('meta[name="pergen-csrf"]');
+          if (meta && meta.getAttribute("content")) {
+            const next = encodeURIComponent(window.location.hash || "");
+            window.location.assign("/login?next=" + next);
+          }
+        } catch (_) { /* navigation may be blocked in tests */ }
+      }
+      return res;
+    }
+    // Expose for static-grep test + ad-hoc operator console use.
+    window.pergenFetch = pergenFetch;
+    /**
+     * Wave-6 Phase F: bootstrap the CSRF meta tag from the live session.
+     *
+     * Called on `window.load`. When the cookie auth path is enabled
+     * (`PERGEN_AUTH_COOKIE_ENABLED=1`), `/api/auth/whoami` returns the
+     * actor + CSRF token of the current session; we copy the CSRF token
+     * into `<meta name="pergen-csrf">` so subsequent unsafe-method
+     * pergenFetch calls inject the right `X-CSRF-Token` header.
+     *
+     * In legacy token-only mode `/api/auth/whoami` still works (it's an
+     * exempt route) and returns `{actor: null}` — meta tag stays empty
+     * and the wrapper does not add the header.
+     */
+    async function pergenAuthBoot() {
+      try {
+        // Use pergenFetch for consistency. /api/auth/whoami is GET so
+        // no CSRF header is needed (chicken-and-egg: we're here BECAUSE
+        // the meta tag is empty). The wrapper passes credentials:'same-origin'
+        // by default so the session cookie (if any) rides along.
+        const res = await pergenFetch("/api/auth/whoami");
+        if (!res.ok) return;
+        const j = await res.json();
+        if (j && j.csrf) {
+          const meta = document.querySelector('meta[name="pergen-csrf"]');
+          if (meta) meta.setAttribute("content", j.csrf);
+        }
+      } catch (_) { /* whoami is best-effort */ }
+    }
+    if (typeof window !== "undefined" && typeof document !== "undefined") {
+      window.addEventListener("load", pergenAuthBoot);
+    }
     var globalDeviceErrorsList = [];
     var globalDeviceEvents = [];
     var MAX_DEVICE_EVENTS = 300;
@@ -264,7 +361,7 @@
     let customCommandColumnFilters = {};
 
     async function get(path) {
-      const r = await fetch(API + path);
+      const r = await pergenFetch(path);
       if (!r.ok) throw new Error(await r.text());
       return r.json();
     }
@@ -513,7 +610,7 @@
       pingStatus.textContent = "Pinging…";
       pingBtn.disabled = true;
       try {
-        const res = await fetch(API + "/api/ping", {
+        const res = await pergenFetch("/api/ping", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ devices: devicesCache.map(d => ({ hostname: d.hostname, ip: d.ip })) }),
@@ -642,7 +739,7 @@
       var host = (device.hostname || device.ip || "?").trim();
       var res;
       try {
-        res = await fetch(API + "/api/transceiver/recover", {
+        res = await pergenFetch("/api/transceiver/recover", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ device: device, interfaces: interfaces }),
@@ -671,7 +768,7 @@
       var host = (device.hostname || device.ip || "?").trim();
       var res;
       try {
-        res = await fetch(API + "/api/transceiver/clear-counters", {
+        res = await pergenFetch("/api/transceiver/clear-counters", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ device: device, interface: iface }),
@@ -1045,7 +1142,7 @@
                 var key = transceiverDeviceKey(device);
                 updateHeaderProgressDetailPhase(key, "running", "Transceiver API…");
                 try {
-                  var res = await fetch(API + "/api/transceiver", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ devices: [device] }) });
+                  var res = await pergenFetch("/api/transceiver", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ devices: [device] }) });
                   var data;
                   try {
                     data = await res.json();
@@ -1145,7 +1242,7 @@
           const batch = devices.slice(i, i + PARALLEL);
           const batchResults = await Promise.all(batch.map(async function(device) {
             try {
-              const r = await fetch(API + "/api/custom-command", {
+              const r = await pergenFetch("/api/custom-command", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ device: device, command: customCmd }),
@@ -1188,7 +1285,7 @@
         $("runBtn").disabled = true;
         let runDevices = [];
         try {
-          const runRes = await fetch(API + "/api/run/result/" + encodeURIComponent(lastRunId));
+          const runRes = await pergenFetch("/api/run/result/" + encodeURIComponent(lastRunId));
           if (!runRes.ok) throw new Error("Run not found");
           const runData = await runRes.json();
           runDevices = runData.devices || [];
@@ -1210,7 +1307,7 @@
           const batch = runDevices.slice(i, i + PARALLEL_POST);
           const batchResults = await Promise.all(batch.map(async function(device) {
             try {
-              const r = await fetch(API + "/api/run/device", {
+              const r = await pergenFetch("/api/run/device", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ device: device }),
@@ -1231,7 +1328,7 @@
         }
         let d = {};
         try {
-          const cr = await fetch(API + "/api/run/post/complete", {
+          const cr = await pergenFetch("/api/run/post/complete", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ run_id: lastRunId, device_results: deviceResults }),
@@ -1282,7 +1379,7 @@
         const batch = list.slice(i, i + PARALLEL);
         const batchResults = await Promise.all(batch.map(async function(device) {
           try {
-            const r = await fetch(API + "/api/run/device", {
+            const r = await pergenFetch("/api/run/device", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ device: device }),
@@ -1309,7 +1406,7 @@
       const preName = preReportName(fabricName, roleName, list.length);
       if (successCount > 0) {
         try {
-          const cr = await fetch(API + "/api/run/pre/create", {
+          const cr = await pergenFetch("/api/run/pre/create", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ devices: list, device_results: deviceResults, name: preName }),
@@ -1412,7 +1509,7 @@
       const preRaw = getShowRunRaw(lastPreDeviceResults[idx]);
       const postRaw = getShowRunRaw(lastDeviceResults[idx]);
       try {
-        const r = await fetch(API + "/api/diff", {
+        const r = await pergenFetch("/api/diff", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ pre: preRaw, post: postRaw }),
@@ -2327,7 +2424,7 @@
       if (asnToFetch) {
         if (statusEl) statusEl.textContent = "Adding…";
         if (addBtn) addBtn.disabled = true;
-        fetch(API + "/api/bgp/as-info?asn=" + encodeURIComponent(asnToFetch)).then(function(r) { return r.json(); }).then(function(d) {
+        pergenFetch("/api/bgp/as-info?asn=" + encodeURIComponent(asnToFetch)).then(function(r) { return r.json(); }).then(function(d) {
           doAdd(d.name ? String(d.name).trim() : null);
         }).catch(function() {
           doAdd("Unknown");
@@ -2407,7 +2504,7 @@
           if (!isShown && listDiv.getAttribute("data-loaded") !== "1") {
             listDiv.setAttribute("data-loaded", "1");
             listDiv.textContent = "Loading…";
-            fetch(API + "/api/bgp/announced-prefixes?asn=" + encodeURIComponent(asn)).then(function(r) { return r.json(); }).then(function(d) {
+            pergenFetch("/api/bgp/announced-prefixes?asn=" + encodeURIComponent(asn)).then(function(r) { return r.json(); }).then(function(d) {
               var prefixes = (d.prefixes || []).slice(0, 100);
               if (d.error) listDiv.innerHTML = "<span class=\"muted muted-085\">" + escapeHtml(d.error || "Error") + "</span>";
               else if (prefixes.length === 0) listDiv.innerHTML = "<span class=\"muted muted-085\">No prefixes</span>";
@@ -2508,7 +2605,7 @@
         show(bgpAsNameCache[key]);
         return;
       }
-      fetch(API + "/api/bgp/as-info?asn=" + encodeURIComponent(key)).then(function(r) { return r.json(); }).then(function(d) {
+      pergenFetch("/api/bgp/as-info?asn=" + encodeURIComponent(key)).then(function(r) { return r.json(); }).then(function(d) {
         var name = d.name || null;
         bgpAsNameCache[key] = name;
         show(name);
@@ -2657,7 +2754,7 @@
         newEnd = Math.min(endTs + interval, Math.floor(Date.now() / 1000));
         if (newEnd <= newStart) { if (statusEl) statusEl.textContent = "No later data."; return; }
       }
-      fetch(API + "/api/bgp/bgplay?" + lastBgpQuery + "&starttime=" + newStart + "&endtime=" + newEnd).then(function(r) { return r.json(); }).then(function(bp) {
+      pergenFetch("/api/bgp/bgplay?" + lastBgpQuery + "&starttime=" + newStart + "&endtime=" + newEnd).then(function(r) { return r.json(); }).then(function(bp) {
         if (statusEl) statusEl.textContent = "";
         lastBgplayWindow = { start_ts: newStart, end_ts: newEnd };
         if (lastBgpResult && lastBgpResult.bgplay) lastBgpResult.bgplay = bp;
@@ -2704,11 +2801,11 @@
       var wanRtrWrap = document.getElementById("bgpWanRtrWrap");
       if (wanRtrWrap) wanRtrWrap.style.display = "none";
       Promise.all([
-        fetch(API + "/api/bgp/status?" + q).then(function(r) { return r.json(); }),
-        fetch(API + "/api/bgp/history?" + q).then(function(r) { return r.json(); }),
-        fetch(API + "/api/bgp/visibility?" + q).then(function(r) { return r.json(); }),
-        fetch(API + "/api/bgp/looking-glass?" + q).then(function(r) { return r.json(); }),
-        fetch(API + "/api/bgp/bgplay?" + q).then(function(r) { return r.json(); })
+        pergenFetch("/api/bgp/status?" + q).then(function(r) { return r.json(); }),
+        pergenFetch("/api/bgp/history?" + q).then(function(r) { return r.json(); }),
+        pergenFetch("/api/bgp/visibility?" + q).then(function(r) { return r.json(); }),
+        pergenFetch("/api/bgp/looking-glass?" + q).then(function(r) { return r.json(); }),
+        pergenFetch("/api/bgp/bgplay?" + q).then(function(r) { return r.json(); })
       ]).then(function(results) {
         var status = results[0];
         var history = results[1];
@@ -2743,7 +2840,7 @@
         if (history.current || history.previous) {
           diffWrap.style.display = "block";
           if (history.current && history.previous) {
-            fetch(API + "/api/diff", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ pre: history.previous, post: history.current }) })
+            pergenFetch("/api/diff", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ pre: history.previous, post: history.current }) })
               .then(function(r) { return r.json(); })
               .then(function(d) { if (diffOut) diffOut.textContent = d.diff || "(no diff)"; })
               .catch(function(e) { if (diffOut) diffOut.textContent = "Current:\n" + history.current + "\n\nPrevious:\n" + history.previous; });
@@ -2774,7 +2871,7 @@
           if (wanRtrEl) wanRtrEl.style.display = "block";
           if (wanRtrStatusEl) wanRtrStatusEl.textContent = "Searching WAN RTR devices...";
           if (wanRtrBodyEl) wanRtrBodyEl.innerHTML = "";
-          fetch(API + "/api/bgp/wan-rtr-match?asn=" + encodeURIComponent(asnNum)).then(function(r) { return r.json(); }).then(function(data) {
+          pergenFetch("/api/bgp/wan-rtr-match?asn=" + encodeURIComponent(asnNum)).then(function(r) { return r.json(); }).then(function(data) {
             var list = data.matches || [];
             if (wanRtrStatusEl) wanRtrStatusEl.textContent = list.length ? list.length + " device(s) with router bgp " + asnNum + "." : "No WAN RTR device has router bgp " + asnNum + ".";
             if (wanRtrBodyEl) wanRtrBodyEl.innerHTML = list.length ? list.map(function(m) { return "<tr><td>" + escapeHtml(m.hostname || "") + "</td><td>" + escapeHtml(m.fabric || "—") + "</td><td>" + escapeHtml(m.site || "—") + "</td></tr>"; }).join("") : "<tr><td colspan=\"3\" class=\"muted\">No match.</td></tr>";
@@ -2828,7 +2925,7 @@
       function loadRouterDevices() {
         var scope = (scopeSel && scopeSel.value) || "";
         if (!scope) { listEl.innerHTML = ""; routerDevicesCache = []; if (compareBtn) compareBtn.disabled = true; return; }
-        fetch(API + "/api/router-devices?scope=" + encodeURIComponent(scope)).then(function(r) { return r.json(); }).then(function(data) {
+        pergenFetch("/api/router-devices?scope=" + encodeURIComponent(scope)).then(function(r) { return r.json(); }).then(function(data) {
           routerDevicesCache = data.devices || [];
           listEl.innerHTML = routerDevicesCache.map(function(d, i) {
             return "<div class=\"device-row\" data-index=\"" + i + "\"><input type=\"checkbox\" data-index=\"" + i + "\" /><span class=\"hostname\">" + escapeHtml(d.hostname || "") + "</span><span class=\"ip\">" + escapeHtml(d.ip || "") + "</span></div>";
@@ -3016,7 +3113,7 @@
         if (!devices.length) { if (statusEl) statusEl.textContent = "Select at least one device."; return; }
         if (statusEl) statusEl.textContent = "Loading…";
         compareBtn.disabled = true;
-        fetch(API + "/api/route-map/run", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ devices: devices }) })
+        pergenFetch("/api/route-map/run", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ devices: devices }) })
           .then(function(r) { return r.json(); })
           .then(function(data) {
             compareBtn.disabled = false;
@@ -3060,7 +3157,7 @@
           if (!devices.length) { if (prefixStatusEl) prefixStatusEl.textContent = "No routers in scope. Select scope first."; return; }
           if (prefixStatusEl) prefixStatusEl.textContent = "Loading " + devices.length + " router(s)…";
           if (prefixSearchBtn) prefixSearchBtn.disabled = true;
-          fetch(API + "/api/route-map/run", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ devices: devices }) })
+          pergenFetch("/api/route-map/run", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ devices: devices }) })
           .then(function(r) { return r.json(); })
           .then(function(data) {
             if (prefixSearchBtn) prefixSearchBtn.disabled = false;
@@ -3087,7 +3184,7 @@
           runCompareWithDevices(routerDevicesCache);
         } else {
           if (prefixStatusEl) prefixStatusEl.textContent = "Loading scope…";
-          fetch(API + "/api/router-devices?scope=" + encodeURIComponent(scope)).then(function(r) { return r.json(); }).then(function(data) {
+          pergenFetch("/api/router-devices?scope=" + encodeURIComponent(scope)).then(function(r) { return r.json(); }).then(function(data) {
             routerDevicesCache = data.devices || [];
             runCompareWithDevices(routerDevicesCache);
           }).catch(function() {
@@ -3130,7 +3227,7 @@
         renderLineEditors(editors.slice(0, lines.length));
       }
       function loadNotepad() {
-        fetch(API + "/api/notepad").then(function(r) { return r.json(); }).then(function(d) {
+        pergenFetch("/api/notepad").then(function(r) { return r.json(); }).then(function(d) {
           applyNotepadData(d);
           setStatus("Synced. Changes sync live for everyone.");
         }).catch(function() { setStatus("Failed to load."); });
@@ -3140,7 +3237,7 @@
         var user = (nameInput && nameInput.value) ? nameInput.value.trim() : "";
         if (!user) { setStatus("Enter your name above, then edit."); return; }
         try { localStorage.setItem(NOTEPAD_NAME_KEY, user); } catch (e) {}
-        fetch(API + "/api/notepad", {
+        pergenFetch("/api/notepad", {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ content: content, user: user })
@@ -3153,7 +3250,7 @@
       if (notepadPollTimer) clearInterval(notepadPollTimer);
       notepadPollTimer = setInterval(function() {
         if (location.hash !== "#notepad") return;
-        fetch(API + "/api/notepad").then(function(r) { return r.json(); }).then(function(d) {
+        pergenFetch("/api/notepad").then(function(r) { return r.json(); }).then(function(d) {
           if (document.activeElement !== ta) applyNotepadData(d);
         }).catch(function() {});
       }, 2000);
@@ -3605,7 +3702,7 @@
         if (statusEl) statusEl.textContent = "Sending to " + selected.length + " device(s)…";
         submitBtn.disabled = true;
         var promises = selected.map(function(device) {
-          return fetch(API + "/api/arista/run-cmds", {
+          return pergenFetch("/api/arista/run-cmds", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ device: device, cmds: cmds })
@@ -3888,10 +3985,10 @@
       const data = invFormData();
       if (!data.hostname) { alert("Hostname is required."); return; }
       const isEdit = !!invEditCurrentHostname;
-      const url = API + "/api/inventory/device";
+      const url = "/api/inventory/device";
       const body = isEdit ? { ...data, current_hostname: invEditCurrentHostname } : data;
       try {
-        const r = await fetch(url, {
+        const r = await pergenFetch(url, {
           method: isEdit ? "PUT" : "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body),
@@ -3908,7 +4005,7 @@
       if (!invEditCurrentHostname) return;
       if (!confirm("Delete device " + invEditCurrentHostname + "?")) return;
       try {
-        const r = await fetch(API + "/api/inventory/device?hostname=" + encodeURIComponent(invEditCurrentHostname), { method: "DELETE" });
+        const r = await pergenFetch("/api/inventory/device?hostname=" + encodeURIComponent(invEditCurrentHostname), { method: "DELETE" });
         const j = await r.json();
         if (!r.ok) throw new Error(j.error || "Request failed");
         invModalHide();
@@ -3969,7 +4066,7 @@
         rows.push(row);
       }
       try {
-        const r = await fetch(API + "/api/inventory/import", {
+        const r = await pergenFetch("/api/inventory/import", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ rows }),
@@ -3986,7 +4083,7 @@
       const invStatus = $("invStatus");
       if (invStatus) invStatus.textContent = "Loading…";
       try {
-        const r = await fetch(API + "/api/inventory");
+        const r = await pergenFetch("/api/inventory");
         const data = await r.json();
         if (!r.ok) throw new Error(data.error || "Failed to load inventory");
         inventoryCache = data.inventory || [];
@@ -4059,7 +4156,7 @@
         return;
       }
       if (resultWrap) resultWrap.style.display = "none";
-      fetch(API + "/api/devices-by-tag?tag=leaf-search")
+      pergenFetch("/api/devices-by-tag?tag=leaf-search")
         .then(function(r) { return r.json(); })
         .then(function(tagRes) {
           const devs = tagRes.devices || [];
@@ -4110,7 +4207,7 @@
           }
           devs.forEach(function(d) {
             var name = d.hostname || d.ip || "?";
-            fetch(API + "/api/find-leaf-check-device", {
+            pergenFetch("/api/find-leaf-check-device", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ ip: ip, hostname: d.hostname || undefined, device_ip: d.ip || undefined }),
@@ -4175,7 +4272,7 @@
       }
       if (resultWrap) resultWrap.style.display = "none";
       if (debugOut) debugOut.style.display = "none";
-      fetch(API + "/api/devices-by-tag?tag=leaf-search")
+      pergenFetch("/api/devices-by-tag?tag=leaf-search")
         .then(function(r) { return r.json(); })
         .then(function(tagRes) {
           const leafDevs = tagRes.devices || [];
@@ -4242,7 +4339,7 @@
           var leafDone = 0;
           leafDevs.forEach(function(d) {
             var name = d.hostname || d.ip || "?";
-            fetch(API + "/api/find-leaf-check-device", {
+            pergenFetch("/api/find-leaf-check-device", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ ip: srcIp, hostname: d.hostname || undefined, device_ip: d.ip || undefined }),
@@ -4265,13 +4362,13 @@
             return;
           }
           function startFirewallStep() {
-            fetch(API + "/api/devices-by-tag?tag=natlookup&fabric=" + encodeURIComponent(fabric) + "&site=" + encodeURIComponent(site))
+            pergenFetch("/api/devices-by-tag?tag=natlookup&fabric=" + encodeURIComponent(fabric) + "&site=" + encodeURIComponent(site))
               .then(function(r) { return r.json(); })
               .then(function(fwRes) {
                 var fwDevs = fwRes.devices || [];
                 addListRows(fwDevs.map(function(d) { return { hostname: d.hostname || d.ip, ip: d.ip }; }), "FW:");
                 if (statusEl) statusEl.textContent = "Querying firewall(s)..."; statusEl.className = "ping-status";
-                return fetch(API + "/api/nat-lookup", {
+                return pergenFetch("/api/nat-lookup", {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
                   body: JSON.stringify({
@@ -4315,7 +4412,7 @@
                 if (firstIp) {
                   var pathRow = "<tr><td>BGP path (Looking Glass)</td><td id=\"natBgpPathCell\" class=\"muted cell-nat-bgp-loading\">Loading…</td></tr>";
                   resultBody.insertAdjacentHTML("beforeend", pathRow);
-                  fetch(API + "/api/bgp/looking-glass?prefix=" + encodeURIComponent(firstIp + "/32")).then(function(res) { return res.json(); }).then(function(lg) {
+                  pergenFetch("/api/bgp/looking-glass?prefix=" + encodeURIComponent(firstIp + "/32")).then(function(res) { return res.json(); }).then(function(lg) {
                     var cell = document.getElementById("natBgpPathCell");
                     if (!cell) return;
                     if (lg.error) { cell.textContent = lg.error; return; }
@@ -4406,7 +4503,7 @@
     }
     async function refreshSavedReportsList() {
       try {
-        var r = await fetch(API + "/api/reports");
+        var r = await pergenFetch("/api/reports");
         var data = await r.json();
         if (r.ok && Array.isArray(data.reports)) {
           savedReportsListCache = data.reports;
@@ -4467,7 +4564,7 @@
     async function deleteSavedReport(run_id) {
       if (!run_id) return;
       try {
-        await fetch(API + "/api/reports/" + encodeURIComponent(run_id), { method: "DELETE" });
+        await pergenFetch("/api/reports/" + encodeURIComponent(run_id), { method: "DELETE" });
       } catch (e) {}
       await refreshSavedReportsList();
     }
@@ -4661,7 +4758,7 @@
           // Audit M-03: restore is now POST /api/reports/<id>/restore
           // (the legacy GET ?restore=1 is rejected with 405). The fetch
           // does both the read and the run-state write atomically.
-          var getRes = await fetch(API + "/api/reports/" + encodeURIComponent(report.run_id));
+          var getRes = await pergenFetch("/api/reports/" + encodeURIComponent(report.run_id));
           var fullReport = await getRes.json();
           if (!getRes.ok) {
             $("runStatus").textContent = "Could not load report: " + (fullReport.error || getRes.status);
@@ -4669,7 +4766,7 @@
           }
           // Push the report back into the in-memory run-state store so the
           // POST run path can pick it up.
-          await fetch(API + "/api/reports/" + encodeURIComponent(report.run_id) + "/restore", { method: "POST" });
+          await pergenFetch("/api/reports/" + encodeURIComponent(report.run_id) + "/restore", { method: "POST" });
           report = fullReport;
           devices = report.devices || [];
           deviceResults = report.device_results || [];
@@ -4683,7 +4780,7 @@
         return;
       }
       try {
-        var restoreRes = await fetch(API + "/api/run/pre/restore", {
+        var restoreRes = await pergenFetch("/api/run/pre/restore", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -4816,7 +4913,7 @@
       const deviceResults = [];
       for (let i = 0; i < devices.length; i++) {
         try {
-          const r = await fetch(API + "/api/run/device", {
+          const r = await pergenFetch("/api/run/device", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ device: devices[i] }),
@@ -4838,7 +4935,7 @@
       var reportRole = (devices.length && devices[0].role) ? devices[0].role : "";
       resultsSavedName = preReportName(reportFabric, reportRole, devices.length);
       try {
-        const cr = await fetch(API + "/api/run/pre/create", {
+        const cr = await pergenFetch("/api/run/pre/create", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ devices: devices, device_results: deviceResults, name: resultsSavedName }),
@@ -5043,7 +5140,7 @@
       }
       this.disabled = true;
       try {
-        const r = await fetch(API + "/api/run/post", {
+        const r = await pergenFetch("/api/run/post", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ run_id: resultsRunId }),
@@ -5254,7 +5351,7 @@
           var name = btn.getAttribute("data-name");
           $("credMsg").textContent = "Validating…";
           $("credMsg").className = "credential-msg";
-          fetch(API + "/api/credentials/" + encodeURIComponent(name) + "/validate", { method: "POST" })
+          pergenFetch("/api/credentials/" + encodeURIComponent(name) + "/validate", { method: "POST" })
             .then(function(r) { return r.json(); })
             .then(function(d) {
               if (d.ok) {
@@ -5276,7 +5373,7 @@
       tbody.querySelectorAll(".cred-delete").forEach(function(btn) {
         btn.addEventListener("click", function() {
           var name = btn.getAttribute("data-name");
-          fetch(API + "/api/credentials/" + encodeURIComponent(name), { method: "DELETE" })
+          pergenFetch("/api/credentials/" + encodeURIComponent(name), { method: "DELETE" })
             .then(function(r) { return r.json().then(function(d) { return { ok: r.ok, d: d }; }); })
             .then(function(o) {
               $("credMsg").textContent = o.ok ? "Deleted." : (o.d && o.d.error ? o.d.error : "Error");
@@ -5307,7 +5404,7 @@
       const body = method === "api_key"
         ? { name: name, method: "api_key", api_key: ($("credApiKey").value || "").trim() }
         : { name: name, method: "basic", username: ($("credUsername").value || "").trim(), password: ($("credPassword").value || "").trim() };
-      fetch(API + "/api/credentials", {
+      pergenFetch("/api/credentials", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),

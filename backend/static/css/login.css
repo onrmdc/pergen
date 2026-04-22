@@ -1,0 +1,89 @@
+/* Wave-6 Phase F: minimal login page styling.
+ * CSP-compliant — loaded from a `<link rel="stylesheet">` so style-src 'self'
+ * is satisfied without unsafe-inline. Mirrors the look of the SPA's other
+ * card-style panels using existing color tokens.
+ */
+.login-shell {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 1rem;
+  background: var(--bg, #0e1117);
+}
+
+.login-card {
+  width: 100%;
+  max-width: 360px;
+  background: var(--panel, #161b22);
+  color: var(--fg, #c9d1d9);
+  border: 1px solid var(--border, #30363d);
+  border-radius: 8px;
+  padding: 2rem 1.75rem;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  display: flex;
+  flex-direction: column;
+}
+
+.login-title {
+  margin: 0 0 0.25rem 0;
+  font-size: 1.5rem;
+  font-weight: 600;
+  text-align: center;
+}
+
+.login-sub {
+  margin: 0 0 1.5rem 0;
+  font-size: 0.875rem;
+  color: var(--fg-muted, #8b949e);
+  text-align: center;
+}
+
+.login-label {
+  display: block;
+  margin: 0.75rem 0 0.25rem 0;
+  font-size: 0.8125rem;
+  font-weight: 500;
+}
+
+.login-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.5rem 0.625rem;
+  font-size: 0.9375rem;
+  background: var(--input-bg, #0d1117);
+  color: var(--fg, #c9d1d9);
+  border: 1px solid var(--border, #30363d);
+  border-radius: 4px;
+}
+
+.login-input:focus {
+  outline: none;
+  border-color: var(--accent, #58a6ff);
+  box-shadow: 0 0 0 3px rgba(88, 166, 255, 0.25);
+}
+
+.login-btn {
+  margin-top: 1.25rem;
+  padding: 0.625rem 1rem;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: #ffffff;
+  background: var(--accent, #2f81f7);
+  border: 1px solid var(--accent, #2f81f7);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.login-btn:hover { filter: brightness(1.1); }
+.login-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+.login-error {
+  margin: 0.75rem 0 0 0;
+  padding: 0.5rem 0.625rem;
+  font-size: 0.8125rem;
+  color: #ffa198;
+  background: rgba(248, 81, 73, 0.1);
+  border: 1px solid rgba(248, 81, 73, 0.4);
+  border-radius: 4px;
+}

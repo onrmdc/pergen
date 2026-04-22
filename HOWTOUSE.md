@@ -82,6 +82,7 @@ to `actor=shared`.
 |----------|---------|---------|
 | `PERGEN_API_TOKEN` | unset (dev) / required (prod) | Single shared bearer. Constant-time compare via `hmac.compare_digest`. `/api/health`, `/api/v2/health`, `/` (SPA) always exempt. |
 | `PERGEN_API_TOKENS` | unset | Per-actor format `actor1:tok1,actor2:tok2`. Preferred over `PERGEN_API_TOKEN` for accountability. |
+| `PERGEN_AUTH_COOKIE_ENABLED` | unset (cookie path off) | When `=1`, the SPA can authenticate via `POST /api/auth/login` → HttpOnly signed-session cookie + `X-CSRF-Token` header instead of pasting `X-API-Token` everywhere. The legacy `X-API-Token` path keeps working unchanged for CI / curl. See **§4.5 SPA cookie auth** below. |
 | `PERGEN_REQUIRE_DESTRUCTIVE_CONFIRM` | unset (dev) / on (prod) | When `=1`, `/api/transceiver/recover` and `/api/transceiver/clear-counters` require an `X-Confirm-Destructive: yes` header. Returns 403 otherwise. |
 | `PERGEN_ALLOW_INTERNAL_PING` | unset | When `=1`, `/api/ping` is allowed against loopback / link-local / multicast / private / reserved IPs. Default-deny prevents the endpoint being abused as an internal-network scanner. |
 | `PERGEN_ALLOW_DEBUG_RESPONSES` | unset | When `=1`, `/api/nat-lookup` honours `debug=true` in the request body (otherwise the field is suppressed to prevent Palo Alto API body leakage). |
@@ -151,6 +152,69 @@ gunicorn -w 4 -b 0.0.0.0:8000 'backend.app_factory:create_app("production")'
 
 `ProductionConfig.validate()` raises `RuntimeError` on the default
 `SECRET_KEY`, so a misconfigured deploy fails before binding to a port.
+
+### 4.5 SPA cookie auth (Wave-6 Phase F, opt-in)
+
+By default Pergen's API gate accepts only the `X-API-Token` header.
+That works for CI / curl / scripts, but every browser hit needs the
+operator to paste the token somewhere — there is no in-app login UI in
+the legacy posture.
+
+Wave-6 Phase F adds a second auth path: a server-rendered `/login`
+form that, on success, sets a Flask-signed `pergen_session` cookie
+(`HttpOnly; SameSite=Lax`; `Secure` in prod) carrying `{actor, csrf}`.
+Every state-changing API call from the SPA then carries the cookie
+**and** an `X-CSRF-Token` header pulled from `<meta name="pergen-csrf">`
+by the `pergenFetch(...)` wrapper. The token gate accepts EITHER:
+
+1. `X-API-Token: <per-actor-token>` (legacy, machine clients), OR
+2. The signed `pergen_session` cookie + matching `X-CSRF-Token` for
+   POST/PUT/DELETE/PATCH (browsers).
+
+**Enable it:**
+
+```bash
+export PERGEN_AUTH_COOKIE_ENABLED=1
+export PERGEN_API_TOKENS="alice:$(openssl rand -hex 32),bob:$(openssl rand -hex 32)"
+```
+
+The `password` field on `POST /api/auth/login` is the operator's
+per-actor API token from `PERGEN_API_TOKENS` — there is no separate
+password store. Pergen's identity model remains a small set of named
+operator tokens; the cookie path just stops the operator from having to
+paste them into the browser DevTools every time.
+
+**Routes added:**
+
+| Route | Purpose |
+|-------|---------|
+| `GET  /login`               | Server-rendered login form (CSP-clean: external CSS + JS only). |
+| `POST /api/auth/login`      | Body `{username, password}`. On match → `Set-Cookie: pergen_session=...; HttpOnly`. Returns `{ok: true, csrf: <token>}`. |
+| `POST /api/auth/logout`     | Clears the session cookie. Idempotent. |
+| `GET  /api/auth/whoami`     | Returns `{actor, csrf}` for a logged-in browser, `{actor: null}` otherwise. The SPA calls this on boot to populate the CSRF meta tag. |
+
+**Defences shipped with this path:**
+
+* Session fixation: `session.clear()` is called on every login before
+  the new keys are set, so a pre-planted cookie cannot survive.
+* Constant-time credential check (`hmac.compare_digest`) on the token
+  comparison, including a dummy compare on unknown usernames so the
+  response time is not a username-existence oracle.
+* Login throttling: 10 fails / 60s per `(remote_addr, username)` →
+  429 with `Retry-After`. In-process LRU bounded at 1024 entries.
+* Audit lines on `app.audit`: `auth.login.success`, `auth.login.fail`,
+  `auth.login.throttled`, `auth.logout`, `auth.csrf.mismatch`.
+
+**Recommended deployment posture (unchanged):** Pergen still expects
+to run on a private network. The cookie auth path is the second layer
+of defence, not a substitute for not exposing `/api/*` to the public
+internet. Run behind a VPN / zero-trust mesh / authenticating proxy
+the same way you would have without the cookie path.
+
+**Backwards compatibility:** the legacy `X-API-Token` header is
+ALWAYS accepted, even when `PERGEN_AUTH_COOKIE_ENABLED=1`. CI scripts
+and `curl` commands continue to work unchanged. The CSRF check only
+applies to requests authenticating via the cookie path.
 
 ---
 

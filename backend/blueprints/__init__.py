@@ -13,6 +13,7 @@ Phase-9 ships ``inventory_bp`` and ``notepad_bp`` (full extraction from
 the legacy ``backend/app.py``); credentials, reports, run, transceiver,
 bgp, find_leaf, and nat blueprints follow in subsequent phases.
 """
+from backend.blueprints.auth_bp import auth_bp
 from backend.blueprints.bgp_bp import bgp_bp
 from backend.blueprints.commands_bp import commands_bp
 from backend.blueprints.credentials_bp import credentials_bp
@@ -27,6 +28,7 @@ from backend.blueprints.runs_bp import runs_bp
 from backend.blueprints.transceiver_bp import transceiver_bp
 
 __all__ = [
+    "auth_bp",
     "bgp_bp",
     "commands_bp",
     "credentials_bp",

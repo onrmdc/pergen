@@ -221,7 +221,17 @@ files (12 pass + 9 xfail) and a Playwright E2E layer (20 specs /
 8. Re-init the legacy credential store (so `SECRET_KEY` changes
    propagate during tests).
 9. Install the API-token gate (`_install_api_token_gate`) — fail-closed
-   in production per audit C-1.
+   in production per audit C-1. **Wave-6 Phase F made the gate dual-path:**
+   it now accepts EITHER the legacy `X-API-Token` header (CI / curl) OR
+   a Flask-signed `pergen_session` cookie + matching `X-CSRF-Token` header
+   (browsers, when `PERGEN_AUTH_COOKIE_ENABLED=1`). The cookie path is
+   served by the new `auth_bp` (`POST /api/auth/login`,
+   `POST /api/auth/logout`, `GET /api/auth/whoami`, `GET /login`).
+   Per-actor accountability is preserved on both paths — `g.actor` is
+   populated identically so audit lines and wave-3 RunStateStore actor
+   scoping continue to work unchanged. Token resolution is still wave-3
+   immutable: tokens are snapshotted into a `MappingProxyType` at
+   `create_app` time and never re-read from `os.environ` per request.
 10. Stamp `CONFIG_NAME` on `app.config` and return.
 
 After Phase 12 the factory is **the only supported entry point** —
@@ -427,6 +437,9 @@ into the architecture.  Each item is testable from
 |---------|-------|----------------|----------|
 | **Production fail-closed**: `create_app("production")` raises `RuntimeError` unless `PERGEN_API_TOKEN(S)` is set with ≥32-char tokens | App factory | `backend/app_factory.py::_install_api_token_gate` | C-1 |
 | **Per-actor token routing**: `PERGEN_API_TOKENS=alice:tok,bob:tok` resolves to `flask.g.actor`; audit log lines record `actor=<name>` | App factory + blueprints | `backend/app_factory.py::_parse_actor_tokens`, `backend/blueprints/{credentials,transceiver}_bp.py` | C-2 |
+| **SPA cookie auth (opt-in via `PERGEN_AUTH_COOKIE_ENABLED=1`)**: `POST /api/auth/login` issues a Flask-signed `pergen_session` cookie + CSRF token; `pergenFetch(...)` injects `X-CSRF-Token` from `<meta name="pergen-csrf">` on every unsafe method. Gate accepts EITHER `X-API-Token` OR cookie+CSRF. | App factory + new auth blueprint | `backend/blueprints/auth_bp.py`, `backend/security/csrf.py`, `backend/static/js/app.js::pergenFetch` | Wave-6 Phase F |
+| **Session fixation defence**: `session.clear()` is called on every login before populating new keys; pre-planted attacker cookies cannot survive a successful login | Auth blueprint | `backend/blueprints/auth_bp.py::api_auth_login` | Wave-6 Phase F |
+| **Login throttling**: 10 fails / 60s per `(remote_addr, username)` → 429 + `Retry-After`; LRU bounded at 1024 entries | Auth blueprint | `backend/blueprints/auth_bp.py::_throttle_*` | Wave-6 Phase F |
 | **Hard `cryptography` import**: legacy `credential_store` no longer falls back to base64; `ImportError` at module load on a corrupt venv | Crypto | `backend/credential_store.py` | C-3 |
 | **Hard `defusedxml` import**: declared in `requirements.txt`; the silent `xml.etree` fallback is removed | XML adapter | `backend/nat_lookup.py` | H-1 |
 | **Inventory binding** on every device-targeted route: caller-supplied `credential` / `vendor` / `model` are ignored; the inventory CSV row is the source of truth | Blueprints | `backend/blueprints/runs_bp.py`, `device_commands_bp.py`, `transceiver_bp.py` | H-2 / H-7 |

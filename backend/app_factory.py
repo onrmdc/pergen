@@ -104,6 +104,21 @@ def create_app(config_name: str = "default") -> Flask:
     # production mode and fail-closed BEFORE any side effect.
     app.config["CONFIG_NAME"] = config_name
 
+    # Wave-6 Phase F: session cookie hardening for the new cookie auth path.
+    # HttpOnly defends against JS-based exfiltration; SameSite=Lax defends
+    # against cross-site POSTs (in addition to the X-CSRF-Token check).
+    # Secure is opt-in via app.config["SESSION_COOKIE_SECURE"] (True in
+    # production, False locally) so dev over plain HTTP still receives
+    # the cookie back from the browser.
+    #
+    # Note: direct assignment (NOT setdefault) — Flask pre-populates
+    # SESSION_COOKIE_NAME / SESSION_COOKIE_HTTPONLY with its own
+    # defaults at app construction time, so setdefault would be a no-op.
+    app.config["SESSION_COOKIE_HTTPONLY"] = True
+    app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+    app.config["SESSION_COOKIE_SECURE"] = config_name == "production"
+    app.config["SESSION_COOKIE_NAME"] = "pergen_session"
+
     # --- Step 5: structured logging. ------------------------------------- #
     LoggingConfig.configure(app)
     _log.debug("logging configured for %s", config_name)
@@ -161,7 +176,12 @@ def _parse_actor_tokens(raw: str) -> dict[str, str]:
 
 
 def _install_api_token_gate(app: Flask) -> None:
-    """Install an ``X-API-Token`` gate on every /api/* route.
+    """Install the dual-path API auth gate on every /api/* route.
+
+    Wave-6 Phase F: the gate now accepts EITHER the legacy
+    ``X-API-Token`` header (for CI / curl / machine clients) OR a
+    Flask-signed session cookie + matching ``X-CSRF-Token`` header
+    (for the SPA, once ``PERGEN_AUTH_COOKIE_ENABLED=1``).
 
     Audit C-1 mitigation (fail-closed in production) + C-2 (per-actor
     accountability):
@@ -184,17 +204,36 @@ def _install_api_token_gate(app: Flask) -> None:
     * **Non-production**: gate is opt-in. When no tokens are set, the
       gate is a no-op and a one-shot WARN is logged on first request.
 
+    Cookie-auth exempt routes (always open even when ``PERGEN_AUTH_COOKIE_ENABLED=1``):
+        /api/auth/login, /api/auth/whoami — these establish or query
+        the session itself; gating them on the cookie they're meant
+        to issue would be a chicken-and-egg.
+
     Exempt paths (always open for liveness probes / SPA bootstrap):
         /api/health, /api/v2/health, /
     """
     import hmac
     import os as _os
 
-    from flask import g, jsonify, request
+    from flask import g, jsonify, request, session
+
+    from backend.security.csrf import verify_csrf_token
 
     pergen_ext = app.extensions.setdefault("pergen", {})
     _exempt = {"/api/health", "/api/v2/health", "/"}
+    # Wave-6 Phase F: cookie path needs login + whoami exempt from itself.
+    # logout is also exempt — clearing a session you may already lack
+    # should never error.
+    _auth_exempt = {"/api/auth/login", "/api/auth/whoami", "/api/auth/logout"}
     _min_len = _MIN_API_TOKEN_LENGTH
+
+    def _cookie_auth_enabled() -> bool:
+        val = (
+            _os.environ.get("PERGEN_AUTH_COOKIE_ENABLED")
+            or app.config.get("PERGEN_AUTH_COOKIE_ENABLED")
+            or ""
+        )
+        return str(val).strip() == "1"
 
     def _resolve_tokens() -> dict[str, str]:
         """Return ``{actor: token}`` from current env+config.
@@ -332,6 +371,7 @@ def _install_api_token_gate(app: Flask) -> None:
             return None
         if request.path in _exempt or not request.path.startswith("/api/"):
             return None
+        # ----- Path 1 (legacy): X-API-Token header --------------------- #
         supplied = request.headers.get("X-API-Token", "")
         # Constant-time comparison to neutralise timing oracles. Try every
         # configured token; the FIRST match wins. We compare against every
@@ -344,6 +384,42 @@ def _install_api_token_gate(app: Flask) -> None:
         if matched_actor is not None:
             g.actor = matched_actor
             return None
+        # ----- Path 2 (Wave-6 Phase F): signed cookie + CSRF ----------- #
+        # Only consulted when the operator has opted into the cookie path
+        # via PERGEN_AUTH_COOKIE_ENABLED=1. Failure to opt in means the
+        # request falls straight through to the 401 below — preserving
+        # the legacy contract.
+        if _cookie_auth_enabled():
+            # The auth blueprint's own routes need to be reachable so a
+            # logged-out caller can establish or inspect a session.
+            if request.path in _auth_exempt:
+                # Surface the actor when one already exists, but never
+                # gate these routes.
+                g.actor = session.get("actor") or "anonymous"
+                return None
+            session_actor = session.get("actor")
+            session_csrf = session.get("csrf")
+            if session_actor and session_actor in tokens:
+                # Safe methods (GET/HEAD/OPTIONS): cookie alone grants read
+                # access. Unsafe methods MUST also carry a matching CSRF
+                # header — ``verify_csrf_token`` is constant-time.
+                if request.method in ("GET", "HEAD", "OPTIONS"):
+                    g.actor = session_actor
+                    return None
+                supplied_csrf = request.headers.get("X-CSRF-Token", "")
+                if verify_csrf_token(supplied_csrf, session_csrf):
+                    g.actor = session_actor
+                    return None
+                # Cookie present but CSRF mismatch on a state-changing
+                # request — record this distinctly. It's the textbook
+                # CSRF attack signature.
+                logging.getLogger("app.audit").warning(
+                    "audit auth.csrf.mismatch actor=%s ip=%s path=%s",
+                    session_actor,
+                    request.remote_addr or "-",
+                    request.path,
+                )
+                return jsonify({"error": "missing or invalid X-CSRF-Token header"}), 403
         return jsonify({"error": "missing or invalid X-API-Token header"}), 401
 
     pergen_ext["token_gate_mounted"] = True
@@ -352,6 +428,7 @@ def _install_api_token_gate(app: Flask) -> None:
 def _register_blueprints(app: Flask) -> None:
     """Mount per-domain Blueprints, skipping any already registered."""
     from backend.blueprints import (
+        auth_bp,
         bgp_bp,
         commands_bp,
         credentials_bp,
@@ -368,6 +445,7 @@ def _register_blueprints(app: Flask) -> None:
 
     for bp in (
         health_bp,
+        auth_bp,
         inventory_bp,
         notepad_bp,
         commands_bp,

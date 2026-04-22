@@ -3,6 +3,12 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- Wave-6 Phase F: CSRF token for state-changing API calls. The
+       attribute is empty in the static HTML; app.js populates it from
+       GET /api/auth/whoami on boot when the cookie auth path is enabled
+       (PERGEN_AUTH_COOKIE_ENABLED=1). pergenFetch reads this tag and
+       injects X-CSRF-Token on POST/PUT/DELETE/PATCH. -->
+  <meta name="pergen-csrf" content="" />
   <title>Fabric Check — Network Panel</title>
   <link rel="stylesheet" href="/static/css/extracted-inline.css">
   <link rel="stylesheet" href="/static/css/components.css">
