@@ -22,10 +22,6 @@ import pytest
 pytestmark = [pytest.mark.security]
 
 
-@pytest.mark.xfail(
-    reason="legacy module not yet marked deprecated",
-    strict=False,
-)
 def test_legacy_credential_store_marked_deprecated() -> None:
     sys.modules.pop("backend.credential_store", None)
     with warnings.catch_warnings(record=True) as caught:

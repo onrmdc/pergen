@@ -12,13 +12,19 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Final
 
-from flask import Blueprint, current_app, jsonify, request
+from flask import Blueprint, current_app, g, jsonify, request
 
 if TYPE_CHECKING:  # pragma: no cover
     from backend.services.notepad_service import NotepadService
 
 notepad_bp = Blueprint("notepad", __name__)
 _log = logging.getLogger("app.blueprints.notepad")
+# Audit M-07: dedicated channel for security-relevant events.
+_audit = logging.getLogger("app.audit")
+
+
+def _actor() -> str:
+    return getattr(g, "actor", None) or "anonymous"
 
 # Phase 13: hard cap on a single notepad write.  At ~512 KB any legitimate
 # operator note is well within scope; anything beyond that is either a
@@ -62,6 +68,14 @@ def api_notepad_put():
     except (OSError, ValueError):
         _log.exception("notepad update failed")
         return jsonify({"error": "failed to save"}), 500
+    # Audit M-07: log the actor and content size only — never the
+    # notepad bytes themselves (operators paste sensitive snippets).
+    _audit.info(
+        "audit notepad.save actor=%s claimed_user=%s bytes=%d",
+        _actor(),
+        user,
+        len(content),
+    )
     return jsonify(
         {"content": result["content"], "line_editors": result["line_editors"]}
     )

@@ -14,7 +14,16 @@ which already enforce the path-traversal guard and gzip storage.
 """
 from __future__ import annotations
 
-from flask import Blueprint, current_app, jsonify, request
+import logging
+
+from flask import Blueprint, current_app, g, jsonify, request
+
+# Audit M-07: dedicated audit channel.
+_audit = logging.getLogger("app.audit")
+
+
+def _actor() -> str:
+    return getattr(g, "actor", None) or "anonymous"
 
 reports_bp = Blueprint("reports", __name__)
 
@@ -124,6 +133,8 @@ def api_report_delete(run_id: str):
         return jsonify({"error": "run_id required"}), 400
     try:
         _service().delete(run_id)
+        # Audit M-07: log the run id + actor.
+        _audit.info("audit report.delete actor=%s run_id=%s", _actor(), run_id)
         return jsonify({"ok": True})
     except Exception:  # noqa: BLE001
         return jsonify({"error": "failed to delete"}), 500

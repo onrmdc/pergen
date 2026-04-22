@@ -20,6 +20,11 @@ and ``api_run_post_complete`` share one implementation.
 """
 from __future__ import annotations
 
+import logging
+
+# Audit M-07: dedicated audit channel.
+_audit = logging.getLogger("app.audit")
+
 import contextlib
 import difflib
 import uuid
@@ -175,6 +180,15 @@ def api_run_pre():
             "created_at": created_at,
         },
         actor=_current_actor(),
+    )
+    # Audit M-07: log the run id + actor + device count. Per-row device
+    # data is sensitive (BGP advertisements etc.) and is intentionally
+    # not echoed.
+    _audit.info(
+        "audit run.pre actor=%s run_id=%s devices=%d",
+        _current_actor() or "anonymous",
+        run_id,
+        len(bound),
     )
     return jsonify(
         {

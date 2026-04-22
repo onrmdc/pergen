@@ -14,14 +14,23 @@ the route layer.
 """
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING
 
-from flask import Blueprint, current_app, jsonify, request
+from flask import Blueprint, current_app, g, jsonify, request
 
 if TYPE_CHECKING:  # pragma: no cover
     from backend.services.inventory_service import InventoryService
 
 inventory_bp = Blueprint("inventory", __name__)
+
+# Audit M-07: dedicated audit channel; consumed by the
+# ``app.audit`` logger configured in ``backend.logging_config``.
+_audit = logging.getLogger("app.audit")
+
+
+def _actor() -> str:
+    return getattr(g, "actor", None) or "anonymous"
 
 
 def _svc() -> InventoryService:
@@ -156,6 +165,15 @@ def api_inventory_device_add():
     """Add one device. Hostname and IP must be unique."""
     data = request.get_json(silent=True) or {}
     ok, body = _svc().add_device(data)
+    if ok:
+        # Audit M-07: log only the safe identifier (hostname); never the
+        # credential value (the inventory row carries a credential NAME,
+        # not a secret, but log discipline matters).
+        _audit.info(
+            "audit inventory.add actor=%s hostname=%s",
+            _actor(),
+            data.get("hostname") or "?",
+        )
     return (jsonify(body), 200) if ok else (jsonify(body), 400)
 
 
@@ -164,7 +182,12 @@ def api_inventory_device_update():
     """Update one device by ``current_hostname``. New hostname / IP must be unique."""
     data = request.get_json(silent=True) or {}
     ok, body, status = _svc().update_device(data)
-    _ = ok  # status carries success/error semantics
+    if status == 200:
+        _audit.info(
+            "audit inventory.update actor=%s hostname=%s",
+            _actor(),
+            data.get("hostname") or data.get("current_hostname") or "?",
+        )
     return jsonify(body), status
 
 
@@ -174,7 +197,13 @@ def api_inventory_device_delete():
     hostname = (request.args.get("hostname") or "").strip()
     ip = (request.args.get("ip") or "").strip()
     ok, body, status = _svc().delete_device(hostname=hostname, ip=ip)
-    _ = ok
+    if status == 200:
+        _audit.info(
+            "audit inventory.delete actor=%s hostname=%s ip=%s",
+            _actor(),
+            hostname or "?",
+            ip or "?",
+        )
     return jsonify(body), status
 
 

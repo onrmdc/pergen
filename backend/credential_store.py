@@ -7,6 +7,18 @@ module fell back to base64 (i.e. plaintext-equivalent) storage when the
 ``cryptography`` import failed, which meant a corrupt venv silently
 downgraded the credential DB to no-encryption. The import is now
 unconditional and ``ImportError`` propagates at module import time.
+
+DEPRECATED (wave-3 Phase 6) — see ``docs/refactor/credential_store_migration.md``.
+This module's per-call SHA-256-derived Fernet key is being replaced by
+``backend.security.encryption.EncryptionService`` (PBKDF2 ≥ 600k +
+AES-128-CBC + HMAC) wired via ``backend.services.credential_service.CredentialService``
+and ``backend.repositories.credential_repository.CredentialRepository``.
+The new store lives in ``instance/credentials_v2.db``.
+
+The legacy SHA-256 path remains importable for one release cycle so that
+existing callers (5 blueprint sites + ``backend/runners/runner.py`` +
+``backend/find_leaf.py`` + ``backend/nat_lookup.py``) keep working while
+the migration sweep lands one PR at a time.
 """
 import base64
 import contextlib
@@ -14,8 +26,21 @@ import hashlib
 import json
 import os
 import sqlite3
+import warnings
 
 from cryptography.fernet import Fernet
+
+# Audit deprecation marker — pinned by tests/test_security_legacy_credstore_deprecation.py.
+__deprecated__ = True
+
+warnings.warn(
+    "backend.credential_store is deprecated; use "
+    "backend.services.credential_service.CredentialService "
+    "(PBKDF2 + AES-CBC+HMAC, instance/credentials_v2.db) instead. "
+    "See docs/refactor/credential_store_migration.md.",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
 
 def _db_path():

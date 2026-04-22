@@ -29,10 +29,6 @@ def _audit_records(caplog) -> list[logging.LogRecord]:
     ]
 
 
-@pytest.mark.xfail(
-    reason="audit gap — /api/inventory/device POST does not emit app.audit",
-    strict=False,
-)
 def test_inventory_add_emits_audit_log(client, caplog) -> None:
     caplog.set_level(logging.INFO)
     r = client.post(
@@ -56,10 +52,6 @@ def test_inventory_add_emits_audit_log(client, caplog) -> None:
     )
 
 
-@pytest.mark.xfail(
-    reason="audit gap — /api/notepad PUT does not emit app.audit",
-    strict=False,
-)
 def test_notepad_save_emits_audit_log(client, caplog) -> None:
     caplog.set_level(logging.INFO)
     r = client.put(
@@ -72,10 +64,6 @@ def test_notepad_save_emits_audit_log(client, caplog) -> None:
     )
 
 
-@pytest.mark.xfail(
-    reason="audit gap — /api/run/pre does not emit app.audit",
-    strict=False,
-)
 def test_run_pre_emits_audit_log(client, caplog) -> None:
     caplog.set_level(logging.INFO)
     # Stub the inline runner so we don't actually try to SSH to the device.
@@ -103,10 +91,6 @@ def test_run_pre_emits_audit_log(client, caplog) -> None:
     )
 
 
-@pytest.mark.xfail(
-    reason="audit gap — /api/reports/<id> DELETE does not emit app.audit",
-    strict=False,
-)
 def test_report_delete_emits_audit_log(client, caplog) -> None:
     caplog.set_level(logging.INFO)
     r = client.delete("/api/reports/probe-run-id-does-not-exist")
