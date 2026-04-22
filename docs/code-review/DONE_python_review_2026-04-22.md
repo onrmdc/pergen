@@ -1,4 +1,4 @@
-# Pergen Backend — Python Code Review
+# DONE — Pergen Backend — Python Code Review
 
 **Date:** 2026-04-22
 **Reviewer:** python-reviewer (Claude Opus 4.7, opencode session)

@@ -1,4 +1,4 @@
-# Implementation Plan: AuditLogger Helper + Coverage Closure
+# DONE — Implementation Plan: AuditLogger Helper + Coverage Closure
 
 > **Status:** Plan only — no code changes.
 > **Scope:** Close audit-log gaps in `inventory_bp`, `notepad_bp`, `runs_bp`, `reports_bp`

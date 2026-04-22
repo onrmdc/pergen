@@ -1,4 +1,4 @@
-# Plan: Tighten CSP / HSTS Headers on JSON Responses
+# DONE — Plan: Tighten CSP / HSTS Headers on JSON Responses
 
 > **Status:** PLAN ONLY — no code changes in this document.
 > **Owner:** TBA · **Tracker:** Deferred follow-up #N of 8 · **Author:** planner agent

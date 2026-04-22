@@ -1,4 +1,4 @@
-# Pergen — Test Coverage Audit (2026-04-22, Wave 4)
+# DONE — Pergen Test Coverage Audit (2026-04-22, Wave 4)
 
 Post-wave-3 close-out audit. Audits the working tree at HEAD
 (`0446512 docs: wave-3 final sweep …`) against the wave-2 baseline at

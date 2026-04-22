@@ -1,4 +1,4 @@
-# Pergen Security Audit — Wave 4 (2026-04-22)
+# DONE — Pergen Security Audit — Wave 4 (2026-04-22)
 
 **Reviewer:** security-reviewer agent (read-only audit, no code modified)
 **Repo state:** post wave-3 close-out (24 → 0 audit-tracker xfails closed)

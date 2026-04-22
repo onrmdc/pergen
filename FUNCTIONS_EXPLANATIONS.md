@@ -155,7 +155,7 @@ All runners are stateless; credentials and timeouts are passed per call.
 ## 10. `backend/parsers/` package
 
 The 1,552-line `backend/parse_output.py` god module was split into a 31-module
-package in audit-wave-2 (see `docs/refactor/parse_output_split.md`). The
+package in audit-wave-2 (see `docs/refactor/DONE_parse_output_split.md`). The
 legacy file is now a 151-line back-compat shim that re-exports every symbol
 from its new home.
 

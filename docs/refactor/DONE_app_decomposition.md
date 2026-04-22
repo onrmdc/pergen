@@ -1,4 +1,4 @@
-# `backend/app.py` Decomposition Checklist
+# DONE — `backend/app.py` Decomposition Checklist
 
 **Source:** `backend/app.py` (1,577 lines, audited at start of refactor)
 **Strategy:** Per-domain Flask Blueprint + service layer, registered through `backend/app_factory.py`.

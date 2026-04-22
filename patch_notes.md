@@ -6,6 +6,14 @@ commit on the `refactor/ood-tdd` branch and is documented here.
 The refactor preserves every existing API response, parser output, and runner
 return shape. Behaviour changes are explicitly noted; otherwise none.
 
+> **Doc-rename notice (post wave-5 close-out):** every plan/audit doc under
+> `docs/refactor/`, `docs/security/`, `docs/code-review/`, and
+> `docs/test-coverage/` has been prefixed with `DONE_` to signal that the
+> refactor program is sealed. References below use the **historical**
+> filenames as they existed when each entry was written; on disk they now
+> live at `docs/<area>/DONE_<original-name>.md`. New work should land in
+> fresh, undecorated docs.
+
 ---
 
 ## v0.6.0 — Wave-5: refactor close-out (sealed)

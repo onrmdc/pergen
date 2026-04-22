@@ -1,4 +1,4 @@
-# Pergen — Test Coverage Audit (2026-04-22)
+# DONE — Pergen Test Coverage Audit (2026-04-22)
 
 Audit of the test coverage for the entire `/Users/asim.ceylan/pergen` codebase.
 Source data: `pytest --cov=backend --cov-branch --cov-report=term-missing

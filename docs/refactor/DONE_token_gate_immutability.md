@@ -1,4 +1,4 @@
-# Refactor Plan: Token-Gate Immutability
+# DONE — Refactor Plan: Token-Gate Immutability
 
 > **Status:** Planning only. No code changes in this document.
 > **Owner:** TBD

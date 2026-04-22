@@ -1,4 +1,4 @@
-# Refactor Plan — Migrate `backend/credential_store.py` → `security/encryption.py` + `services/credential_service.py`
+# DONE — Refactor Plan — Migrate `backend/credential_store.py` → `security/encryption.py` + `services/credential_service.py`
 
 > **Status:** PLAN ONLY. No code changes. Awaiting review alongside 6 sibling plans. Executes after the `parse_output.py` refactor lands.
 >

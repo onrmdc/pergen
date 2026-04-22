@@ -1,4 +1,4 @@
-# Pergen — E2E & UI Test Coverage Gap Analysis
+# DONE — Pergen E2E & UI Test Coverage Gap Analysis
 
 **Date:** 2026-04-22
 **Auditor:** OpenCode (audit-only, zero code or package changes)

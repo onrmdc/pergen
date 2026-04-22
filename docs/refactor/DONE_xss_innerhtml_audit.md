@@ -1,4 +1,4 @@
-# XSS `innerHTML` Long-Tail Sweep — Implementation Plan
+# DONE — XSS `innerHTML` Long-Tail Sweep — Implementation Plan
 
 > **Scope**: Sweeping audit of the remaining ~125 `innerHTML` sites in the SPA frontend after the 7 hot-spot fixes already shipped.
 > **Status**: PLAN ONLY — no code changes in this document.

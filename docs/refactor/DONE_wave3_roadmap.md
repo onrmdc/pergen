@@ -1,4 +1,4 @@
-# Wave-3 Production-Readiness Roadmap
+# DONE — Wave-3 Production-Readiness Roadmap
 
 **Status:** in execution (this branch).
 **Goal:** Sequence every audit finding from `docs/security/`, `docs/code-review/`, `docs/test-coverage/`, and the 9 deferred-item plans in `docs/refactor/` into a dependency-aware execution plan that lands the codebase in a production-ready state with zero leftovers.

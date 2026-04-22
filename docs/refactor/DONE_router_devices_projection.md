@@ -1,4 +1,4 @@
-# Refactor Plan — `/api/router-devices` Credential-Field Projection Leak
+# DONE — Refactor Plan — `/api/router-devices` Credential-Field Projection Leak
 
 > **Status:** PLAN ONLY (no code changes). Source: 1 of 8 deferred follow-ups
 > in `patch_notes.md` line 1433; existing xfail at

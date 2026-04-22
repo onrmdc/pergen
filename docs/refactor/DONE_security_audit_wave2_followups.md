@@ -1,4 +1,4 @@
-# Security Audit Wave-2 — Follow-up Plans
+# DONE — Security Audit Wave-2 — Follow-up Plans
 
 **Status:** plan only — no production code changes proposed in this doc.
 Each item below is pinned by a strict `xfail` test under `tests/test_security_*.py`

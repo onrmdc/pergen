@@ -1,4 +1,4 @@
-# Refactor: `backend/parse_output.py` → `backend/parsers/` package
+# DONE — Refactor: `backend/parse_output.py` → `backend/parsers/` package
 
 **Status:** Phase 0 (baseline established, no production code changes yet)
 **Plan:** see this document — the 8-phase plan is captured below.

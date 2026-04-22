@@ -1,4 +1,4 @@
-# SPA ↔ Token-Gate Auth UI Gap — Implementation Plan
+# DONE — SPA ↔ Token-Gate Auth UI Gap — Implementation Plan
 
 > **Status:** PLAN ONLY — no code changes proposed in this document.
 > **Owner area:** `backend/app_factory.py::_install_api_token_gate` ↔ `backend/static/{index.html, js/app.js}`

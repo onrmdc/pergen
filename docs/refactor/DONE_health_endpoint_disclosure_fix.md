@@ -1,4 +1,4 @@
-# `/api/v2/health` config-name leak — implementation plan
+# DONE — `/api/v2/health` config-name leak — implementation plan
 
 **Status:** PLAN ONLY — no code changes performed.
 **Owner:** TBD

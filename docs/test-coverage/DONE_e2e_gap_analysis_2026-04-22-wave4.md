@@ -1,4 +1,4 @@
-# E2E + Frontend Test Coverage — Wave-4 Gap Analysis
+# DONE — E2E + Frontend Test Coverage — Wave-4 Gap Analysis
 
 **Date:** 2026-04-22
 **Scope:** Playwright E2E (`tests/e2e/specs/`) + Vitest unit (`tests/frontend/unit/`)

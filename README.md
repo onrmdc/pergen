@@ -39,8 +39,11 @@
 > work (operator data migration, SPA cookie auth, CSP class refactor,
 > long-tail XSS sweep, find-leaf parallel-cancel) — none block
 > production-readiness. See
-> [`docs/refactor/wave3_roadmap.md`](docs/refactor/wave3_roadmap.md)
-> and [`docs/refactor/wave4_followups.md`](docs/refactor/wave4_followups.md).
+> [`docs/refactor/DONE_wave3_roadmap.md`](docs/refactor/DONE_wave3_roadmap.md)
+> and [`docs/refactor/DONE_wave4_followups.md`](docs/refactor/DONE_wave4_followups.md).
+> All historical plan/audit docs in `docs/` have been prefixed with
+> `DONE_` to signal that the refactor program is sealed; new work
+> should land in fresh, undecorated docs.
 >
 > **Recent UI/Boot work** (post-batch-4): the Phase-13 CSP
 > (`script-src 'self'`) was silently blocking the SPA. Inline `<script>`
@@ -59,8 +62,8 @@
 > [`HOWTOUSE.md`](./HOWTOUSE.md) for the operational guide,
 > [`FUNCTIONS_EXPLANATIONS.md`](./FUNCTIONS_EXPLANATIONS.md) for the
 > per-class reference, [`TEST_RESULTS.md`](./TEST_RESULTS.md) for
-> the full test matrix, and `docs/refactor/parse_output_split.md` +
-> `docs/security/audit_2026-04-22.md` for the wave-2 deep-dive reports.
+> the full test matrix, and `docs/refactor/DONE_parse_output_split.md` +
+> `docs/security/DONE_audit_2026-04-22.md` for the wave-2 deep-dive reports.
 
 ## Refactor at a glance (Phase 12 final shape)
 

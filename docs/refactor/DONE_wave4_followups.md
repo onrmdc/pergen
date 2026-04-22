@@ -1,4 +1,4 @@
-# Wave-4 Audit Follow-ups — SEALED
+# DONE — Wave-4 Audit Follow-ups — SEALED
 
 **Status:** **CLOSED 2026-04-22** in the wave-5 refactor close-out
 session (commits land on the same `refactor/ood-tdd` branch). Every

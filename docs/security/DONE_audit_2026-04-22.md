@@ -1,4 +1,4 @@
-# Pergen Security Audit — 2026-04-22
+# DONE — Pergen Security Audit — 2026-04-22
 
 **Reviewer:** security-reviewer agent (read-only audit, no code modified)
 **Repo state:** post `parsers/` package refactor (Phase-13 hardening landed)
