@@ -1,39 +1,45 @@
 """
 Application Factory for Pergen.
 
-Phase-4 deliverable.
+Phase-4 deliverable, finalised in Phase 12.
 
-This is a *wrapping* factory: the legacy ``backend/app.py`` module is
-imported once (it builds the global ``app`` instance and registers every
-route as a side effect), and ``create_app`` then layers the new
-configuration / logging / request middleware on top.
+After Phase 12 the legacy ``backend/app.py`` is an 87-line shim with
+**zero** ``@app.route`` handlers — it owns only the module-level
+``Flask`` global, ``SECRET_KEY`` wiring, credential-store init, and
+the legacy ``_*`` helper re-exports kept for in-tree imports.  Every
+route now lives in one of the 12 per-domain blueprints under
+``backend/blueprints/`` and is registered here through
+``_register_blueprints``.
 
-Why wrapping rather than full Blueprint extraction?
----------------------------------------------------
-``backend/app.py`` is a 1700+ line module with ~60 routes that all use the
-module-level ``app`` global.  A single-PR rewrite into Blueprints would
-risk silent route drift (different ``url_for`` keys, different error
-handling, missing ``before_request`` order) which our 107 golden tests
-would catch only after the damage is done.  By wrapping, we ship the
-factory, the new config classes, and the logging stack today; subsequent
-phases (5–9) peel routes out into Blueprints incrementally as services
-are introduced.
+The factory still imports ``backend.app`` to grab the module-level
+``app`` (so the global remains a single object across the codebase
+and tests that do ``from backend.app import app`` keep working), but
+no routes ride along with that import — they all attach inside
+``create_app`` itself.
 
-The factory remains the canonical entry point — ``backend/app.py`` keeps
-its module-level ``app`` so existing ``FLASK_APP=backend.app flask run``
-invocations keep working.
+Operator note: ``FLASK_APP`` MUST point at this factory
+(``FLASK_APP=backend.app_factory:create_app``).  Booting
+``FLASK_APP=backend.app`` directly will start Flask but serve 404 for
+every URL because the shim no longer registers any routes.
+``run.sh`` sets the correct default.
 
 Initialisation order
 --------------------
 1. Load the requested config class from ``CONFIG_MAP``.
-2. Validate the config (production refuses default SECRET_KEY).
-3. Import the legacy ``backend.app`` module (registers all routes).
+2. Validate the config (production refuses default ``SECRET_KEY``
+   and missing/weak ``PERGEN_API_TOKEN(S)``).
+3. Import the legacy ``backend.app`` module (provides the ``app``
+   global + the ``_*`` helper aliases; no routes are registered as
+   a side effect any more).
 4. Apply the new config values onto ``app.config``.
 5. Configure logging *after* the config is on the app (so
    ``LOG_LEVEL`` / ``LOG_FORMAT`` / ``LOG_FILE`` are honoured).
 6. Mount ``RequestLogger.init_app(app)`` middleware.
 7. Re-init credential DB (in case ``SECRET_KEY`` changed for tests).
-8. Return ``app``.
+8. Register the OOD service layer onto ``app.extensions``.
+9. Mount the 12 per-domain blueprints.
+10. Install the API-token gate (fail-closed in production).
+11. Return ``app``.
 """
 from __future__ import annotations
 
@@ -68,7 +74,11 @@ def create_app(config_name: str = "default") -> Flask:
       * structured logging mounted on the root logger,
       * per-request middleware (UUID4 request id, X-Request-ID header,
         slow-request WARN),
-      * every legacy route from ``backend/app.py`` already registered.
+      * the 12 per-domain blueprints under ``backend/blueprints/``
+        registered (every operator-facing route),
+      * the OOD service layer (credential / device / inventory /
+        notepad / report / transceiver / run-state) wired into
+        ``app.extensions`` for blueprint resolution.
 
     Security
     --------

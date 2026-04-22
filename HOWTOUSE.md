@@ -100,21 +100,46 @@ to `actor=shared`.
 
 ## 4. Running the app
 
-### 4.1 Development (factory + auto-reload)
+### 4.1 Development (factory + auto-reload, recommended)
 
 ```bash
-export PERGEN_CONFIG=development
+export FLASK_APP=backend.app_factory:create_app
+export FLASK_CONFIG=development                          # selects DevelopmentConfig
 export SECRET_KEY=$(python3 -c "import secrets; print(secrets.token_urlsafe(32))")
+python -m flask run --host 0.0.0.0 --port 5000
+```
+
+`./run.sh` is the operator-friendly equivalent — it activates `venv`,
+exports the same two `FLASK_*` defaults, prints the resolved values
+and the URL, then `exec`s `python -m flask run`. Override either by
+exporting it before the script:
+
+```bash
+FLASK_CONFIG=production FLASK_RUN_HOST=0.0.0.0 ./run.sh
+```
+
+### 4.2 Direct factory call (for embedding / scripts)
+
+```bash
 python3 -c "from backend.app_factory import create_app; create_app('development').run(host='0.0.0.0', port=5000, debug=True)"
 ```
 
-### 4.2 Legacy entry point (still supported)
+### 4.3 Legacy `backend.app` entry point — DO NOT USE
+
+The 1,577-line monolith was decomposed in Phase 12. `backend/app.py` is
+now an **87-line shim with zero `@app.route` handlers** kept only so
+in-tree code that does `from backend.app import _foo` (legacy helper
+re-exports) keeps working.
 
 ```bash
-FLASK_APP=backend.app flask run --host 0.0.0.0 --port 5000
+# Boots Flask but every URL returns 404 — the shim has no routes:
+FLASK_APP=backend.app flask run                         # ❌ broken
 ```
 
-### 4.3 Production (gunicorn or similar)
+If you see 404s from a freshly-cloned tree, this is the cause —
+switch `FLASK_APP` to `backend.app_factory:create_app`.
+
+### 4.4 Production (gunicorn or similar)
 
 ```bash
 export PERGEN_CONFIG=production
@@ -155,10 +180,10 @@ curl -s http://localhost:5000/api/v2/health      # phase-4 blueprint
 | GET | `/api/devices-arista?...` | `inventory_bp` | Arista-only filter |
 | GET | `/api/devices-by-tag?tag=&fabric=&site=` | `inventory_bp` | Lookup by tag |
 | GET | `/api/inventory` | `inventory_bp` | Full dump (`{"inventory": [...]}`) |
-| POST | `/api/inventory/device` | legacy (`backend/app.py`) | Add device |
-| PUT | `/api/inventory/device` | legacy | Update device |
-| DELETE | `/api/inventory/device` | legacy | Delete device |
-| POST | `/api/inventory/import` | legacy | Bulk CSV import |
+| POST | `/api/inventory/device` | `inventory_bp` | Add device |
+| PUT | `/api/inventory/device` | `inventory_bp` | Update device |
+| DELETE | `/api/inventory/device` | `inventory_bp` | Delete device |
+| POST | `/api/inventory/import` | `inventory_bp` | Bulk CSV import |
 
 Example:
 
@@ -185,10 +210,12 @@ Owned by `notepad_bp` → `NotepadService` → `NotepadRepository`.
 
 ## 8. Credentials
 
-Legacy routes (still backed by `backend.credential_store`) currently
-own `/api/credentials*`.  Phase 9 also registers a new
-`CredentialService` against `credentials_v2.db` for blueprints to use
-once the data migration is done.
+`/api/credentials*` is owned by `credentials_bp`
+(`backend/blueprints/credentials_bp.py`) and goes through
+`CredentialService` + `EncryptionService` (AES-128-CBC + HMAC,
+PBKDF2 ≥ 600k). The legacy `backend/credential_store.py` base64
+fallback was removed in audit batch 1 — `cryptography` is now a
+hard import.
 
 ```bash
 curl -X POST http://localhost:5000/api/credentials \
@@ -206,15 +233,26 @@ curl -X DELETE http://localhost:5000/api/credentials/lab   # delete
 
 ## 9. Running commands on devices
 
-The legacy `/api/run/device`, `/api/transceiver`, `/api/find-leaf`,
-`/api/nat-lookup`, `/api/route-map/run`, `/api/bgp/*`,
-`/api/run/pre/*`, `/api/run/post/*`, `/api/custom-command`,
-`/api/arista/run-cmds`, `/api/router-devices`, `/api/ping`,
-`/api/commands`, `/api/parsers/*`, `/api/reports*`,
-`/api/credentials/<name>/validate` and `/api/diff` endpoints stay in
-`backend/app.py` for now.  Refer to the legacy implementation for
-exact payload shapes.  These will move to per-domain blueprints in a
-follow-on phase via the new `DeviceService`.
+Phase 12 finished the blueprint migration — every device-touching
+endpoint now lives in a per-domain blueprint under
+`backend/blueprints/`. There is **no remaining route in
+`backend/app.py`**. Map of who owns what:
+
+| Endpoint(s) | Blueprint | File |
+|---|---|---|
+| `/api/run/device`, `/api/run/pre`, `/api/run/pre/create`, `/api/run/pre/restore`, `/api/run/post`, `/api/run/post/complete`, `/api/run/result/<run_id>`, `/api/diff` | `runs_bp` | `backend/blueprints/runs_bp.py` |
+| `/api/arista/run-cmds`, `/api/custom-command`, `/api/route-map/run`, `/api/router-devices` | `device_commands_bp` | `backend/blueprints/device_commands_bp.py` |
+| `/api/transceiver`, `/api/transceiver/recover`, `/api/transceiver/clear-counters` | `transceiver_bp` | `backend/blueprints/transceiver_bp.py` |
+| `/api/find-leaf`, `/api/find-leaf-check-device`, `/api/nat-lookup` | `network_lookup_bp` | `backend/blueprints/network_lookup_bp.py` |
+| `/api/bgp/status`, `/api/bgp/history`, `/api/bgp/visibility`, `/api/bgp/looking-glass`, `/api/bgp/bgplay`, `/api/bgp/as-info`, `/api/bgp/announced-prefixes`, `/api/bgp/wan-rtr-match` | `bgp_bp` | `backend/blueprints/bgp_bp.py` |
+| `/api/ping` | `network_ops_bp` | `backend/blueprints/network_ops_bp.py` |
+| `/api/commands`, `/api/parsers/fields`, `/api/parsers/<command_id>` | `commands_bp` | `backend/blueprints/commands_bp.py` |
+| `/api/reports`, `/api/reports/<run_id>` (GET/DELETE) | `reports_bp` | `backend/blueprints/reports_bp.py` |
+| `/api/credentials*`, `/api/credentials/<name>/validate` | `credentials_bp` | `backend/blueprints/credentials_bp.py` |
+
+Refer to each blueprint module for exact payload shapes — the
+golden contract tests in `tests/golden/` lock the response envelopes
+byte-for-byte against the pre-refactor baseline.
 
 ---
 

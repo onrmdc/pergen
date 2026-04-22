@@ -179,24 +179,36 @@ and request_logging.
 
 `backend/app_factory.py::create_app(config_name)` performs:
 
-1. Resolve config class from `CONFIG_MAP` and call `validate()`.
-2. Import the legacy `backend.app` module via `importlib` (this
-   registers the remaining global routes as a side effect).
+1. Resolve config class from `CONFIG_MAP` and call `validate()` (production
+   refuses default `SECRET_KEY` and missing/weak `PERGEN_API_TOKEN(S)`).
+2. Import the legacy `backend.app` module via `importlib` to grab the
+   module-level `Flask` global. **The shim has zero `@app.route`
+   handlers** since Phase 12 — this import only provides the `app`
+   object plus the `_*` helper aliases that legacy in-tree callers
+   still resolve through `backend.app`.
 3. Apply the config values onto `app.config`.
 4. `LoggingConfig.configure(app)` — JSON to stream, optional rotating file.
 5. `RequestLogger.init_app(app)` — request id + slow-request WARN.
 6. `_register_services(app)` — build and stash each service into
    `app.extensions` keyed by `inventory_service`, `notepad_service`,
-   `report_service`, `credential_service`, `device_service`.
-7. `_register_blueprints(app)` — mount `health_bp`, `inventory_bp`,
-   `notepad_bp` (idempotent).
+   `report_service`, `credential_service`, `device_service`,
+   `transceiver_service`, `run_state_store`.
+7. `_register_blueprints(app)` — mount the 12 per-domain blueprints
+   (`health_bp`, `inventory_bp`, `notepad_bp`, `commands_bp`,
+   `network_ops_bp`, `credentials_bp`, `bgp_bp`, `network_lookup_bp`,
+   `transceiver_bp`, `device_commands_bp`, `runs_bp`, `reports_bp`),
+   idempotent across repeated `create_app` calls.
 8. Re-init the legacy credential store (so `SECRET_KEY` changes
    propagate during tests).
-9. Stamp `CONFIG_NAME` on `app.config` and return.
+9. Install the API-token gate (`_install_api_token_gate`) — fail-closed
+   in production per audit C-1.
+10. Stamp `CONFIG_NAME` on `app.config` and return.
 
-The factory is **wrapping**, not rewriting — it layers OOD components
-on top of the existing legacy app.  This minimised risk during the
-refactor; subsequent phases will continue to peel routes out into
+After Phase 12 the factory is **the only supported entry point** —
+the `backend/app.py` shim no longer carries routes, so booting
+`FLASK_APP=backend.app` directly serves 404s. `run.sh` and the
+operator docs (`README.md`, `HOWTOUSE.md`) point `FLASK_APP` at
+`backend.app_factory:create_app`. Subsequent phases will continue to peel routes out into
 blueprints incrementally.
 
 ---
@@ -232,23 +244,37 @@ blueprints incrementally.
 
 ---
 
-## 6. Outstanding items (post-phase-9)
+## 6. Outstanding items (post-phase-13 + audit batches)
 
-- Heavy device-execution routes (transceiver, find-leaf, nat, bgp,
-  run/pre, run/post, custom-command, route-map, run/device, ping,
-  parsers, commands, transceiver/recover, transceiver/clear-counters,
-  arista/run-cmds, router-devices, reports list/get/delete, diff,
-  credentials/{name}/validate, /api/health, /) still live in
-  `backend/app.py` and will be migrated to per-domain blueprints in a
-  follow-on phase.
+- **Blueprint migration: COMPLETE.** All heavy device-execution routes
+  (transceiver, find-leaf, nat, bgp, run/pre, run/post, custom-command,
+  route-map, run/device, ping, parsers, commands, transceiver/recover,
+  transceiver/clear-counters, arista/run-cmds, router-devices, reports
+  list/get/delete, diff, credentials/<name>/validate, /api/health, /)
+  now live in their per-domain blueprint under `backend/blueprints/`.
+  `backend/app.py` is an 87-line shim with **zero `@app.route`
+  handlers** kept only so in-tree code that imports `_*` helper
+  aliases still resolves them.
+- **Frontend / CSP**: inline `<script>` blocks were extracted to
+  `backend/static/js/theme-init.js` + `backend/static/js/app.js`, and
+  the JSZip CDN dependency was vendored to
+  `backend/static/vendor/jszip.min.js`. The SPA now satisfies
+  `Content-Security-Policy: script-src 'self'`.
+- **Boot path**: `run.sh` defaults to
+  `FLASK_APP=backend.app_factory:create_app` and prints the resolved
+  `FLASK_APP` / `FLASK_CONFIG` / URL on startup. Booting
+  `FLASK_APP=backend.app` directly will start Flask but serve 404 for
+  every URL (the shim has no routes).
 - Credential store migration (legacy Fernet blob → new
   `EncryptionService` AES-128-CBC + HMAC-SHA256) is staged but not
-  cut over: the phase-9 blueprint registration uses a separate
-  `credentials_v2.db` so the new and legacy stores can coexist.
+  cut over: blueprint registration uses a separate `credentials_v2.db`
+  so the new and legacy stores can coexist.
 - Phase 11 added OWASP Top-10 + business-logic security tests.
 - Phase 12 published `TEST_RESULTS.md`, polished `README.md`, and
-  pushed the new-OOD-layer coverage past 85 %.
+  pushed the new-OOD-layer coverage past 85 % (now 94 %).
 - **Phase 13** completed (see §10).
+- **Audit batches 1–3** remediated 24 findings (4 CRITICAL, 9 HIGH,
+  11 MEDIUM) — see `README.md` audit table.
 
 ---
 

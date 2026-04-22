@@ -179,8 +179,10 @@ to avoid silent route drift while migrating — the **107 golden tests** in `tes
 contract so any regression is caught by the test suite, not in production.
 
 After Phase 12 the legacy `app.py` is now only the Flask global + SECRET_KEY wiring + `_*` helper re-exports, and every
-route lives in a blueprint. The 87-line shim exists solely so existing `FLASK_APP=backend.app flask run` invocations
-keep working.
+route lives in a blueprint. The 87-line shim exists solely so in-tree code that still imports `backend.app._foo`
+helpers keeps resolving — it has **zero `@app.route` handlers**. Operators must now boot through
+`FLASK_APP=backend.app_factory:create_app` (the new default in `run.sh`); booting `FLASK_APP=backend.app` directly
+will start Flask but serve 404 for every URL.
 
 ---
 
@@ -523,9 +525,11 @@ eaf6d29 docs: expand README for transceiver, API, recovery policy
 | Cisco MTU from `show interface` (`eth_mtu`) | Preserved | inside `transceiver_service.py` merge logic |
 | Static screenshots / docs assets | Preserved | `backend/static/screenshots/`, `backend/static/assets/` |
 
-**Nothing visible to operators was removed.** The refactor is additive: every upstream route still resolves, every
-upstream feature still works, and the same `FLASK_APP=backend.app flask run` command still boots the app. The added
-layers wrap the legacy code rather than replacing it.
+**Nothing visible to operators was removed.** The refactor is additive: every upstream route still resolves and
+every upstream feature still works. The one operator-visible change is the boot entry point — routes now register
+through `backend.app_factory.create_app()` rather than as side effects of importing `backend.app`. `run.sh` was
+updated to use the factory by default, so users on `./run.sh` see no change. Anyone who hard-coded
+`FLASK_APP=backend.app` in a launcher must update it to `FLASK_APP=backend.app_factory:create_app` (see §15.1).
 
 ---
 
@@ -608,13 +612,16 @@ These are the deltas a caller would actually notice in a request/response or in 
 
 The following upstream behaviours were intentionally preserved bit-for-bit so operator workflows keep working:
 
-- The Flask global `backend.app:app` still exists; `FLASK_APP=backend.app flask run` still boots the app.
+- The Flask global `backend.app:app` still exists for in-tree imports of the legacy `_*` helpers — but it has no
+  routes; route registration happens exclusively through `backend.app_factory.create_app()`. Boot through the
+  factory (`FLASK_APP=backend.app_factory:create_app`); `./run.sh` does this for you.
 - All 53 upstream routes still resolve at the same URLs with the same response shapes (golden tests lock this).
 - The `_*` helper functions historically resolvable as `backend.app._foo` are re-exported from `app.py` — see
-  `backend/app.py:38-55`.
+  `backend/app.py:37-57`.
 - `backend/credential_store.py` still uses single SHA-256 → Fernet for **legacy credentials** (no PBKDF2 migration);
   the new `EncryptionService` is for new code paths only, so old credential blobs continue to decrypt.
-- `run.sh` is unchanged; `Makefile run` is an additional alias, not a replacement.
+- `run.sh` keeps the same name and arguments; only its internal `FLASK_APP` default changed to point at the
+  factory. `Makefile run` is an additional alias.
 - Inventory CSV format (`hostname,ip,fabric,site,hall,vendor,model,role,tag,credential`) is identical.
 
 ### 14.3 Where to find the regression tests
@@ -645,7 +652,7 @@ This section is the **upgrade guide for someone running upstream today** who pul
 
 | Task | Upstream `main` | `refactor/ood-tdd` | Notes |
 |---|---|---|---|
-| Start the app | `./run.sh` | `./run.sh` (unchanged) **or** `make run` | Both paths still set `FLASK_APP=backend.app` |
+| Start the app | `./run.sh` | `./run.sh` **or** `make run` | `run.sh` now defaults `FLASK_APP=backend.app_factory:create_app` and `FLASK_CONFIG=development`, and prints both + the URL on boot. Hard-coded `FLASK_APP=backend.app` launchers must update — that shim has no routes. |
 | Install runtime deps | `pip install -r requirements.txt` | `pip install -r requirements.txt` **or** `make install` | `defusedxml` is now mandatory (added in `requirements.txt`) |
 | Install dev deps | n/a | `pip install -r requirements-dev.txt` **or** `make install-dev` | Adds `pytest`, `pytest-cov`, `pytest-mock`, `responses`, `freezegun`, `ruff` |
 | Run tests | `pytest` (no markers, no coverage) | `make test` (full) / `make test-fast` (only `-m unit`) | Markers: `unit`, `integration`, `security`, `golden` |
@@ -657,7 +664,7 @@ This section is the **upgrade guide for someone running upstream today** who pul
 
 | Variable | Upstream | Refactor | Effect |
 |---|---|---|---|
-| `FLASK_APP` | `backend.app` (set by `run.sh`) | `backend.app` (unchanged) | — |
+| `FLASK_APP` | `backend.app` (set by `run.sh`) | `backend.app_factory:create_app` (set by `run.sh`) | The legacy `backend.app` shim no longer registers routes. Pointing `FLASK_APP` at it boots Flask but serves 404s. |
 | `FLASK_RUN_HOST` | `127.0.0.1` default in `run.sh` | unchanged | — |
 | `FLASK_RUN_PORT` | `5000` default in `run.sh` | unchanged | — |
 | `SECRET_KEY` | Optional; inline default | **Required in production**; rejected if it equals the sentinel placeholder OR the historic `dev-secret-change-in-prod` OR is shorter than 16 chars | `ProductionConfig.validate()` raises at startup |
@@ -697,12 +704,15 @@ Existing log shippers may need a parser update.
 
 ### 15.5 What stays exactly the same
 
-- All HTTP routes resolve at the same URLs with the same payload shapes — frontend code (`backend/static/`) is
-  untouched.
+- All HTTP routes resolve at the same URLs with the same payload shapes.
 - The inventory CSV header is unchanged.
 - The credential DB schema is unchanged; old credential blobs still decrypt.
-- `FLASK_APP=backend.app flask run` still works (the legacy module is wrapped, not removed).
-- `run.sh` still works.
+- `./run.sh` still works (its internal `FLASK_APP` default was retargeted at the factory; the script's CLI is
+  unchanged).
+- The frontend SPA in `backend/static/` is functionally identical, but the document was split for CSP compliance:
+  inline `<script>` blocks were extracted to `backend/static/js/theme-init.js` + `backend/static/js/app.js`, and the
+  jszip CDN `<script src="…cdnjs…">` was replaced with a vendored `backend/static/vendor/jszip.min.js`. The page
+  now satisfies `Content-Security-Policy: script-src 'self'`.
 - The Subnet Calculator, Live Notepad, Diff Checker, Saved Reports, Transceiver merge, and Recovery Policy features
   all behave the same way for the user.
 

@@ -196,27 +196,42 @@ cd pergen
 python3 -m venv venv
 source venv/bin/activate
 python -m pip install -r requirements.txt
-export FLASK_APP=backend.app
+export FLASK_APP=backend.app_factory:create_app
+export FLASK_CONFIG=development
 python -m flask run
 ```
 
 Open http://127.0.0.1:5000 in your browser. Default port is **5000**.
 
+> **Boot path note (post-OOD/TDD refactor).** All routes are registered through `backend.app_factory.create_app()` via 12 per-domain blueprints. The legacy `backend/app.py` is now an **87-line shim with zero routes** (it only owns the Flask global, `SECRET_KEY` wiring, and `_*` helper re-exports for in-tree imports). Booting `FLASK_APP=backend.app` directly will start Flask but serve **404 for every URL** — always boot through the App Factory entry point above, or use `./run.sh` which sets it for you.
+
 **Alternative (same directory as `run.sh`):** after creating `venv` and installing deps once, `chmod +x run.sh && ./run.sh`
+
+`run.sh` now defaults to `FLASK_APP=backend.app_factory:create_app` and `FLASK_CONFIG=development`, and prints the resolved values + URL on startup. Override either by exporting them before launch (e.g. `FLASK_CONFIG=production ./run.sh`).
 
 ### venv / “cannot run the app” checklist
 
-1. **Working directory** — Commands must run from the **repository root** (the folder that contains `backend/` and `requirements.txt`). If you `cd backend` first, imports like `backend.app` will fail.
+1. **Working directory** — Commands must run from the **repository root** (the folder that contains `backend/` and `requirements.txt`). If you `cd backend` first, imports like `backend.app_factory` will fail.
 2. **Activate the venv** — You should see `(venv)` in your shell prompt after `source venv/bin/activate` (macOS/Linux). Every new terminal needs `source venv/bin/activate` again.
 3. **Install into the venv** — Use `python -m pip install -r requirements.txt` so packages go into `venv`, not the system Python.
 4. **`flask` not found** — Use `python -m flask run` instead of `flask run` (avoids a different `flask` on your PATH).
-5. **`FLASK_APP`** — Must be set: `export FLASK_APP=backend.app` (or use `./run.sh`, which sets it).
+5. **`FLASK_APP`** — Must point at the factory: `export FLASK_APP=backend.app_factory:create_app` (or use `./run.sh`, which sets it). Do **not** set it to `backend.app` — that shim has no routes and will 404 on every request.
 6. **Listen on all interfaces** — `export FLASK_RUN_HOST=0.0.0.0` then run again (or `./run.sh` after exporting).
 
 ## Backend (Flask)
 
-Same steps if you already have the repo: `cd pergen`, create/activate venv, `python -m pip install -r requirements.txt`, `export FLASK_APP=backend.app`, `python -m flask run` (or `./run.sh`).  
+Same steps if you already have the repo: `cd pergen`, create/activate venv, `python -m pip install -r requirements.txt`, `export FLASK_APP=backend.app_factory:create_app`, `python -m flask run` (or `./run.sh`).
 UI: `backend/static/index.html` at `/`. Inventory: `backend/inventory/inventory.csv` (or `example_inventory.csv` if present, else `inventory_sample.csv`). Override with `PERGEN_INVENTORY_PATH`.
+
+### Frontend / CSP layout
+
+The SPA is served from `backend/static/index.html` plus three split-out asset bundles so the production CSP header `script-src 'self'` will accept everything (no inline scripts, no third-party CDN):
+
+- `backend/static/js/theme-init.js` — runs before the SPA renders to apply the persisted light/dark theme without a flash. Replaces a previous inline `<script>` block.
+- `backend/static/js/app.js` — the ~5,250-line SPA logic (event bus, panels, API clients, table renderers). Extracted from `index.html` so the document is now ~1,350 lines instead of ~6,600.
+- `backend/static/vendor/jszip.min.js` — vendored copy of JSZip 3.10.1 (used by Pre/Post **Export as ZIP**). Replaces the previous `cdnjs.cloudflare.com` `<script src="…">`. Update by replacing the file in place.
+
+When editing the SPA, change `backend/static/js/app.js` (markup-only changes still go in `index.html`). Hard-reload the browser (Cmd/Ctrl+Shift+R) to bypass the static cache.
 
 ### API overview
 
