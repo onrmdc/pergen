@@ -1,15 +1,14 @@
 """
-Token-gate snapshot at boot.
+Token-gate snapshot at boot (audit H-06).
 
-The audit recommends resolving ``PERGEN_API_TOKEN`` / ``PERGEN_API_TOKENS``
-once at ``create_app`` time and binding the result into the app, so a
-runtime ``del os.environ[...]`` (or env scrubbing by an init system)
-can never silently downgrade the gate.
+Wave-3 Phase 5 landed the immutable-snapshot fix. ``_install_api_token_gate``
+now resolves tokens once at ``create_app`` time and freezes the result
+into ``app.extensions['pergen']['token_snapshot']`` (a ``MappingProxyType``).
+Per-request handler reads only from the snapshot — no per-request env
+read. Closes the timing-attack surface flagged by the audit.
 
-Today, ``_install_api_token_gate`` re-resolves tokens on every request
-(see ``_resolve_tokens`` in ``backend/app_factory.py``). This test
-documents the desired behaviour and is marked ``xfail`` until the
-gate switches to a startup-time snapshot.
+This test is the contract pin: a runtime ``del os.environ[...]`` must
+NOT downgrade the gate, AND the original token must still authenticate.
 """
 from __future__ import annotations
 
@@ -23,10 +22,6 @@ import pytest
 pytestmark = [pytest.mark.security]
 
 
-@pytest.mark.xfail(
-    reason="token gate currently re-reads env per request — see _resolve_tokens",
-    strict=False,
-)
 def test_token_gate_resolves_tokens_once_at_startup(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,

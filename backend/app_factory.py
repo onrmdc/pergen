@@ -197,7 +197,15 @@ def _install_api_token_gate(app: Flask) -> None:
     _min_len = _MIN_API_TOKEN_LENGTH
 
     def _resolve_tokens() -> dict[str, str]:
-        """Return ``{actor: token}`` from current env+config (re-read each request)."""
+        """Return ``{actor: token}`` from current env+config.
+
+        Audit H-06: this helper is now called ONCE at create_app time
+        (the result is frozen into ``_token_snapshot`` below); the
+        per-request handler reads only from that snapshot. Token rotation
+        therefore requires a graceful restart — operators who need
+        runtime rotation should land /api/_admin/reload-tokens in a
+        future PR (see ``docs/refactor/token_gate_immutability.md``).
+        """
         raw_multi = (
             _os.environ.get("PERGEN_API_TOKENS")
             or app.config.get("PERGEN_API_TOKENS")
@@ -277,15 +285,41 @@ def _install_api_token_gate(app: Flask) -> None:
             )
             pergen_ext["dev_open_banner_logged"] = True
 
+    # Audit H-06 (token gate immutability): resolve ONCE at create_app
+    # and freeze. The before_request handler reads from the snapshot,
+    # never re-reads os.environ — that closes the small but real timing
+    # surface where an attacker who can flip env mid-request could swap
+    # the token. Token rotation is now an explicit operator action
+    # (env update + graceful restart). Tests that need to mutate tokens
+    # at runtime can call ``rebuild_token_snapshot(app)`` (added below).
+    from types import MappingProxyType as _MappingProxyType
+
+    _token_snapshot = _MappingProxyType(dict(_resolve_tokens()))
+    pergen_ext["token_snapshot"] = _token_snapshot
+
+    def rebuild_token_snapshot(_app: Flask = app) -> None:
+        """Re-resolve tokens from current env/config into a fresh frozen snapshot.
+
+        Test-only seam: production code never calls this. Tests that need
+        to flip the token map after create_app() use this function so the
+        immutability invariant holds for every other call path.
+        """
+        new_snap = _MappingProxyType(dict(_resolve_tokens()))
+        _app.extensions["pergen"]["token_snapshot"] = new_snap
+
+    pergen_ext["rebuild_token_snapshot"] = rebuild_token_snapshot
+
     # The Flask before_request handler is mounted exactly once per app.
     # Subsequent create_app calls (test-harness pattern) re-evaluate the
-    # H-05 boot guard above but skip the registration.
+    # H-05 boot guard above and rebuild the token snapshot, but skip the
+    # registration.
     if pergen_ext.get("token_gate_mounted"):
         return
 
     @app.before_request
     def _enforce_api_token():
-        tokens = _resolve_tokens()
+        # Audit H-06: read from the immutable snapshot, NOT os.environ.
+        tokens = pergen_ext.get("token_snapshot") or {}
         if not tokens:
             # Non-production only path. Emit a one-shot WARN so operators
             # in dev see the open posture in their logs.

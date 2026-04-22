@@ -12,6 +12,16 @@ from __future__ import annotations
 import os
 
 
+def _rebuild_snapshot(flask_app):
+    """Audit H-06: tests that mutate app.config['PERGEN_API_TOKEN(S)']
+    AFTER create_app must call this so the immutable snapshot picks up
+    the change. Production code never calls this (token rotation =
+    graceful restart)."""
+    rebuild = flask_app.extensions.get("pergen", {}).get("rebuild_token_snapshot")
+    if rebuild is not None:
+        rebuild()
+
+
 # --------------------------------------------------------------------------- #
 # C1 (security) — Optional API-token auth gate                                 #
 # --------------------------------------------------------------------------- #
@@ -22,6 +32,7 @@ def test_api_token_gate_blocks_unauthenticated_requests_when_enabled(
 ):
     """When ``PERGEN_API_TOKEN`` is set, requests without the token get 401."""
     flask_app.config["PERGEN_API_TOKEN"] = "test-token-123456"
+    _rebuild_snapshot(flask_app)
     client = flask_app.test_client()
     # Health endpoint stays open (liveness probes can't carry tokens by default).
     assert client.get("/api/v2/health").status_code == 200
@@ -33,6 +44,7 @@ def test_api_token_gate_blocks_unauthenticated_requests_when_enabled(
 
 def test_api_token_gate_accepts_correct_token(flask_app):
     flask_app.config["PERGEN_API_TOKEN"] = "test-token-456789"
+    _rebuild_snapshot(flask_app)
     client = flask_app.test_client()
     r = client.get("/api/inventory", headers={"X-API-Token": "test-token-456789"})
     assert r.status_code == 200
@@ -40,6 +52,7 @@ def test_api_token_gate_accepts_correct_token(flask_app):
 
 def test_api_token_gate_rejects_wrong_token(flask_app):
     flask_app.config["PERGEN_API_TOKEN"] = "right-token-123456"
+    _rebuild_snapshot(flask_app)
     client = flask_app.test_client()
     r = client.get("/api/inventory", headers={"X-API-Token": "wrong-token"})
     assert r.status_code == 401

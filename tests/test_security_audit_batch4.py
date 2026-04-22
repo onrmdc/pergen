@@ -10,6 +10,16 @@ designed to FAIL if the corresponding protection is removed or weakened
 """
 from __future__ import annotations
 
+
+def _rebuild_snapshot(flask_app):
+    """Audit H-06: tests that mutate app.config['PERGEN_API_TOKEN(S)']
+    AFTER create_app must call this so the immutable snapshot picks up
+    the change. Production code never calls this (token rotation =
+    graceful restart)."""
+    rebuild = flask_app.extensions.get("pergen", {}).get("rebuild_token_snapshot")
+    if rebuild is not None:
+        rebuild()
+
 import inspect
 import logging
 from unittest.mock import patch
@@ -126,6 +136,7 @@ def test_api_token_gate_records_matched_actor_in_flask_g(flask_app):
     flask_app.config["PERGEN_API_TOKENS"] = (
         "alice:" + "a" * 32 + ",bob:" + "b" * 32
     )
+    _rebuild_snapshot(flask_app)
     client = flask_app.test_client()
 
     # We need to inspect g.actor inside a request, so attach a probe.
@@ -466,6 +477,7 @@ def test_api_token_gate_exempts_health_probe(flask_app):
     load-balancer liveness checks don't break.
     """
     flask_app.config["PERGEN_API_TOKEN"] = "tok-health-exempt-test-32chars-min"
+    _rebuild_snapshot(flask_app)
     c = flask_app.test_client()
     r = c.get("/api/health")  # no X-API-Token header
     assert r.status_code != 401, (
