@@ -222,11 +222,12 @@ def api_transceiver_recover():
             if st_err:
                 payload["interface_status_warning"] = st_err
             _log.info(
-                "audit transceiver.recover ok actor=%s host=%s ip=%s vendor=cisco interfaces=%s",
+                "audit transceiver.recover ok actor=%s host=%s ip=%s vendor=cisco interfaces=%s bounce_delay_s=%d",
                 _actor(),
                 (device.get("hostname") or "").strip(),
                 ip,
                 ok_names,
+                interface_recovery._resolve_bounce_delay_sec(),
             )
             return jsonify(payload)
         if "arista" in vendor_l:
@@ -253,11 +254,12 @@ def api_transceiver_recover():
             if st_err:
                 payload["interface_status_warning"] = st_err
             _log.info(
-                "audit transceiver.recover ok actor=%s host=%s ip=%s vendor=arista interfaces=%s",
+                "audit transceiver.recover ok actor=%s host=%s ip=%s vendor=arista interfaces=%s bounce_delay_s=%d",
                 _actor(),
                 (device.get("hostname") or "").strip(),
                 ip,
                 ok_names,
+                interface_recovery._resolve_bounce_delay_sec(),
             )
             return jsonify(payload)
         return (

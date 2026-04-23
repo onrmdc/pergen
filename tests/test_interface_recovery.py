@@ -29,35 +29,64 @@ class TestValidateInterfaceNames(unittest.TestCase):
 
 
 class TestRecoverCisco(unittest.TestCase):
+    @patch("backend.runners.interface_recovery.time.sleep")
     @patch("backend.runners.ssh_runner.run_config_lines_pty")
-    def test_cisco_builds_lines(self, mock_pty):
+    def test_cisco_builds_lines(self, mock_pty, _mock_sleep):
+        """Wave-7.3: each interface bounce now executes as TWO separate
+        SSH sessions (shutdown stanza + no-shutdown stanza) with a
+        delay between them. Each stanza is the canonical 4-line script.
+        """
         from backend.runners.interface_recovery import recover_interfaces_cisco_nxos
 
         mock_pty.return_value = ("ok", None)
         out, err = recover_interfaces_cisco_nxos("10.0.0.1", "u", "p", ["Ethernet1/1"])
         self.assertIsNone(err)
-        mock_pty.assert_called_once()
-        args, kwargs = mock_pty.call_args
-        lines = args[3]
-        self.assertIn("configure terminal", lines)
-        self.assertIn("interface Ethernet1/1", lines)
-        self.assertIn("shutdown", lines)
-        self.assertIn("no shutdown", lines)
-        self.assertIn("end", lines)
+        # Two sessions: shutdown then no-shutdown.
+        self.assertEqual(mock_pty.call_count, 2)
+        first_lines = mock_pty.call_args_list[0][0][3]
+        second_lines = mock_pty.call_args_list[1][0][3]
+        # First (shutdown) stanza.
+        self.assertEqual(
+            first_lines,
+            [
+                "configure terminal",
+                "interface Ethernet1/1",
+                "shutdown",
+                "end",
+            ],
+        )
+        # Second (no-shutdown) stanza.
+        self.assertEqual(
+            second_lines,
+            [
+                "configure terminal",
+                "interface Ethernet1/1",
+                "no shutdown",
+                "end",
+            ],
+        )
 
 
 class TestRecoverArista(unittest.TestCase):
+    @patch("backend.runners.interface_recovery.time.sleep")
     @patch("backend.runners.arista_eapi.run_commands")
-    def test_arista_cmds(self, mock_rc):
+    def test_arista_cmds(self, mock_rc, _mock_sleep):
+        """Wave-7.3: Arista bounce now also splits into two eAPI batches."""
         from backend.runners.interface_recovery import recover_interfaces_arista_eos
 
         mock_rc.return_value = ([{}], None)
         recover_interfaces_arista_eos("10.0.0.1", "u", "p", ["Ethernet1/1"])
-        mock_rc.assert_called_once()
-        cmds = mock_rc.call_args[0][3]
-        self.assertEqual(cmds[0], "configure")
-        self.assertIn("interface Ethernet1/1", cmds)
-        self.assertIn("end", cmds)
+        self.assertEqual(mock_rc.call_count, 2)
+        first_cmds = mock_rc.call_args_list[0][0][3]
+        second_cmds = mock_rc.call_args_list[1][0][3]
+        self.assertEqual(
+            first_cmds,
+            ["configure", "interface Ethernet1/1", "shutdown", "end"],
+        )
+        self.assertEqual(
+            second_cmds,
+            ["configure", "interface Ethernet1/1", "no shutdown", "end"],
+        )
 
 
 class TestClearCounters(unittest.TestCase):

@@ -16,6 +16,132 @@ return shape. Behaviour changes are explicitly noted; otherwise none.
 
 ---
 
+## v0.7.3 — Wave-7.3: transceiver recovery actually recovers (2026-04-23)
+
+**Scope:** production bug fix. `/api/transceiver/recover` was returning
+`200 ok` while leaving the target interface stuck errdisabled / flapping.
+Confirmed in operator logs against `Ethernet1/15` on
+`LSW-IL2-H2-R509-VENUSTEST-P1-N04`.
+
+### Root cause
+
+The legacy implementation built ONE config script per recover request:
+
+```
+configure terminal
+interface Ethernet1/15
+shutdown
+no shutdown
+end
+```
+
+NX-OS schedules link-state changes asynchronously. When `shutdown` and
+`no shutdown` arrive back-to-back inside a single config session, the
+device often coalesces them — the SVI/PHY may never observe a real
+down→up transition, so an errdisabled or flapping port stays exactly
+as it was before the bounce. The audit log lied: API returned 200
+even though nothing recovered.
+
+### Fix
+
+Match the operator-validated CLI sequence: TWO separate SSH/eAPI
+sessions per interface, with a 5-second sleep between them. Sequential
+per-interface (interface 1 fully bounced before interface 2 starts).
+
+- `backend/runners/interface_recovery.py`:
+  - New `build_cisco_nxos_recovery_plan()` and
+    `build_arista_recovery_plan()` return per-stanza dicts
+    `{interface, phase, lines, post_delay_sec}`. Each interface produces
+    two stanzas (shutdown, no_shutdown) — the shutdown stanza carries
+    the bounce delay.
+  - `recover_interfaces_cisco_nxos()` and
+    `recover_interfaces_arista_eos()` now iterate the plan, dispatch
+    each stanza in its own session, and `time.sleep(N)` between them.
+    Short-circuit on first error so a failed shutdown does not leave
+    the port admin-down.
+  - Legacy `build_cisco_nxos_recovery_lines()` /
+    `build_arista_recovery_commands()` retained but deprecated for
+    execution; they now emit a flat list with a `! wait N seconds`
+    comment for the SPA's "Command logs" panel only.
+
+### Strict allowlist (operator's explicit hardening)
+
+The operator's constraint: this code path must NEVER send anything
+beyond the canonical recovery commands.
+
+- `_ALLOWED_LINE_PATTERNS` regex tuple in `interface_recovery.py`
+  permits exactly: `configure terminal`, `configure`,
+  `interface <validated-name>`, `shutdown`, `no shutdown`, `end`.
+- `_assert_lines_allowed()` runs before every SSH/eAPI dispatch.
+  Defensive caps: max 4 lines per script, max 1 `interface` stanza
+  per script.
+- Rejected examples (all covered by tests): `hostname FOO`,
+  `ip address 1.2.3.4/24`, `write erase`, `reload`,
+  `shutdown ; reload`, `no shutdown | exclude foo`,
+  `switchport mode trunk`, `vlan 100`, `Shutdown` (case-sensitive),
+  `  shutdown ` (whitespace), `interface ../etc/passwd`.
+
+### Configurability
+
+- New env knob `PERGEN_RECOVERY_BOUNCE_DELAY_SEC` (default 5, clamped
+  `[1, 30]`). Garbage values fall back to default with no exception.
+- Audit-log line for `/api/transceiver/recover` now includes
+  `bounce_delay_s=5` for forensic reproducibility.
+- INFO log per stanza: `recovery: nxos running ip=10.59.65.4
+  iface=Ethernet1/15 phase=shutdown` (and `phase=no_shutdown` after
+  the sleep).
+
+### Tests
+
+- `tests/test_interface_recovery_bounce_delay.py` (NEW, 41 tests):
+  - 4 tests for plan structure (NX-OS + Arista, single + multi-iface)
+  - 26 parametrised allowlist tests (8 canonical accepted + 17 rogue
+    rejected + 2 cap violations)
+  - 6 dispatch tests (mock paramiko.run_config_lines_pty + time.sleep,
+    assert call ordering, short-circuit on shutdown failure,
+    sequential per-interface)
+  - 5 env-knob tests (default 5s, clamp [1,30], garbage → default)
+- `tests/test_interface_recovery.py` updated: existing
+  `test_cisco_builds_lines` and `test_arista_cmds` rewritten to
+  expect the new two-session-per-interface contract.
+
+### Trade-offs (documented in plan)
+
+- **Latency**: each interface bounce now takes ~9s instead of ~3s
+  (two SSH connect/auth cycles + the 5s sleep). Operator-initiated
+  rare action; acceptable.
+- **Multi-interface partial failure**: interface 2 failing leaves
+  interface 1 already bounced. Documented in the plan; per-interface
+  outcome aggregation is a future enhancement (current behaviour
+  short-circuits at the first error and returns it).
+
+### Verification
+
+- pytest: **1817 passed, 1 xfailed** (was 1776 + 1 xfail; +41 net
+  new tests; existing tests updated, none broken)
+- Vitest: 45 / 45
+- Playwright: 100 / 100
+- Lint (`ruff check`): no net change (184 errors total)
+
+### Manual smoke
+
+To verify on a real device after upgrade:
+
+1. Identify an errdisabled / flapping interface, e.g. `Ethernet1/15`
+   on `LSW-IL2-H2-R509-VENUSTEST-P1-N04`.
+2. POST `/api/transceiver/recover` with that device + interface.
+3. Backend log should show:
+   ```
+   INFO  recovery: nxos running ip=10.59.65.4 iface=Ethernet1/15 phase=shutdown
+   INFO  recovery: nxos sleeping 5s before no-shutdown of Ethernet1/15
+   INFO  recovery: nxos running ip=10.59.65.4 iface=Ethernet1/15 phase=no_shutdown
+   INFO  audit transceiver.recover ok ... bounce_delay_s=5
+   ```
+4. On the device: `show interface Ethernet1/15` — admin state went
+   `up → down` for ~5s and is now `up` again, errdisable cleared.
+
+---
+
 ## v0.7.2 — Wave-7.1: deliberate posture relaxation for internal-only deployment (2026-04-23)
 
 **Scope:** operator-driven posture change. Pergen is run as an internal-only
