@@ -16,6 +16,114 @@ return shape. Behaviour changes are explicitly noted; otherwise none.
 
 ---
 
+## v0.7.6 — Wave-7.6: Arista bare-Ethernet form for transceiver actions (2026-04-23)
+
+**Scope:** operator-reported bug. Arista host ports use the bare
+``EthernetN`` form (e.g. `Ethernet1`, `Ethernet8`, `Ethernet9`) — NO
+module/port slash. The legacy `transceiver_recovery_policy._HOST_PORT_RE`
+required `Ethernet<m>/<p>` (correct for Cisco NX-OS), so every Arista
+recover and clear-counters request was rejected by the policy gate
+BEFORE reaching the eAPI dispatch with:
+
+```
+"Recovery is only allowed for Leaf devices on host ports
+ Ethernet1/1 through Ethernet1/48. Not allowed: ['Ethernet8']"
+```
+
+### Fix
+
+`backend/transceiver_recovery_policy.py`:
+
+- New regex `_ARISTA_HOST_PORT_RE = ^(?:Ethernet|Eth|Et)(\d+)$` accepts
+  the bare Arista form (case-insensitive, short forms `Eth8`/`Et8`
+  also accepted).
+- `is_ethernet_module1_host_port()` now accepts BOTH forms:
+  - Cisco: `Ethernet1/X` (module 1, ports 1-48) — unchanged
+  - Arista: `EthernetX` (ports 1-48) — NEW
+  - Short forms: `1/X`, `EthX`, `EtX` — unchanged + NEW
+- Range constants extracted (`_HOST_PORT_MIN=1`, `_HOST_PORT_MAX=48`)
+  for clarity.
+
+The Arista range mirrors the Cisco range (1-48 host ports) so
+operators have one mental model. Uplinks (49+ on most Arista
+leaves) remain rejected — bouncing them risks isolating the device.
+
+### What did NOT change
+
+- Cisco NX-OS path is byte-identical (existing 2 policy tests still pass).
+- Wave-7.3 strict allowlist (`_ALLOWED_LINE_PATTERNS`) already accepts
+  the bare `interface EthernetN` form via the
+  `[A-Za-z0-9][A-Za-z0-9/_.:\-]{0,127}` interface-name regex — no
+  changes needed there. New tests pin this so a future tightening of
+  the allowlist cannot silently break Arista recovery.
+- Arista eAPI dispatch (`recover_interfaces_arista_eos`) and
+  clear-counters (`clear_counters_arista_eos`) work unchanged once the
+  policy gate stops rejecting the input. Each `arista_eapi.run_commands`
+  is a stateless HTTPS POST so wave-7.4/7.5's NX-OS PTY gymnastics do
+  not apply to Arista.
+
+### Tests (TDD: 30 new tests)
+
+`tests/test_transceiver_recovery_policy_arista.py` (NEW):
+
+- 8 parametrised tests: bare Arista forms in range 1-48 accepted
+  (`Ethernet1`, `Ethernet8`, `Ethernet9`, `Ethernet24`, `Ethernet48`,
+  case-insensitive variants, short `Eth9` / `Et24`).
+- 5 parametrised tests: out-of-range bare forms rejected
+  (`Ethernet0`, `Ethernet49`, `Ethernet64`, `Ethernet96`,
+  `Ethernet128` — uplinks).
+- 9 parametrised tests: non-host-port forms rejected (`Management1`,
+  `Loopback0`, `Port-Channel1`, `Vlan100`, `Tunnel1`, sub-interface
+  `Ethernet1.100`, injection attempt `Ethernet1; reload`,
+  `Ethernet 1` with space, empty string).
+- 3 policy-gate tests: leaf + bare Arista accepted, spine + bare
+  Arista rejected, leaf + uplink rejected.
+- 4 allowlist tests: wave-7.3 `_assert_lines_allowed` accepts bare
+  `interface Ethernet8` form (regression guard).
+- 1 plan-builder test: `build_arista_recovery_plan(["Ethernet8"])`
+  emits exactly the canonical 4-line scripts.
+
+### Documentation
+
+- `AGENTS.md` and `HOWTOUSE.md` — add a Arista interface-naming note
+  next to the existing Cisco-format env-knob row.
+- `patch_notes.md` — this entry.
+
+### Verification
+
+- pytest: **1869 passed, 1 xfailed** (was 1839 + 1 xfail; +30 net
+  new tests; no existing test broken)
+- Lint (`ruff check`): no net change (184 errors total)
+
+### Manual smoke (post-deploy, against an Arista leaf)
+
+```
+POST /api/transceiver/recover
+{
+  "device": {"hostname": "lsw-arista-01", "ip": "10.x.y.z"},
+  "interfaces": ["Ethernet8"]
+}
+```
+
+Expected backend log:
+
+```
+audit transceiver.recover ok actor=... vendor=arista
+    interfaces=['Ethernet8'] bounce_delay_s=5
+```
+
+The eAPI dispatch will hit `https://10.x.y.z/command-api` twice —
+once with `["configure", "interface Ethernet8", "shutdown", "end"]`,
+sleep 5s, then `["configure", "interface Ethernet8", "no shutdown",
+"end"]`. On the device: `show interface Ethernet8` confirms link
+state went down → up.
+
+`POST /api/transceiver/clear-counters` with the same `interface:
+"Ethernet8"` will hit eAPI once with `["clear counters interface
+Ethernet8"]`.
+
+---
+
 ## v0.7.5 — Wave-7.5: NX-OS shell — wake banner + disable paging + non-blocking poll (2026-04-23)
 
 **Scope:** root-cause follow-up to v0.7.4.
