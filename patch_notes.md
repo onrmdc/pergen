@@ -16,6 +16,85 @@ return shape. Behaviour changes are explicitly noted; otherwise none.
 
 ---
 
+## v0.7.7 — Wave-7.7: SPA twin of the Arista bare-Ethernet host-port classifier (2026-04-23)
+
+**Scope:** SPA-side follow-up to v0.7.6.
+
+After v0.7.6 the backend accepted Arista's bare `EthernetN` form, but
+the SPA still hid the recover and clear-counters buttons for those
+rows. Operator-reported behaviour: the action column rendered as a
+muted em-dash (`—`) instead of the two button icons.
+
+### Root cause
+
+`backend/static/js/app.js::transceiverIsHostPortEthernet1to48()` was
+the JavaScript twin of the legacy backend regex. Like the pre-7.6
+backend, it only accepted Cisco's `Ethernet1/X` slash form — so even
+though the backend would now happily process a recover request for
+`Ethernet8`, the SPA's per-row gate `transceiverIsLeafHostRecoverablePort`
+returned `false` first and the buttons never rendered. The action
+cell fell into the `: "<span class=\"muted\">&mdash;</span>"` branch.
+
+### Fix
+
+`backend/static/js/app.js`:
+
+- `transceiverIsHostPortEthernet1to48` now accepts the bare Arista
+  `EthernetN` form via the same regex chain as the backend's
+  `is_ethernet_module1_host_port`. Cisco `Ethernet1/X` and short
+  forms (`Eth1/X`, `Et1/X`, `1/X`, `EthN`, `EtN`) all preserved.
+- The "muted em-dash" tooltip now reads:
+  *"Recovery only on Leaf host ports 1–48 (Cisco Ethernet1/1–
+  Ethernet1/48 or Arista Ethernet1–Ethernet48)."*
+- The "no error interfaces" status text dropped the Cisco-specific
+  port range from its message.
+
+`backend/static/js/lib/utils.js`:
+
+- New exported helper `isHostPortEthernet1to48(iface)` — the
+  canonical, Vitest-tested implementation. The duplicate in `app.js`
+  is annotated to stay in sync; the lib file is the source of truth.
+
+`backend/blueprints/transceiver_bp.py`:
+
+- Two operator-facing 400 error messages updated to mention both
+  vendor forms ("...host ports 1-48 (Cisco Ethernet1/1-Ethernet1/48
+  or Arista Ethernet1-Ethernet48)").
+- Module docstring updated to acknowledge the wave-7.6 widening.
+
+### Tests (TDD: 9 new Vitest tests)
+
+`tests/frontend/unit/utils.spec.ts` — three new `describe` blocks
+exercising `isHostPortEthernet1to48`:
+
+- 3 tests: Cisco NX-OS form accepted (1/1, 1/15, 1/48; case-insensitive
+  + short forms; out-of-range / non-module-1 rejected).
+- 3 tests: Arista bare form accepted (Ethernet1, 8, 9, 24, 48;
+  case-insensitive + short Eth/Et forms; uplinks 49/64/96 rejected).
+- 3 tests: non-host-port forms rejected (Management1, Loopback0,
+  Port-Channel1, Vlan100, Tunnel1, sub-interfaces, injection
+  attempts, empty/null/non-string).
+
+The pre-existing 100 Playwright specs continue to pass — the SPA's
+DOM identifiers and selectors are unchanged.
+
+### Verification
+
+- pytest: 1869 + 1 xfail (unchanged)
+- Vitest: **54 / 54** (was 45 / 45; +9 new tests)
+- Playwright: 100 / 100
+- Lint clean
+
+### Manual smoke
+
+Hard-refresh the SPA after `git pull && ./run.sh` (browsers cache
+`app.js` aggressively). On the Transceiver Check page, run a check
+against an Arista leaf with errored ports — the recover (orange) and
+clear-counters (blue) icon buttons should now appear in the rightmost
+column of every row whose interface is `Ethernet1` through `Ethernet48`.
+
+---
+
 ## v0.7.6 — Wave-7.6: Arista bare-Ethernet form for transceiver actions (2026-04-23)
 
 **Scope:** operator-reported bug. Arista host ports use the bare

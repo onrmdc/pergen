@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   escapeHtml,
   formatBytes,
+  isHostPortEthernet1to48,
   isValidIPv4,
   parseHash,
   safeHtml,
@@ -153,5 +154,84 @@ describe("parseHash", () => {
 
   it("trims surrounding whitespace", () => {
     expect(parseHash("#  diff  ")).toBe("diff");
+  });
+});
+
+// --------------------------------------------------------------------------- //
+// Wave-7.6 (frontend twin) — host-port classifier for transceiver actions     //
+// --------------------------------------------------------------------------- //
+// Mirrors backend/transceiver_recovery_policy.py::is_ethernet_module1_host_port
+// so the SPA renders the recover / clear-counters buttons for both Cisco's
+// `Ethernet1/X` form AND Arista's bare `EthernetX` form. Operator-reported
+// bug 2026-04-23: Arista buttons never appeared because the JS twin only
+// accepted the slash form.
+
+describe("isHostPortEthernet1to48 — Cisco NX-OS form", () => {
+  it("accepts Ethernet1/1 .. Ethernet1/48 (ports in range)", () => {
+    expect(isHostPortEthernet1to48("Ethernet1/1")).toBe(true);
+    expect(isHostPortEthernet1to48("Ethernet1/15")).toBe(true);
+    expect(isHostPortEthernet1to48("Ethernet1/48")).toBe(true);
+  });
+
+  it("accepts case-insensitive + short forms", () => {
+    expect(isHostPortEthernet1to48("ethernet1/24")).toBe(true);
+    expect(isHostPortEthernet1to48("Eth1/24")).toBe(true);
+    expect(isHostPortEthernet1to48("Et1/24")).toBe(true);
+    expect(isHostPortEthernet1to48("1/24")).toBe(true);
+  });
+
+  it("rejects out-of-range and non-module-1 ports", () => {
+    expect(isHostPortEthernet1to48("Ethernet1/0")).toBe(false);
+    expect(isHostPortEthernet1to48("Ethernet1/49")).toBe(false);
+    expect(isHostPortEthernet1to48("Ethernet1/64")).toBe(false);
+    expect(isHostPortEthernet1to48("Ethernet2/1")).toBe(false);
+    expect(isHostPortEthernet1to48("Ethernet3/15")).toBe(false);
+  });
+});
+
+describe("isHostPortEthernet1to48 — Arista EOS bare form (wave-7.6)", () => {
+  it("accepts bare EthernetN where 1 <= N <= 48", () => {
+    expect(isHostPortEthernet1to48("Ethernet1")).toBe(true);
+    expect(isHostPortEthernet1to48("Ethernet8")).toBe(true);
+    expect(isHostPortEthernet1to48("Ethernet9")).toBe(true);
+    expect(isHostPortEthernet1to48("Ethernet24")).toBe(true);
+    expect(isHostPortEthernet1to48("Ethernet48")).toBe(true);
+  });
+
+  it("accepts case-insensitive + short Arista forms", () => {
+    expect(isHostPortEthernet1to48("ethernet9")).toBe(true);
+    expect(isHostPortEthernet1to48("Eth9")).toBe(true);
+    expect(isHostPortEthernet1to48("Et9")).toBe(true);
+  });
+
+  it("rejects out-of-range bare Ethernet (uplinks etc.)", () => {
+    expect(isHostPortEthernet1to48("Ethernet0")).toBe(false);
+    expect(isHostPortEthernet1to48("Ethernet49")).toBe(false);
+    expect(isHostPortEthernet1to48("Ethernet64")).toBe(false);
+    expect(isHostPortEthernet1to48("Ethernet96")).toBe(false);
+  });
+});
+
+describe("isHostPortEthernet1to48 — non-host-port forms", () => {
+  it("rejects management / loopback / port-channel / vlan / tunnel", () => {
+    expect(isHostPortEthernet1to48("Management1")).toBe(false);
+    expect(isHostPortEthernet1to48("Loopback0")).toBe(false);
+    expect(isHostPortEthernet1to48("Port-Channel1")).toBe(false);
+    expect(isHostPortEthernet1to48("Vlan100")).toBe(false);
+    expect(isHostPortEthernet1to48("Tunnel1")).toBe(false);
+  });
+
+  it("rejects sub-interfaces and injection attempts", () => {
+    expect(isHostPortEthernet1to48("Ethernet1/1.100")).toBe(false);
+    expect(isHostPortEthernet1to48("Ethernet1.100")).toBe(false);
+    expect(isHostPortEthernet1to48("Ethernet1; reload")).toBe(false);
+    expect(isHostPortEthernet1to48("Ethernet 1")).toBe(false);
+  });
+
+  it("rejects empty / null / non-string input", () => {
+    expect(isHostPortEthernet1to48("")).toBe(false);
+    expect(isHostPortEthernet1to48(null as unknown as string)).toBe(false);
+    expect(isHostPortEthernet1to48(undefined as unknown as string)).toBe(false);
+    expect(isHostPortEthernet1to48(15 as unknown as string)).toBe(false);
   });
 });

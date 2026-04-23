@@ -664,17 +664,31 @@
     function transceiverStatusHasErr(status) {
       return status != null && String(status).toLowerCase().indexOf("err") !== -1;
     }
+    // Wave-7.6: classifier kept in sync with backend
+    // transceiver_recovery_policy.py and the canonical helper in
+    // backend/static/js/lib/utils.js (covered by Vitest tests). Accepts
+    // BOTH Cisco's Ethernet1/X and Arista's bare EthernetX (1-48); see
+    // tests/frontend/unit/utils.spec.ts for the full matrix.
     function transceiverIsHostPortEthernet1to48(iface) {
       var s = String(iface || "").trim();
+      if (!s) return false;
+      // Cisco NX-OS form: Ethernet<m>/<p>
       var m = s.match(/^(?:Ethernet|Eth|Et)(\d+)\/(\d+)$/i);
       if (m) {
         var mod = parseInt(m[1], 10), port = parseInt(m[2], 10);
         return mod === 1 && port >= 1 && port <= 48;
       }
+      // Short slash form: <m>/<p>
       m = s.match(/^(\d+)\/(\d+)$/);
       if (m) {
         var mod2 = parseInt(m[1], 10), port2 = parseInt(m[2], 10);
         return mod2 === 1 && port2 >= 1 && port2 <= 48;
+      }
+      // Arista EOS bare form: Ethernet<p> (no module slash)
+      m = s.match(/^(?:Ethernet|Eth|Et)(\d+)$/i);
+      if (m) {
+        var port3 = parseInt(m[1], 10);
+        return port3 >= 1 && port3 <= 48;
       }
       return false;
     }
@@ -725,7 +739,7 @@
             "<img src=\"/static/assets/transceiver-recover.png\" alt=\"\" width=\"28\" height=\"28\" /></button>" +
             "<button type=\"button\" class=\"btn-clear-counters-one transceiver-icon-btn\" title=\"clear counters\" aria-label=\"clear counters\">" +
             "<img src=\"/static/assets/transceiver-clear-counters.png\" alt=\"\" width=\"28\" height=\"28\" /></button>"
-          : "<span class=\"muted muted-085\" title=\"Recovery only on Leaf, Ethernet1/1-1/48 host ports.\">&mdash;</span>";
+          : "<span class=\"muted muted-085\" title=\"Recovery only on Leaf host ports 1\u201348 (Cisco Ethernet1/1\u2013Ethernet1/48 or Arista Ethernet1\u2013Ethernet48).\">&mdash;</span>";
         return "<tr data-hostname=\"" + escapeHtml(r.hostname || "") + "\" data-ip=\"" + escapeHtml(r.ip || "") + "\" data-interface=\"" + escapeHtml(r.interface || "") + "\">" +
           "<td>" + escapeHtml(r.hostname || "") + "</td><td>" + escapeHtml(r.interface || "") + "</td>" +
           "<td>" + escapeHtml(r.tx_power != null ? String(r.tx_power) : "") + "</td><td>" + escapeHtml(r.rx_power != null ? String(r.rx_power) : "") + "</td>" +
@@ -1074,7 +1088,7 @@
         var errRows = transceiverTableRows.filter(function(r) { return transceiverStatusHasErr(r.status); });
         var recoverableRows = errRows.filter(function(r) { return transceiverIsLeafHostRecoverablePort(r); });
         if (!recoverableRows.length) {
-          if (recoverStatusEl) recoverStatusEl.textContent = errRows.length ? "No Leaf host ports (Ethernet1/1-1/48) in error state to recover." : "No error interfaces.";
+          if (recoverStatusEl) recoverStatusEl.textContent = errRows.length ? "No Leaf host ports (1\u201348) in error state to recover." : "No error interfaces.";
           return;
         }
         var groups = {};

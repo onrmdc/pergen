@@ -11,8 +11,9 @@ they are stateless and their per-vendor branching is small.
 
 Recovery + clear-counters share a strict gate:
 
-* Audit C4: only Leaf devices on host ports ``Ethernet1/1``–``Ethernet1/48``
-  may be touched.
+* Audit C4 (+ wave-7.6): only Leaf devices on host ports 1-48 may be
+  touched. Both Cisco's ``Ethernet1/1``–``Ethernet1/48`` and Arista's
+  bare ``Ethernet1``–``Ethernet48`` forms are accepted.
 * Audit H7: the destination device + credential are RESOLVED FROM THE
   INVENTORY by hostname/ip, not trusted from the request body. An
   attacker who can call the API cannot rebind a device to a privileged
@@ -182,7 +183,8 @@ def api_transceiver_recover():
             jsonify(
                 {
                     "error": (
-                        "Recovery is only allowed for Leaf devices on host ports Ethernet1/1 through Ethernet1/48. "
+                        "Recovery is only allowed for Leaf devices on host ports 1-48 "
+                        "(Cisco Ethernet1/1-Ethernet1/48 or Arista Ethernet1-Ethernet48). "
                         f"Not allowed: {denied!r}"
                     ),
                     "commands": [],
@@ -325,8 +327,8 @@ def api_transceiver_clear_counters():
             jsonify(
                 {
                     "error": (
-                        "Clear counters is only allowed for Leaf devices on host ports "
-                        "Ethernet1/1 through Ethernet1/48."
+                        "Clear counters is only allowed for Leaf devices on host ports 1-48 "
+                        "(Cisco Ethernet1/1-Ethernet1/48 or Arista Ethernet1-Ethernet48)."
                     ),
                     "commands": [],
                 }

@@ -93,3 +93,53 @@ export function parseHash(hash) {
   if (typeof hash !== "string") return "";
   return hash.replace(/^#/, "").trim();
 }
+
+/**
+ * Wave-7.6 (frontend twin) — host-port classifier for the transceiver
+ * recover / clear-counters buttons.
+ *
+ * Mirrors backend/transceiver_recovery_policy.py::is_ethernet_module1_host_port
+ * exactly so the SPA renders the action buttons for the same set of
+ * interfaces the backend will accept. Operator-reported bug 2026-04-23:
+ * the original JS-side regex only accepted Cisco's `Ethernet1/X` form,
+ * so Arista rows (bare `EthernetX`, e.g. `Ethernet8`) never showed any
+ * buttons even though the backend would have accepted them.
+ *
+ * Accepts:
+ *   - Cisco NX-OS: `Ethernet1/X` where 1 <= X <= 48
+ *     plus short forms `Eth1/X`, `Et1/X`, `1/X`
+ *   - Arista EOS: `EthernetX` (no slash) where 1 <= X <= 48
+ *     plus short forms `EthX`, `EtX`
+ *   - Case-insensitive
+ *
+ * Rejects everything else (uplinks, sub-interfaces, port-channels,
+ * management ports, names with shell metacharacters, etc.).
+ *
+ * Returns false for null / undefined / non-string input.
+ */
+export function isHostPortEthernet1to48(iface) {
+  if (typeof iface !== "string") return false;
+  const s = iface.trim();
+  if (!s) return false;
+  // Cisco NX-OS form: Ethernet<m>/<p>
+  let m = s.match(/^(?:Ethernet|Eth|Et)(\d+)\/(\d+)$/i);
+  if (m) {
+    const mod = parseInt(m[1], 10);
+    const port = parseInt(m[2], 10);
+    return mod === 1 && port >= 1 && port <= 48;
+  }
+  // Short slash form: <m>/<p>
+  m = s.match(/^(\d+)\/(\d+)$/);
+  if (m) {
+    const mod = parseInt(m[1], 10);
+    const port = parseInt(m[2], 10);
+    return mod === 1 && port >= 1 && port <= 48;
+  }
+  // Arista EOS bare form: Ethernet<p> (no module slash)
+  m = s.match(/^(?:Ethernet|Eth|Et)(\d+)$/i);
+  if (m) {
+    const port = parseInt(m[1], 10);
+    return port >= 1 && port <= 48;
+  }
+  return false;
+}
