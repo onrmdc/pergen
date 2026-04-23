@@ -353,6 +353,22 @@ def _install_api_token_gate(app: Flask) -> None:
                 "============================================================"
             )
             pergen_ext["dev_open_banner_logged"] = True
+        # Wave-7.2: warn the operator when BOTH env vars are set. This is
+        # a contradictory configuration: the runtime gate enforces tokens
+        # whenever any are configured, so PERGEN_DEV_OPEN_API has no
+        # effect. Without this warning, the operator sees an empty UI
+        # (every API call returns 401) with no obvious cause.
+        elif dev_open == "1" and dev_tokens and not pergen_ext.get(
+            "contradictory_config_warned"
+        ):
+            _log.warning(
+                "PERGEN_DEV_OPEN_API=1 has no effect when PERGEN_API_TOKEN(S) "
+                "is also set; the gate enforces tokens at runtime. To use the "
+                "open posture, unset PERGEN_API_TOKEN(S). To use token auth "
+                "with the SPA, also set PERGEN_AUTH_COOKIE_ENABLED=1 so the "
+                "browser can log in via /login."
+            )
+            pergen_ext["contradictory_config_warned"] = True
 
     # Audit H-06 (token gate immutability): resolve ONCE at create_app
     # and freeze. The before_request handler reads from the snapshot,

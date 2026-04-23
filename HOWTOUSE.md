@@ -160,6 +160,31 @@ then add it to `.env` (or export it in your shell). The factory
 refuses to silently boot open in development since wave-7 (audit
 H-05).
 
+**Common runtime failure: every API call returns 401, UI is empty.**
+This happens when you set BOTH a token AND `PERGEN_DEV_OPEN_API=1` in
+the same `.env`. The runtime gate ALWAYS enforces tokens when any are
+configured — `PERGEN_DEV_OPEN_API` is consulted only at boot time (it
+controls the H-05 boot guard, not the runtime auth check). Wave-7.2
+emits a clear WARN at startup for this contradictory configuration:
+
+```
+PERGEN_DEV_OPEN_API=1 has no effect when PERGEN_API_TOKEN(S) is also
+set; the gate enforces tokens at runtime. To use the open posture,
+unset PERGEN_API_TOKEN(S). To use token auth with the SPA, also set
+PERGEN_AUTH_COOKIE_ENABLED=1 so the browser can log in via /login.
+```
+
+Pick ONE auth mode (see `.env.example` for full details):
+
+- **Posture A — token auth (recommended):** keep `PERGEN_API_TOKEN`,
+  drop `PERGEN_DEV_OPEN_API`, ADD `PERGEN_AUTH_COOKIE_ENABLED=1`. The
+  SPA will redirect to `/login` on first load; type your actor name
+  (`shared` for the single-token form) and the token itself as the
+  password.
+- **Posture B — open API (internal-only, no auth):** drop
+  `PERGEN_API_TOKEN` entirely, keep only `PERGEN_DEV_OPEN_API=1`. The
+  SPA loads with no auth challenge.
+
 ### 4.2 Direct factory call (for embedding / scripts)
 
 ```bash
