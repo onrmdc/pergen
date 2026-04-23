@@ -477,9 +477,9 @@ byte-for-byte against the pre-refactor baseline.
 ## 10. Tests
 
 ```bash
-make test                          # full suite (1767 passed + 1 xfailed, ~93 s)
-make cov                           # whole-project coverage report (gate 45 %, currently 90.79 %)
-npm run test:frontend              # Vitest frontend unit tests (45 tests, <1 s)
+make test                          # full suite (1888 passed + 1 xfailed, ~110 s)
+make cov                           # whole-project coverage report (gate 45 %, currently 90.50 %)
+npm run test:frontend              # Vitest frontend unit tests (54 tests, <1 s)
 npx playwright test                # Playwright E2E (100 / 100 passing, 43 specs, ~10–30 s)
 
 # Operator CLI (wave-5):
@@ -493,7 +493,7 @@ python scripts/migrate_credentials_v1_to_v2.py --verbose             # real run
 node scripts/audit/innerhtml_classifier.mjs                          # generate XSS site CSV
 # SPA cookie auth (wave-6 Phase F) — opt-in:
 export PERGEN_AUTH_COOKIE_ENABLED=1                                  # then restart app
-make cov-new                       # OOD-layer-only coverage report (gate 85 %, currently 91.34 %)
+make cov-new                       # OOD-layer-only coverage report (gate 85 %, currently 91.28 %)
 venv/bin/python -m pytest tests/golden/ -q                # golden / characterisation
 venv/bin/python -m pytest -k phase9 -q                    # phase-9 only
 venv/bin/python -m pytest tests/test_services.py -q       # service layer

@@ -573,7 +573,7 @@ cd /path/to/new-project
 This guide is the generic ECC reference. For Pergen-specific operational
 knowledge use the project's own docs:
 
-- **Test counts and reproducibility:** [`TEST_RESULTS.md`](./TEST_RESULTS.md) — current `1767 + 1 xfailed` pytest, `45` Vitest, `100 / 100` Playwright; coverage `90.79 %` whole-project / `91.34 %` OOD-scoped.
+- **Test counts and reproducibility:** [`TEST_RESULTS.md`](./TEST_RESULTS.md) — current `1888 + 1 xfailed` pytest, `54` Vitest, `100 / 100` Playwright; coverage `90.50 %` whole-project / `91.28 %` OOD-scoped.
 - **Operational env vars** (including the wave-7 additions `PERGEN_SESSION_LIFETIME_HOURS`, `PERGEN_SESSION_IDLE_HOURS`, `PERGEN_TRUST_PROXY`, `PERGEN_DEV_BIND_HOST`, `PERGEN_DEV_ALLOW_PUBLIC_BIND`): [`HOWTOUSE.md`](./HOWTOUSE.md) §3.
 - **Architecture** (App Factory + 12 blueprints + service layer + repository layer + parser package): [`ARCHITECTURE.md`](./ARCHITECTURE.md).
 - **Per-class function reference:** [`FUNCTIONS_EXPLANATIONS.md`](./FUNCTIONS_EXPLANATIONS.md).

@@ -22,6 +22,24 @@ test.describe("inventory CRUD round-trip", () => {
     const app = new AppShell(page);
     await app.gotoHash("inventory");
 
+    // The SPA attaches the #invAddBtn click handler INSIDE
+    // refreshInventory() -- specifically inside the
+    // `if (!window._invListenersAttached)` block AFTER the initial
+    // GET /api/inventory resolves (backend/static/js/app.js:4112).
+    // Wait for that GET to complete before clicking, otherwise under
+    // parallel load the click lands before the handler is wired up
+    // and the modal never opens. (E2E gap analysis 2026-04-23 follow-up.)
+    await page.waitForResponse(
+      (r) => r.url().endsWith("/api/inventory") &&
+             r.request().method() === "GET" &&
+             r.status() === 200,
+      { timeout: 10_000 },
+    ).catch(() => { /* may already have resolved before goto returned */ });
+    await expect.poll(
+      () => page.evaluate(() => (window as any)._invListenersAttached === true),
+      { timeout: 10_000 },
+    ).toBe(true);
+
     // --- ADD --------------------------------------------------------- //
     await page.locator("#invAddBtn").click();
     await expect(page.locator("#invModal")).toBeVisible();

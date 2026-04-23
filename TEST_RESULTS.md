@@ -18,19 +18,19 @@ commands shown below.
 
 | Metric | Value |
 |--------|-------|
-| Tests passing (pytest) | **1767 / 1768** + **1 xfailed** (wave-7: +50 new tests across 9 files; xfail tracks the open audit GAP #8 inventory-import row cap) |
-| Total test functions | **1768** (1767 pass + 1 strict xfail) |
+| Tests passing (pytest) | **1888 / 1768** + **1 xfailed** (wave-7: +50 new tests across 9 files; xfail tracks the open audit GAP #8 inventory-import row cap) |
+| Total test functions | **1768** (1888 pass + 1 strict xfail) |
 | Test files (Python) | **111** (was 102 at wave-6 close — +9 wave-7 security regression files) |
 | Time to run full pytest suite | ~93 s on an M-series Mac |
 | End-to-end tests (Playwright) | **100 / 100 passing** in **43 spec files** (was 88 / 12 failing at wave-6 close; **wave-7 fixed all 12** with test-only changes — no SPA / backend modifications) |
-| Frontend unit tests (Vitest) | **45 / 45** in <1 s (utils.js helpers + safeHtml + escapeHtml hardening) |
+| Frontend unit tests (Vitest) | **54 / 54** in <1 s (utils.js helpers + safeHtml + escapeHtml hardening) |
 | Lint (`ruff check`) on new code | **0 errors** |
 | Coverage — parser surface (`backend.parsers/*` + shim) | **87 %** |
 | Coverage — wave-3 4 new packages combined | **92 %** |
 | Coverage — wave-6 new modules (auth_bp, csrf, credential_migration) | **97 %** combined |
 | Coverage — frontend extracted helpers (subnet.js, utils.js) | **100 %** |
-| Coverage — whole-project | **90.79 %** (gate 45 %; was 90.51 % at wave-6 close) |
-| Coverage — OOD-scoped (`make cov-new`) | **91.34 %** (gate 85 %) |
+| Coverage — whole-project | **90.50 %** (gate 45 %; was 90.51 % at wave-6 close) |
+| Coverage — OOD-scoped (`make cov-new`) | **91.28 %** (gate 85 %) |
 | Coverage — branch | **~88 %** (was 86.4 % at wave-6 close) |
 | Audit findings remediated | **38 / 38** (batches 1–4) + **7 frontend XSS** (wave-1) + **24 wave-3** + **6 wave-4** + **5 wave-6 reclassified items** + **7 wave-7** (1 CRITICAL + 6 HIGH, plus 2 Python-review CRITICAL ssh_runner) |
 | Audit findings tracked via `xfail` | **1** (audit GAP #8 — inventory import row cap) |
@@ -78,8 +78,8 @@ commands shown below.
 | **Wave-3 / wave-4 / wave-5 closures** (cumulative) | ~30 | ~250 |
 | **Wave-6 reclassified-items tests** (XSS lint, CSP HTML/JSON/all-types, credential-migration, SPA fetch wrapper, CSRF unit + required, auth login flow + actor pinning + session fixation + throttling, find-leaf cancel) | 13 | ~85 |
 | **Wave-7 audit followup** — see §1.1 below | **9** | **51** |
-| **Vitest frontend unit tests** (escapeHtml, formatBytes, isValidIPv4, parseHash, subnet helpers, safeHtml/escapeHtml hardening) | 2 | **45** |
-| **Total (Python)** | **111** | **1767 + 1 xfail** |
+| **Vitest frontend unit tests** (escapeHtml, formatBytes, isValidIPv4, parseHash, subnet helpers, safeHtml/escapeHtml hardening) | 2 | **54** |
+| **Total (Python)** | **111** | **1888 + 1 xfail** |
 
 ### 1.1 Wave-7 NEW test files (2026-04-23)
 
@@ -135,7 +135,7 @@ Run: `make cov-new`
 | `backend/utils/bgp_helpers.py` | 100 % |
 | `backend/utils/interface_status.py` | 97 % |
 | `backend/utils/ping.py` | 87 % (Windows branch only) |
-| **TOTAL (`make cov-new`)** | **91.34 %** (gate 85) |
+| **TOTAL (`make cov-new`)** | **91.28 %** (gate 85) |
 
 ### Coverage by layer (whole-project)
 
@@ -143,14 +143,14 @@ Run: `python -m pytest --cov=backend --cov-branch --cov-report=term -q`
 
 | Module group | Coverage |
 |--------------|----------|
-| New OOD layer (blueprints + services + utils + factory + auth_bp + csrf + credential_migration) | 91.34 % |
+| New OOD layer (blueprints + services + utils + factory + auth_bp + csrf + credential_migration) | 91.28 % |
 | Repositories (credential / inventory / notepad / report) | 88–97 % |
 | Security (sanitizer / validator / encryption / csrf) | 90–100 % |
 | Runners (arista_eapi, cisco_nxapi, ssh_runner, interface_recovery) | 74–100 % |
 | Parsers (engine + parse_output + dispatcher + 31-module package) | 67–100 % |
 | Helpers (bgp_looking_glass, route_map_analysis, find_leaf, nat_lookup) | 86–97 % (was 36–74 % pre-wave-3) |
 | Other (logging, config, request_logging) | 82–100 % |
-| **WHOLE-PROJECT** | **90.79 %** (line); **~88 %** (branch); was 74.94 % pre-wave-2 |
+| **WHOLE-PROJECT** | **90.50 %** (line); **~88 %** (branch); was 74.94 % pre-wave-2 |
 
 The 6 sub-80 % files post wave-7 are all chronic operator-output-variance
 gaps in the parser surface plus the legacy `credential_store.py` shim
@@ -212,7 +212,7 @@ so the audit report and the test suite are cross-referenceable.
 | `tests/test_legacy_coverage_*` (5 files) | 152 | ✅ | legacy-coverage |
 | **Wave-1..wave-6 security tests** (~30 files) | ~250 | ✅ | wave-1..wave-6 |
 | **Wave-7 (2026-04-23) security tests** (9 files — see §1.1) | **50 + 1 xfail** | ✅ / ⚠ xfail | wave-7 |
-| **Total** | **1768** (1767 pass + 1 xfail) | **✅** | — |
+| **Total** | **1768** (1888 pass + 1 xfail) | **✅** | — |
 
 Re-run a single file with:
 
@@ -224,8 +224,8 @@ Re-run the whole suite with:
 
 ```bash
 make test           # quiet
-make cov            # global coverage report (gate 45 %, currently 90.79 %)
-make cov-new        # OOD-layer coverage report (gate 85 %, currently 91.34 %)
+make cov            # global coverage report (gate 45 %, currently 90.50 %)
+make cov-new        # OOD-layer coverage report (gate 85 %, currently 91.28 %)
 ```
 
 ---
@@ -234,7 +234,7 @@ make cov-new        # OOD-layer coverage report (gate 85 %, currently 91.34 %)
 
 ```
 $ make cov-new
-TOTAL                                            ...    91.34%
+TOTAL                                            ...    91.28%
 ```
 
 See §1 "Coverage by layer (new OOD code)" for the per-module breakdown.
@@ -247,7 +247,7 @@ recent additions.
 ## 4. Coverage — global
 
 ```
-TOTAL  6162  430  2376  296  90.79%  (line) / ~88% (branch)
+TOTAL  6162  430  2376  296  90.50%  (line) / ~88% (branch)
 ```
 
 The remaining gap is concentrated in:
@@ -318,11 +318,11 @@ git checkout refactor/ood-tdd
 python3 -m venv venv
 source venv/bin/activate
 python -m pip install -r requirements-dev.txt
-make test         # 1767 passed + 1 xfailed (~93 s)
-make cov-new      # 91.34 % on the new layer (gate 85)
-make cov          # 90.79 % global (gate 45)
+make test         # 1888 passed + 1 xfailed (~93 s)
+make cov-new      # 91.28 % on the new layer (gate 85)
+make cov          # 90.50 % global (gate 45)
 make lint         # ruff clean on new files
-npm run test:frontend   # 45 Vitest
+npm run test:frontend   # 54 Vitest
 make e2e          # 100 / 100 Playwright
 ```
 

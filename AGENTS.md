@@ -174,9 +174,10 @@ conventions in addition to the ECC defaults above.
 ## Pergen architecture (one-liner)
 
 App Factory + 12 blueprints + service layer + repository layer +
-RunnerFactory + ParserEngine on top of a 1767-test pytest safety net
-(+ 1 strict xfail tracking audit GAP #8) + 45 Vitest + 100 Playwright.
-Whole-project coverage **90.79 %**, OOD-scoped **91.34 %**.
+RunnerFactory + ParserEngine on top of a 1888-test pytest safety net
+(+ 1 strict xfail tracking audit GAP #8) + 54 Vitest + 100 Playwright
+(verified 2026-04-23 wave-7.10).
+Whole-project coverage **90.50 %**, OOD-scoped **91.28 %**.
 
 Full layered diagram + module reference:
 [`ARCHITECTURE.md`](./ARCHITECTURE.md). Per-class function reference:

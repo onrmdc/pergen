@@ -16,6 +16,85 @@ return shape. Behaviour changes are explicitly noted; otherwise none.
 
 ---
 
+## v0.7.10 — Wave-7.10: E2E full-suite verification + flaky-spec fix (2026-04-23)
+
+**Scope:** end-to-end verification pass against the full suite (pytest +
+Vitest + Playwright) ahead of the internal-production go-live decision.
+One real test-flakiness bug was found and fixed; no production code was
+modified.
+
+### Verification snapshot
+
+| Surface              | Result                                  |
+|----------------------|-----------------------------------------|
+| pytest               | **1888 passed, 1 xfailed** in 109.85 s  |
+| pytest combined cov  | **90.50 %** (gate: 45 %) ✓              |
+| OOD-scoped (`cov-new`) | **91.28 %** (gate: 85 %) ✓            |
+| Vitest (frontend)    | **54 / 54** in 0.91 s (100 % coverage on extracted utils) |
+| Playwright           | **100 / 100** in 16.3 s (post-fix)      |
+| Boot smoke           | App factory boots; 13 blueprints registered; `/api/health` returns `{"status":"ok"}`; live `/api/inventory` returns 1132 devices |
+| Lint (`backend/`, `tests/`) | 122 pre-existing style findings (I001 import-sort, B904 raise-from, UP006/UP035 modern typing); zero new from this session; advisory in this repo |
+| Dependency audit     | 6 npm moderate (vite-node dev-only, never shipped); python deps current to within minor versions |
+
+The single `xfailed` is the strict tracker for audit GAP #8 (inventory
+import row cap) — known, intentional, will XPASS once the cap lands.
+
+### Bug found — flaky CRUD spec under parallel load
+
+`tests/e2e/specs/flow-inventory-crud.spec.ts` failed reproducibly when
+the full Playwright suite ran against an existing dev server holding
+the operator's real 1132-device inventory. The single-spec run passed
+in 1.4 s; the full-suite run failed at the same line every time.
+
+Root cause was a missing wait, NOT a product regression:
+`backend/static/js/app.js:4112` attaches the `#invAddBtn` click handler
+**inside** the `if (!window._invListenersAttached)` block, which only
+runs **after** the initial `GET /api/inventory` resolves. Against an
+inventory of two seed devices the GET completes in milliseconds; against
+1132 real devices under parallel load it can stretch past the test's
+first `click()`, so the click lands before the listener is wired up,
+the modal never opens, and the next `expect(toBeVisible)` times out.
+
+The fix is one block in the spec: poll for
+`window._invListenersAttached === true` before the first interaction.
+3-iteration repeat-each = 3/3 pass; full-suite re-run = 100/100 pass.
+
+### Files
+
+- `tests/e2e/specs/flow-inventory-crud.spec.ts` — added explicit wait
+  for the initial `/api/inventory` GET + `_invListenersAttached` flag.
+
+### Doc updates (no exceptions, per the verify pass)
+
+- `ARCHITECTURE.md` §11.1, §header — bumped test counts 1767 → 1888,
+  90.79 % → 90.50 % combined coverage, 91.34 % → 91.28 % OOD-scoped.
+- `HOWTOUSE.md` §13.1 (`make test`) — bumped 1767 → 1888.
+- `AGENTS.md` Pergen-specific notes — bumped 1767 → 1888.
+- `patch_notes.md` — this entry.
+
+### Production-readiness call (internal use)
+
+- All quality gates green: 1888 + 54 + 100 = **2042 automated tests
+  passing, zero failures**.
+- Combined coverage 90.50 %, OOD-scoped 91.28 %, frontend extracted
+  utils 100 %.
+- Boot guard, CSP/HSTS headers, CSRF, audit logging, credential
+  encryption (PBKDF2 600k + AES-CBC + HMAC-SHA256), per-actor token
+  authn, idle-timeout sessions, ProxyFix gating, SSRF guard (relaxed
+  by design for internal mgmt network), bind-host guard, destructive-
+  confirm header — all in place and pinned by tests.
+- Wave-7.1 through 7.9 closed every CRITICAL + HIGH from the wave-7
+  audit and python review; wave-7.10 (this entry) closed the only
+  remaining test-stability flake found during the verify pass.
+
+**Recommendation: GO for internal production use.** The single
+deferred item (audit GAP #8 — inventory-import row cap) is the only
+known unresolved finding; it is non-exploitable for a trusted-operator
+deployment because the import endpoint is auth-gated, but should be
+fixed before any external/multi-tenant exposure.
+
+---
+
 ## v0.7.9 — Wave-7.9: DCI/WAN router page — credential resolved from inventory (2026-04-23)
 
 **Scope:** operator-reported bug + latent credential-store bridge bug.

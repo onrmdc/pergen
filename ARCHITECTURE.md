@@ -134,7 +134,7 @@ tests/                           # 861 tests (852 pass + 9 xfail) across 58 file
 └── test_runner_dispatch_coverage.py    # 13 runner.run_device_commands branches
 ```
 
-**Total tests: 1767 pytest + 1 strict xfail + 45 Vitest + 100 Playwright** — refactor program FULLY COMPLETE at wave-6 (all 5 reclassified items shipped); wave-7 (2026-04-23) closed an additional 1 CRITICAL + 6 HIGH (security audit) + 2 CRITICAL (python review) findings in the seams between the wave-6 surface and the unchanged legacy modules. Every plan in `docs/refactor/` is `DONE_*`-prefixed, all green. The single strict xfail tracks audit GAP #8 (inventory import row cap). Lint clean on every blueprint, service, util, factory,
+**Total tests: 1888 pytest + 1 strict xfail + 54 Vitest + 100 Playwright** (verified 2026-04-23 wave-7.10) — refactor program FULLY COMPLETE at wave-6 (all 5 reclassified items shipped); wave-7 (2026-04-23) closed an additional 1 CRITICAL + 6 HIGH (security audit) + 2 CRITICAL (python review) findings in the seams between the wave-6 surface and the unchanged legacy modules; wave-7.10 closed the only test-stability flake found during the production-readiness verify pass. Every plan in `docs/refactor/` is `DONE_*`-prefixed, all green. The single strict xfail tracks audit GAP #8 (inventory import row cap). Lint clean on every blueprint, service, util, factory,
 app.py, config, hardened runner, security module, and request_logging.
 Audit batch 4 added 24 security-regression tests
 (`tests/test_security_audit_batch4.py`) and 13 runner-dispatch coverage
@@ -316,7 +316,7 @@ blueprints incrementally.
 The test suite is now stratified across three runtimes, each with
 a different feedback loop and ownership boundary.
 
-### 7.1 Python — pytest (1767 passed + 1 xfailed in ~93 s)
+### 7.1 Python — pytest (1888 passed + 1 xfailed in ~110 s)
 
 The classical layer. Owned by every code change. Three sub-tiers:
 
@@ -399,13 +399,13 @@ module split is queued); audit-wave-1 dropped the count from
 ### 7.4 Coverage gates (Makefile)
 
 - `make cov` — whole-project line coverage (gate 45 %, current
-  **90.79 %** post-wave-7; legacy parser surface drags the average; their
-  public APIs are all covered, only deep operator-output-variance branches
-  remain).
+  **90.50 %** post-wave-7.10; legacy parser surface drags the average;
+  their public APIs are all covered, only deep operator-output-variance
+  branches remain).
 - `make cov-new` — new-OOD-layer-only coverage (gate 85 %, current
-  **91.34 %** post-wave-7). This is the gate that *must* hold green;
+  **91.28 %** post-wave-7.10). This is the gate that *must* hold green;
   the global gate is informational only. (Note: OOD-scoped dropped from
-  94 % at wave-6 close to 91.34 % at wave-7 close because the wave-7
+  94 % at wave-6 close to 91.28 % at wave-7.10 close because the wave-7
   fixes added new code paths in `app_factory` + `ssh_runner` +
   `credential_store` slightly faster than the matching tests filled in
   the denominator. Both gates remain green.)

@@ -23,15 +23,16 @@
 > proxy-aware throttle, bounded session lifetime, `__main__` bind guard,
 > audit-log scrubbing, username-enum closure).
 >
-> Every existing API still ships unchanged — **1,767 pytest tests + 1
-> strict xfail + 45 Vitest + 100 Playwright** lock the response shapes
-> byte-for-byte across all 28 golden parser snapshots.
+> Every existing API still ships unchanged — **1,888 pytest tests + 1
+> strict xfail + 54 Vitest + 100 Playwright** (verified 2026-04-23
+> wave-7.10) lock the response shapes byte-for-byte across all 28
+> golden parser snapshots.
 >
 > **Coverage:** **87 %** on the parser surface; **92 %** on the 4 new
 > wave-3 packages; **97 %** on the wave-6 modules (auth_bp, csrf,
 > credential_migration); **100 %** on extracted frontend helpers
-> (`subnet.js`, `utils.js`); **90.79 %** whole-project (was 74.94 %
-> pre-refactor, +15.85 pp net); **91.34 %** on the OOD-scoped layer
+> (`subnet.js`, `utils.js`); **90.50 %** whole-project (was 74.94 %
+> pre-refactor, +15.56 pp net); **91.28 %** on the OOD-scoped layer
 > (`make cov-new`, gate 85).
 >
 > **Refactor program FULLY COMPLETE** — wave-6 shipped all 5 reclassified
