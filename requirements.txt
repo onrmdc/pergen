@@ -8,3 +8,9 @@ requests>=2.28
 # XML responses from network firewalls — the stdlib xml.etree parser is
 # vulnerable to billion-laughs / XXE attacks.
 defusedxml>=0.7.1
+# Wave-7.2: python-dotenv lets the Flask CLI auto-load `.env` from the repo
+# root so operators can put PERGEN_API_TOKEN / PERGEN_DEV_OPEN_API there
+# without sourcing it manually each time. run.sh ALSO loads .env as a
+# fallback so this dependency is belt-and-suspenders, not strictly
+# required to boot.
+python-dotenv>=1.0

@@ -132,6 +132,34 @@ exporting it before the script:
 FLASK_CONFIG=production FLASK_RUN_HOST=0.0.0.0 ./run.sh
 ```
 
+**Wave-7.2 — `.env` auto-loading.** `./run.sh` now auto-loads `.env`
+from the repo root before launching Flask. Put your tokens, secret
+key, and any other env knobs in `.env` (copy from `.env.example`):
+
+```bash
+cp .env.example .env
+# edit .env: set SECRET_KEY, PERGEN_API_TOKEN (≥ 32 chars) or
+# PERGEN_DEV_OPEN_API=1
+./run.sh
+```
+
+Existing shell exports take precedence over `.env` (`.env` is a
+baseline, not an override) — set a variable inline (`FOO=bar ./run.sh`)
+and the inline value wins. The Flask CLI also auto-loads `.env` when
+`python-dotenv` is installed (it ships in `requirements.txt` since
+wave-7.2); the `run.sh` parser is the belt-and-suspenders fallback for
+older venvs.
+
+**Common boot failure: "Refusing to boot with an open API in
+development."** This means neither `PERGEN_API_TOKEN(S)` nor
+`PERGEN_DEV_OPEN_API=1` is in the environment. Either:
+- set a token (must be ≥ 32 characters): `PERGEN_API_TOKEN=$(python3 -c "import secrets; print(secrets.token_urlsafe(32))")`, or
+- explicitly opt into the open posture: `PERGEN_DEV_OPEN_API=1`,
+
+then add it to `.env` (or export it in your shell). The factory
+refuses to silently boot open in development since wave-7 (audit
+H-05).
+
 ### 4.2 Direct factory call (for embedding / scripts)
 
 ```bash
