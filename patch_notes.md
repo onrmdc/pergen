@@ -16,6 +16,140 @@ return shape. Behaviour changes are explicitly noted; otherwise none.
 
 ---
 
+## v0.7.4 — Wave-7.4: NX-OS recovery now uses interactive shell (2026-04-23)
+
+**Scope:** root-cause follow-up to v0.7.3.
+
+The wave-7.3 fix split the bounce into two SSH sessions with a 5-second
+sleep — operator-validated CLI workflow. But the device's interface
+state STILL did not change after recover. Operator log evidence
+2026-04-23 against `LSW-IL2-H2-R509-VENUSTEST-P1-N04 / Ethernet1/15`:
+
+```
+recovery: nxos running ip=10.59.65.4 iface=Ethernet1/15 phase=shutdown
+[chan 0] EOF received (0)         ← session lasted ~1 second
+recovery: nxos sleeping 5s before no-shutdown of Ethernet1/15
+recovery: nxos running ip=10.59.65.4 iface=Ethernet1/15 phase=no_shutdown
+[chan 0] EOF received (0)         ← session lasted ~1 second
+audit transceiver.recover ok ... bounce_delay_s=5
+```
+
+The bounce LOOKED right (correct dispatch sequence + correct sleep) but
+nothing happened on the device.
+
+### Root cause
+
+`ssh_runner.run_config_lines_pty` joined the stanza into a single
+script string and called `client.exec_command(script, get_pty=True)`.
+NX-OS's SSH `exec_command` channel does NOT execute multi-line config
+scripts the way an interactive shell does — it interprets only the
+**first** line as the command and subsequent lines arrive on the
+channel input but are not handed to the parser. NX-OS treated
+`configure terminal\ninterface ...\nshutdown\nend\n` as the single
+command `configure terminal` and discarded the rest. The session
+closed in ~1 second because the channel sent EOF immediately after
+the script.
+
+### Fix
+
+New runner `ssh_runner.run_config_lines_shell` opens a real interactive
+PTY via `client.invoke_shell()`, waits for the device prompt before
+sending each line, and captures the response between commands. This
+is the standard paramiko pattern for NX-OS / IOS-style config
+sessions.
+
+- `backend/runners/ssh_runner.py`:
+  - New `_CONFIG_PROMPT_RE` matches NX-OS / IOS prompts:
+    `hostname#`, `hostname(config)#`, `hostname(config-if)#`,
+    `hostname(config-if-Ethernet1/15)#`. Constrained to legitimate
+    hostname chars so a stray `#` in command output cannot fool it.
+  - New `_DEVICE_ERROR_RE` matches NX-OS error markers
+    (`% Invalid command`, `% Incomplete command`, `% Ambiguous`,
+    `% Cannot...`, `% Error`).
+  - New `_open_shell_channel()` helper (extracted so tests can patch
+    it without touching paramiko).
+  - New `_read_until_prompt()` reads the channel until a prompt
+    arrives or the deadline expires; returns the accumulated text
+    plus a `prompt_seen` flag.
+  - New `run_config_lines_shell()` is the public API: connects,
+    invoke_shell, waits for initial prompt, then for each line
+    sends `line + "\n"` and waits for the next prompt. Returns the
+    full transcript so callers can audit what the device actually
+    said. Errors map to the existing `_classify_ssh_error` vocabulary
+    plus two new buckets: `"timeout"` (no prompt arrived) and
+    `"device rejected line: ..."` (NX-OS error marker matched).
+
+- `backend/runners/interface_recovery.py`:
+  - `recover_interfaces_cisco_nxos()` now dispatches each stanza
+    through `run_config_lines_shell` (was: `run_config_lines_pty`).
+  - Adds an INFO log per stanza echoing the device's actual response
+    (truncated at 800 chars). Operators can now SEE in the audit
+    trail whether NX-OS accepted the commands.
+
+### Tests (TDD, +20 net new tests)
+
+- `tests/test_ssh_runner_shell_config.py` (NEW, 20 tests):
+  - 8 prompt-regex tests (canonical NX-OS prompts accepted, banners
+    / passwords / errors / random text rejected)
+  - 2 happy-path tests (each line sent, lines sent in order, response
+    captured)
+  - 4 failure-mode tests (device error response → "rejected" bucket,
+    no-prompt-ever → "timeout" bucket, missing paramiko → friendly
+    error, empty input → friendly error)
+  - Built around a deterministic mock channel that delivers one
+    transcript chunk per `send()` cycle, mimicking real PTY behaviour.
+- `tests/test_interface_recovery_bounce_delay.py` and
+  `tests/test_interface_recovery.py` updated: mock targets switched
+  from `run_config_lines_pty` to `run_config_lines_shell`. All
+  existing assertions hold (sequential per-interface, sleep between,
+  short-circuit on shutdown failure, allowlist enforcement).
+
+### What did NOT change
+
+- `run_config_lines_pty` is still in the module — kept for
+  backwards-compat in case any external caller imports it. NX-OS
+  recovery no longer uses it.
+- The wave-7.3 plan structure, strict allowlist, and bounce-delay
+  env knob are all unchanged. This is a pure dispatch-layer fix.
+- Arista path uses `arista_eapi.run_commands` (HTTP eAPI, not SSH)
+  and was never affected by the exec_command bug.
+
+### Verification
+
+- pytest: **1837 passed, 1 xfailed** (was 1817 + 1 xfail; +20 new
+  tests; no existing test broken)
+- Lint (`ruff check`): no net change (184 errors total)
+
+### Manual smoke (post-deploy, repeat your test)
+
+```
+POST /api/transceiver/recover {"device": {"hostname": "...", "ip": "10.59.65.4"}, "interfaces": ["Ethernet1/15"]}
+```
+
+Expected backend log additions vs v0.7.3:
+
+```
+recovery: nxos running ip=10.59.65.4 iface=Ethernet1/15 phase=shutdown
+recovery: nxos device-response ip=10.59.65.4 iface=Ethernet1/15 phase=shutdown:
+    LSW-IL2-H2-R509-VENUSTEST-P1-N04# configure terminal
+    LSW-IL2-H2-R509-VENUSTEST-P1-N04(config)# interface Ethernet1/15
+    LSW-IL2-H2-R509-VENUSTEST-P1-N04(config-if)# shutdown
+    LSW-IL2-H2-R509-VENUSTEST-P1-N04(config-if)# end
+    LSW-IL2-H2-R509-VENUSTEST-P1-N04#
+recovery: nxos sleeping 5s before no-shutdown of Ethernet1/15
+recovery: nxos running ip=10.59.65.4 iface=Ethernet1/15 phase=no_shutdown
+recovery: nxos device-response ip=10.59.65.4 iface=Ethernet1/15 phase=no_shutdown:
+    ... similar transcript with "no shutdown" ...
+audit transceiver.recover ok ... bounce_delay_s=5
+```
+
+The session per stanza will now take 3-6 seconds (not 1 second) —
+because NX-OS is actually parsing each line and emitting its
+prompt back. On the device: `show interface Ethernet1/15` should
+show the link state went down→up.
+
+---
+
 ## v0.7.3 — Wave-7.3: transceiver recovery actually recovers (2026-04-23)
 
 **Scope:** production bug fix. `/api/transceiver/recover` was returning

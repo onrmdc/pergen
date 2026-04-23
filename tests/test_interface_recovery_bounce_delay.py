@@ -233,7 +233,7 @@ class TestNxosRecoverySleepAndDispatch:
 
         with (
             patch(
-                "backend.runners.ssh_runner.run_config_lines_pty",
+                "backend.runners.ssh_runner.run_config_lines_shell",
                 return_value=("ok", None),
             ) as mock_pty,
             patch(
@@ -271,7 +271,7 @@ class TestNxosRecoverySleepAndDispatch:
 
         with (
             patch(
-                "backend.runners.ssh_runner.run_config_lines_pty",
+                "backend.runners.ssh_runner.run_config_lines_shell",
                 return_value=(None, "auth_failed"),
             ) as mock_pty,
             patch(
@@ -297,7 +297,7 @@ class TestNxosRecoverySleepAndDispatch:
 
         with (
             patch(
-                "backend.runners.ssh_runner.run_config_lines_pty",
+                "backend.runners.ssh_runner.run_config_lines_shell",
                 return_value=("ok", None),
             ) as mock_pty,
             patch(

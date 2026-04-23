@@ -30,7 +30,7 @@ class TestValidateInterfaceNames(unittest.TestCase):
 
 class TestRecoverCisco(unittest.TestCase):
     @patch("backend.runners.interface_recovery.time.sleep")
-    @patch("backend.runners.ssh_runner.run_config_lines_pty")
+    @patch("backend.runners.ssh_runner.run_config_lines_shell")
     def test_cisco_builds_lines(self, mock_pty, _mock_sleep):
         """Wave-7.3: each interface bounce now executes as TWO separate
         SSH sessions (shutdown stanza + no-shutdown stanza) with a

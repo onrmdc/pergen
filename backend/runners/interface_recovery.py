@@ -290,6 +290,16 @@ def recover_interfaces_cisco_nxos(
     2 starts). Short-circuits on the first error to avoid leaving a
     port admin-down. Returns the concatenated output of all dispatches
     or the first error encountered.
+
+    Wave-7.4: dispatches via ``run_config_lines_shell`` (invoke_shell +
+    per-line prompt detection) instead of the old ``run_config_lines_pty``
+    (single ``exec_command`` with the whole script). NX-OS's
+    ``exec_command`` channel does not actually execute multi-line config
+    scripts — it interpreted only the first line as the command and the
+    rest never reached the parser. Confirmed against
+    ``LSW-IL2-H2-R509-VENUSTEST-P1-N04`` 2026-04-23: the bounce returned
+    200 ok in ~1 second per stanza but the device's interface state
+    never changed.
     """
     from backend.runners import ssh_runner
 
@@ -304,9 +314,20 @@ def recover_interfaces_cisco_nxos(
             stanza["interface"],
             stanza["phase"],
         )
-        out, err = ssh_runner.run_config_lines_pty(
-            ip, username, password, stanza["lines"], timeout=180
+        out, err = ssh_runner.run_config_lines_shell(
+            ip, username, password, stanza["lines"], timeout=60
         )
+        # Always log the device's actual response so the operator can
+        # see what NX-OS said. Truncate at 800 chars to keep logs sane.
+        if out:
+            preview = out[:800].replace("\r\n", " ").replace("\n", " ")
+            _log.info(
+                "recovery: nxos device-response ip=%s iface=%s phase=%s: %s",
+                ip,
+                stanza["interface"],
+                stanza["phase"],
+                preview,
+            )
         if err:
             _log.warning(
                 "recovery: nxos failed ip=%s iface=%s phase=%s err=%s",

@@ -27,6 +27,8 @@ from __future__ import annotations
 import contextlib
 import logging
 import os
+import re
+import time
 from typing import Any
 
 try:
@@ -241,3 +243,194 @@ def run_commands(
             return results, err
         results.append(out or "")
     return results, None
+
+
+# --------------------------------------------------------------------------- #
+# Wave-7.4 — interactive shell config dispatch                                #
+# --------------------------------------------------------------------------- #
+#
+# ``run_config_lines_pty`` (above) calls ``client.exec_command`` with the
+# entire config script as a single argument. NX-OS's SSH ``exec_command``
+# channel does NOT run multi-line config scripts the way an interactive
+# shell does — it interprets only the first line as the command and
+# subsequent lines arrive on the channel input but are not acted on.
+# Confirmed against ``LSW-IL2-H2-R509-VENUSTEST-P1-N04`` 2026-04-23: the
+# bounce returned 200 ok in ~1 second per stanza but the device's
+# interface state never changed.
+#
+# ``run_config_lines_shell`` opens a real interactive PTY via
+# ``client.invoke_shell()``, waits for the device prompt before sending
+# each line, and reads the response back so the caller can surface
+# what NX-OS actually said.
+
+# Prompt detection. NX-OS / IOS prompts look like:
+#   hostname#                       (exec)
+#   hostname(config)#               (config mode)
+#   hostname(config-if)#            (interface config)
+#   hostname(config-if-Ethernet1/15)# (some platforms)
+#
+# We require '# ' at end (with optional trailing space/CR/LF), preceded
+# by a word and an optional '(...)' segment. Constrain the leading word
+# to legitimate hostname chars (alnum + '-' + '_' + '.') so a stray '#'
+# in command output (e.g. comment lines) does not fool us.
+_CONFIG_PROMPT_RE = re.compile(
+    r"[A-Za-z0-9][A-Za-z0-9_.\-]{0,127}(?:\([A-Za-z0-9_\-/\.]+\))?#\s*$",
+    re.MULTILINE,
+)
+
+# NX-OS / IOS error markers. Any line starting with '%' that isn't just
+# a banner '%' is a syntax / semantic error.
+_DEVICE_ERROR_RE = re.compile(
+    r"^%\s*(invalid|incomplete|ambiguous|cannot|error)",
+    re.MULTILINE | re.IGNORECASE,
+)
+
+
+def _open_shell_channel(  # type: ignore[no-untyped-def]
+    ip: str, username: str, password: str, timeout: int
+):
+    """Connect, ``invoke_shell()``, and return the channel.
+
+    Extracted as a separate helper so tests can monkey-patch it without
+    touching paramiko itself. On failure returns ``None`` and a bucketed
+    error string via raising — callers should wrap in try/except.
+    """
+    if paramiko is None:
+        raise RuntimeError("paramiko not installed")
+    client = _build_client()
+    if client is None:
+        raise RuntimeError("paramiko not installed")
+    client.connect(
+        ip,
+        username=username,
+        password=password or "",
+        timeout=min(30, timeout),
+        allow_agent=False,
+        look_for_keys=False,
+    )
+    chan = client.invoke_shell(width=200, height=50)
+    chan.settimeout(min(30, timeout))
+    # Stash the client on the channel so the caller can close both.
+    chan._pergen_client = client  # type: ignore[attr-defined]
+    return chan
+
+
+def _read_until_prompt(  # type: ignore[no-untyped-def]
+    chan, deadline: float, *, idle_grace_s: float = 0.5
+) -> tuple[str, bool]:
+    """Read from ``chan`` until a config prompt arrives or ``deadline``.
+
+    Returns ``(accumulated_text, prompt_seen)``. ``prompt_seen`` is
+    False on timeout — the caller decides whether to surface that as
+    an error or continue.
+
+    ``idle_grace_s`` is a small extra wait after the prompt is
+    detected, in case the device is still flushing output past the
+    prompt (some NX-OS releases double-print).
+    """
+    buf = bytearray()
+    last_data_ts = time.time()
+    prompt_seen = False
+    while time.time() < deadline:
+        try:
+            chunk = chan.recv(4096)
+        except Exception:  # noqa: BLE001 — paramiko throws socket.timeout
+            chunk = b""
+        if chunk:
+            buf.extend(chunk)
+            last_data_ts = time.time()
+            text = buf.decode("utf-8", errors="replace")
+            if _CONFIG_PROMPT_RE.search(text):
+                prompt_seen = True
+                # One short grace period for trailing bytes.
+                grace_end = time.time() + idle_grace_s
+                while time.time() < grace_end:
+                    try:
+                        more = chan.recv(4096)
+                    except Exception:  # noqa: BLE001
+                        more = b""
+                    if more:
+                        buf.extend(more)
+                    else:
+                        time.sleep(0.05)
+                break
+        else:
+            # No data yet — small sleep and re-check.
+            time.sleep(0.05)
+            # If we've been idle for >2s without ever getting data,
+            # bail early so we don't churn until the deadline.
+            if time.time() - last_data_ts > 2.0 and not buf:
+                break
+    return buf.decode("utf-8", errors="replace"), prompt_seen
+
+
+def run_config_lines_shell(
+    ip: str,
+    username: str,
+    password: str,
+    lines: list[str],
+    timeout: int = 30,
+) -> tuple[str | None, str | None]:
+    """Run config lines via an interactive shell with per-line prompts.
+
+    Wave-7.4 fix for transceiver recovery: the wave-7.3 split-into-two-
+    sessions plan was correct, but the per-stanza dispatch via
+    ``exec_command`` was not actually executing the config on NX-OS
+    boxes. Each line is now sent individually via ``invoke_shell()``;
+    we wait for the device prompt before sending the next line and
+    capture the response so the audit log can show what the device
+    really did.
+
+    Returns ``(combined_output_text, error_or_None)``.
+    """
+    if paramiko is None:
+        return None, "paramiko not installed"
+    if not lines:
+        return None, "no configuration lines"
+
+    chan = None
+    client = None
+    try:
+        try:
+            chan = _open_shell_channel(ip, username, password, timeout)
+        except Exception as exc:  # noqa: BLE001
+            bucket = _classify_ssh_error(exc)
+            _log.warning(
+                "ssh_runner.run_config_lines_shell connect failed (%s): %r",
+                bucket,
+                exc,
+            )
+            return None, bucket
+        client = getattr(chan, "_pergen_client", None)
+
+        deadline = time.time() + max(5, int(timeout))
+        # Wait for the initial banner + prompt.
+        banner, prompt_ok = _read_until_prompt(chan, deadline)
+        if not prompt_ok:
+            return banner or None, "timeout"
+        out_buf = [banner]
+
+        for line in lines:
+            payload = (line + "\n").encode("utf-8")
+            chan.send(payload)
+            text, prompt_ok = _read_until_prompt(chan, deadline)
+            out_buf.append(text)
+            if not prompt_ok:
+                return "".join(out_buf), "timeout"
+            if _DEVICE_ERROR_RE.search(text):
+                return "".join(out_buf), f"device rejected line: {line!r}"
+
+        return "".join(out_buf), None
+    except Exception as exc:  # noqa: BLE001
+        bucket = _classify_ssh_error(exc)
+        _log.warning(
+            "ssh_runner.run_config_lines_shell failed (%s): %r", bucket, exc
+        )
+        return None, bucket
+    finally:
+        if chan is not None:
+            with contextlib.suppress(Exception):
+                chan.close()
+        if client is not None:
+            with contextlib.suppress(Exception):
+                client.close()
