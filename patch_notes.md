@@ -16,6 +16,134 @@ return shape. Behaviour changes are explicitly noted; otherwise none.
 
 ---
 
+## v0.7.9 — Wave-7.9: DCI/WAN router page — credential resolved from inventory (2026-04-23)
+
+**Scope:** operator-reported bug + latent credential-store bridge bug.
+
+### Bug 1 — `/api/route-map/run` missed the H-2 audit pattern
+
+Operator log evidence 2026-04-23: every DCI/WAN router request to
+`/api/route-map/run` failed with `"no credential for ''"`. The empty
+quotes were the giveaway: the route was reading `credential` from the
+request body, but `/api/router-devices` (the SPA's source for the
+device list) intentionally projects the `credential` field OUT of its
+response — its docstring even promises that `/api/route-map/run` will
+re-resolve credentials from inventory by hostname. **That promise was
+never implemented.** When wave-3 added `/api/router-devices`'s
+projection, the corresponding update to `/api/route-map/run` was
+missed.
+
+The transceiver, custom-command, and arista-run-cmds routes already
+do the right thing via the `_resolve_inventory_device(d)` helper.
+Route-map didn't.
+
+### Bug 2 — credential_store v2-bridge ignored `PERGEN_INSTANCE_DIR`
+
+While writing the regression test, I found a second bug: the wave-7
+v2 fall-through bridge (`backend/credential_store.py::_v2_db_path()`)
+hardcoded the path `backend/instance/credentials_v2.db` and ignored
+the `PERGEN_INSTANCE_DIR` env var. Any deployment that overrode the
+instance directory (the Playwright e2e suite, anyone with a custom
+layout) silently lost the bridge — the bridge looked at a database
+that didn't exist on disk.
+
+This was also masking other test bugs: tests that asserted
+"no credential" behaviour were accidentally finding the operator's
+real credentials (in `backend/instance/credentials_v2.db`) because
+the bridge was looking there regardless of the test fixture's
+isolated tmp dir.
+
+### Fixes
+
+`backend/blueprints/device_commands_bp.py`:
+
+- `/api/route-map/run` now calls `_resolve_inventory_device(d)` on
+  every device in the request body. Hostname / IP / vendor / model /
+  credential are read from the canonical inventory row, NOT from
+  the request body. Audit H-2 invariant: even if the body PROVIDES
+  a `credential` field, it is ignored.
+- `/api/arista/run-cmds` now validates commands BEFORE the
+  credential lookup (defence-in-depth: malformed requests rejected
+  without exercising the credential subsystem). The enable-password
+  injection still happens after credential resolution via a
+  placeholder pattern, so the security shape is identical.
+
+`backend/credential_store.py`:
+
+- New `_instance_dir()` helper resolves `PERGEN_INSTANCE_DIR` first,
+  falling back to the `backend/instance` default — same precedence
+  as `backend.config.settings`.
+- Both `_db_path()` (legacy) and `_v2_db_path()` (wave-7 bridge) now
+  use `_instance_dir()`. Operators who override the instance
+  directory regain the v2 fall-through bridge.
+
+### Tests (TDD: 3 new + 3 updated)
+
+`tests/test_route_map_run_inventory_credential.py` (NEW, 3 tests):
+
+- `test_route_map_run_resolves_credential_from_inventory_when_body_omits_it`:
+  reproduces the exact operator scenario — SPA sends device payload
+  without `credential` field — and asserts the route still resolves
+  via inventory and reaches the eAPI dispatch.
+- `test_route_map_run_returns_friendly_error_for_unknown_hostname`:
+  unknown device returns "device not found in inventory", NOT a
+  misleading "no credential for ''".
+- `test_route_map_run_does_not_trust_credential_from_request_body`
+  (audit H-2 invariant): body provides `credential: "evil-cred"`,
+  inventory has `credential: "tyc"` — route MUST resolve "tyc"
+  (probing "evil-cred" would let an attacker enumerate the
+  credential store).
+
+Each test rebuilds the app with the conftest's full module-eviction
+set — without that, `device_commands_bp` retains a stale binding to
+the previous test's `credential_store` module and the bridge looks
+at the wrong tmp dir.
+
+`tests/test_coverage_push.py` — 2 tests updated:
+
+- `test_route_map_run_skips_device_missing_ip`: now uses the conftest
+  inventory hostname `leaf-01` (instead of fake `"h"`) and patches
+  `_resolve_inventory_device` to return a row with empty ip, so the
+  missing-ip branch is exercised after the inventory gate passes.
+- `test_route_map_run_handles_per_device_exception`: same hostname
+  swap to land in the analyze-config exception branch.
+
+Note: two related tests (`test_route_map_run_runner_error`,
+`test_route_map_run_no_json_config`) continued passing because they
+use generic-message assertions; no update needed.
+
+`tests/test_security_phase13.py::test_arista_run_cmds_rejects_configure_terminal`:
+no test code change — the `/api/arista/run-cmds` route reorder
+(validate before credential lookup) makes it pass naturally. The test
+was previously passing only because the operator's real credential
+DB on disk happened to have a `test-cred` row — masked by the v2
+bridge's hardcoded path. With the bridge now isolated to the test's
+tmp dir, the test exercises the validator path it was always meant
+to.
+
+### Verification
+
+- pytest: **1880 passed, 1 xfailed** (was 1877 + 1 xfail; +3 net
+  new tests; 2 existing tests updated, 1 fixed by route reorder)
+- Lint (`ruff check`): no net change (184 errors total)
+
+### Manual smoke (post-deploy)
+
+Repeat the failing flow on the DCI/WAN routers page:
+
+1. Save the `tyc` credential under Credentials.
+2. Open DCI/WAN Routers, scope = TYC, select a DCI router, click Compare.
+
+Expected: the route-map data loads. No `"no credential for ''"`
+error in the device events panel.
+
+If a device's inventory `credential` column references a credential
+not in the store, the error now reads `"no credential for 'tyc'"`
+(with the actual credential name) — pointing the operator directly
+to the missing entry instead of leaving them puzzled.
+
+---
+
 ## v0.7.8 — Wave-7.8: Arista recovery — prepend `enable` + inspect per-cmd results (2026-04-23)
 
 **Scope:** root-cause follow-up to v0.7.7.

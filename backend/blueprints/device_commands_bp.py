@@ -80,6 +80,32 @@ def api_arista_run_cmds():
     if not ip:
         return jsonify({"result": None, "error": "inventory device missing ip"}), 400
 
+    # Wave-7.9: validate commands BEFORE the credential lookup. This is
+    # defence-in-depth: a malformed request should be rejected without
+    # exercising the credential subsystem. Audit M11: dict-form cmds
+    # must only contain ``cmd`` (and ``input`` for the special-case
+    # ``enable`` step). Any other key is a possible injection vector —
+    # we strip them rather than forwarding. Note: we cannot inject the
+    # enable password yet (we don't have it), so we mark enable steps
+    # for substitution after the credential lookup below.
+    _ENABLE_PLACEHOLDER = object()
+    cmds_validated: list = []
+    for c in cmds:
+        if isinstance(c, dict) and (c.get("cmd") or "").strip().lower() == "enable":
+            cmds_validated.append(_ENABLE_PLACEHOLDER)
+        elif isinstance(c, dict):
+            cmd_str = (c.get("cmd") or "").strip()
+            ok, reason = CommandValidator.validate(cmd_str)
+            if not ok:
+                return jsonify({"result": None, "error": f"rejected command: {reason}"}), 400
+            cmds_validated.append({"cmd": cmd_str})
+        else:
+            cmd_str = str(c).strip() if c is not None else ""
+            ok, reason = CommandValidator.validate(cmd_str)
+            if not ok:
+                return jsonify({"result": None, "error": f"rejected command: {reason}"}), 400
+            cmds_validated.append(cmd_str)
+
     cred_name = (canonical.get("credential") or "").strip()
     username, password = _get_credentials(
         cred_name, current_app.config["SECRET_KEY"], creds
@@ -90,26 +116,11 @@ def api_arista_run_cmds():
             400,
         )
 
-    # Audit M11: dict-form cmds must only contain ``cmd`` (and ``input``
-    # for the special-case ``enable`` step). Any other key is a possible
-    # injection vector — we strip them rather than forwarding.
-    cmds_out: list = []
-    for c in cmds:
-        if isinstance(c, dict) and (c.get("cmd") or "").strip().lower() == "enable":
-            cmds_out.append({"cmd": "enable", "input": password or ""})
-        elif isinstance(c, dict):
-            cmd_str = (c.get("cmd") or "").strip()
-            ok, reason = CommandValidator.validate(cmd_str)
-            if not ok:
-                return jsonify({"result": None, "error": f"rejected command: {reason}"}), 400
-            # Whitelist: only ``cmd`` is forwarded for non-enable dicts.
-            cmds_out.append({"cmd": cmd_str})
-        else:
-            cmd_str = str(c).strip() if c is not None else ""
-            ok, reason = CommandValidator.validate(cmd_str)
-            if not ok:
-                return jsonify({"result": None, "error": f"rejected command: {reason}"}), 400
-            cmds_out.append(cmd_str)
+    # Substitute the enable password into the marked positions.
+    cmds_out: list = [
+        {"cmd": "enable", "input": password or ""} if c is _ENABLE_PLACEHOLDER else c
+        for c in cmds_validated
+    ]
 
     from backend.runners import arista_eapi
 
@@ -194,11 +205,27 @@ def api_route_map_run():
     secret_key = current_app.config["SECRET_KEY"]
 
     for d in devices:
-        hostname = (d.get("hostname") or "").strip()
-        ip = (d.get("ip") or "").strip()
-        vendor = (d.get("vendor") or "").strip()
-        model = (d.get("model") or "").strip()
-        cred_name = (d.get("credential") or "").strip()
+        # Wave-7.9 (audit H-2): re-resolve the device + credential from
+        # inventory by hostname/ip. The request body's ``credential``,
+        # ``vendor`` and ``model`` are NOT trusted — ``/api/router-devices``
+        # intentionally projects those out, and even if the body
+        # provided one, an attacker could supply a forged credential
+        # name and probe the credential store.
+        req_hostname = (d.get("hostname") or "").strip()
+        canonical = _resolve_inventory_device(d)
+        if canonical is None:
+            errors.append(
+                {
+                    "hostname": req_hostname,
+                    "error": "device not found in inventory",
+                }
+            )
+            continue
+        hostname = (canonical.get("hostname") or req_hostname).strip()
+        ip = (canonical.get("ip") or "").strip()
+        vendor = (canonical.get("vendor") or "").strip()
+        model = (canonical.get("model") or "").strip()
+        cred_name = (canonical.get("credential") or "").strip()
         if not ip:
             errors.append({"hostname": hostname, "error": "missing ip"})
             continue

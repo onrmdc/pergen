@@ -43,9 +43,26 @@ warnings.warn(
 )
 
 
-def _db_path():
+def _instance_dir() -> str:
+    """Resolve the instance directory the same way ``backend.config.settings``
+    does: prefer ``PERGEN_INSTANCE_DIR`` when set, otherwise the
+    ``backend/instance`` default.
+
+    Wave-7.9 fix: prior to this, the legacy module hardcoded
+    ``backend/instance``, so any deployment that overrode
+    ``PERGEN_INSTANCE_DIR`` (the Playwright e2e suite, anyone with a
+    custom layout) silently lost the v2 fall-through bridge — every
+    credential lookup went to a database that didn't exist.
+    """
+    env_dir = os.environ.get("PERGEN_INSTANCE_DIR", "").strip()
+    if env_dir:
+        return env_dir
     base = os.path.dirname(os.path.abspath(__file__))
-    instance = os.path.join(base, "instance")
+    return os.path.join(base, "instance")
+
+
+def _db_path():
+    instance = _instance_dir()
     os.makedirs(instance, exist_ok=True)
     db = os.path.join(instance, "credentials.db")
     # Audit M-6: enforce 0o600 on the DB file as soon as we touch it so a
@@ -109,8 +126,13 @@ def list_credentials(secret_key: str) -> list[dict]:
 
 
 def _v2_db_path() -> str:
-    base = os.path.dirname(os.path.abspath(__file__))
-    return os.path.join(base, "instance", "credentials_v2.db")
+    """Path to the v2 (PBKDF2 + AES-CBC+HMAC) credential store.
+
+    Wave-7.9: now honours ``PERGEN_INSTANCE_DIR`` via ``_instance_dir()``
+    so the v2 fall-through bridge works under any deployment layout
+    (including the Playwright e2e suite which uses a per-run tmp dir).
+    """
+    return os.path.join(_instance_dir(), "credentials_v2.db")
 
 
 def _read_from_v2(name: str, secret_key: str) -> dict | None:

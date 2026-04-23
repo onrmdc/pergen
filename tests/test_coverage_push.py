@@ -759,6 +759,10 @@ def test_route_map_run_happy_aggregates_rows(client):
 
 
 def test_route_map_run_handles_per_device_exception(client):
+    """Wave-7.9: route now resolves the device from inventory; use the
+    real conftest hostname `leaf-01` so the inventory-resolution gate
+    passes and we reach the analyze_router_config exception branch.
+    """
     with patch(
         "backend.runners.arista_eapi.run_commands",
         return_value=([{"cmds": {}}], None),
@@ -776,11 +780,10 @@ def test_route_map_run_handles_per_device_exception(client):
             json={
                 "devices": [
                     {
-                        "hostname": "h",
+                        "hostname": "leaf-01",
                         "ip": "10.0.0.1",
                         "vendor": "Arista",
                         "model": "EOS",
-                        "credential": "test-cred",
                     }
                 ]
             },
@@ -789,7 +792,7 @@ def test_route_map_run_handles_per_device_exception(client):
     errs = r.get_json()["errors"]
     # Audit L-1: error envelope is generic; "bad config" stays in server log.
     assert any(
-        e.get("hostname") == "h" and "analysis failed" in e.get("error", "").lower()
+        e.get("hostname") == "leaf-01" and "analysis failed" in e.get("error", "").lower()
         for e in errs
     )
     # Confirm the raw exception detail is NOT echoed to clients.
@@ -848,15 +851,28 @@ def test_route_map_run_no_json_config(client):
 
 
 def test_route_map_run_skips_device_missing_ip(client):
+    """Wave-7.9: route now resolves the device from inventory; we reach
+    the missing-ip branch by binding to a real inventory hostname and
+    then patching the resolver to return a row with an empty ip.
+    """
     with patch(
         "backend.blueprints.device_commands_bp._get_credentials",
         return_value=("u", "p"),
+    ), patch(
+        "backend.blueprints.device_commands_bp._resolve_inventory_device",
+        return_value={
+            "hostname": "leaf-01",
+            "ip": "",  # the bug-trigger
+            "vendor": "Arista",
+            "model": "EOS",
+            "credential": "test-cred",
+        },
     ):
         r = client.post(
             "/api/route-map/run",
             json={
                 "devices": [
-                    {"hostname": "h", "ip": "", "vendor": "Arista", "model": "EOS"}
+                    {"hostname": "leaf-01", "ip": "10.0.0.1", "vendor": "Arista", "model": "EOS"}
                 ]
             },
         )
