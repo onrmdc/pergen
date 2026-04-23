@@ -44,10 +44,10 @@ def test_ping_short_circuits_invalid_ip(client):
 def test_ping_returns_reachable_true_when_single_ping_succeeds(client, monkeypatch):
     """``single_ping`` is monkey-patched to short-circuit success.
 
-    Audit H3: 10.0.0.1 is RFC1918 private — opt in via PERGEN_ALLOW_INTERNAL_PING
-    so the SSRF guard does not short-circuit the test.
+    Wave-7 follow-up: default-allow on internal addresses; no env var
+    needed for RFC1918 targets to reach ``single_ping``.
     """
-    monkeypatch.setenv("PERGEN_ALLOW_INTERNAL_PING", "1")
+    monkeypatch.delenv("PERGEN_BLOCK_INTERNAL_PING", raising=False)
     with patch("backend.utils.ping.single_ping", return_value=True):
         r = client.post(
             "/api/ping",
@@ -58,7 +58,7 @@ def test_ping_returns_reachable_true_when_single_ping_succeeds(client, monkeypat
 
 
 def test_ping_returns_reachable_false_on_repeated_failures(client, monkeypatch):
-    monkeypatch.setenv("PERGEN_ALLOW_INTERNAL_PING", "1")
+    monkeypatch.delenv("PERGEN_BLOCK_INTERNAL_PING", raising=False)
     with patch("backend.utils.ping.single_ping", return_value=False):
         r = client.post(
             "/api/ping",

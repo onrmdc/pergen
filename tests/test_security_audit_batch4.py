@@ -417,8 +417,16 @@ def test_clear_counters_requires_confirmation_header_in_production_mode(
 def test_ping_blocks_internal_address_families(client, monkeypatch, ip):
     """Surface 9 — SSRF guard on /api/ping must cover cloud metadata and
     the unspecified address, not just the loopback range.
+
+    Wave-7 follow-up: default posture flipped to default-allow for the
+    internal-only deployment threat model. The SSRF guard now opts in
+    via ``PERGEN_BLOCK_INTERNAL_PING=1``; this test exercises the guard
+    by setting that env var. The default-allow posture is pinned
+    separately by ``test_ping_allows_rfc1918_by_default`` in
+    ``tests/test_security_audit_findings.py``.
     """
     monkeypatch.delenv("PERGEN_ALLOW_INTERNAL_PING", raising=False)
+    monkeypatch.setenv("PERGEN_BLOCK_INTERNAL_PING", "1")
     r = client.post("/api/ping", json={"devices": [{"ip": ip}]})
     assert r.status_code in (200, 400)
     body = r.get_json() or {}

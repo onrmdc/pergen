@@ -16,6 +16,100 @@ return shape. Behaviour changes are explicitly noted; otherwise none.
 
 ---
 
+## v0.7.2 — Wave-7.1: deliberate posture relaxation for internal-only deployment (2026-04-23)
+
+**Scope:** operator-driven posture change. Pergen is run as an internal-only
+operator tool against the operator's own management network. Two wave-7
+controls were turning legitimate use into security-theatre noise:
+
+1. The audit-H3 SSRF guard on `/api/ping` was rejecting every RFC1918 target
+   (the operator's actual fleet — `10.59.1.x` leaves, `10.59.65.x` spines)
+   unless the operator remembered to set `PERGEN_ALLOW_INTERNAL_PING=1`.
+2. The audit-H1 SSH `AutoAddPolicy` notice was firing as a WARN on every
+   `_build_client()` call — multi-device runs (`/api/run/pre` against 50
+   devices) emitted 50 identical WARN lines per request, drowning the audit
+   trail.
+
+Both controls now have operator-friendly defaults; the strict postures are
+preserved as one-env-var opt-ins for any deployment that does NOT trust the
+management network.
+
+### Backend changes
+
+- **`backend/blueprints/network_ops_bp.py`** — `/api/ping` flipped from
+  default-deny to default-allow on internal targets. New helper
+  `_ssrf_guard_enabled()` reads `PERGEN_BLOCK_INTERNAL_PING=1` (opt-in
+  lock-down). Legacy `PERGEN_ALLOW_INTERNAL_PING=1` honoured as no-op
+  (allow is now the default); if BOTH are set, BLOCK wins. Module
+  docstring rewritten to record the deliberate posture decision. The
+  per-rejected-IP log line dropped from WARN to INFO (it now fires only
+  when an operator has explicitly opted into the SSRF guard).
+
+- **`backend/runners/ssh_runner.py`** — `AutoAddPolicy` is unchanged as
+  the runtime default (was already default), but the policy notice now
+  fires **once per process at module-import** (level INFO via new
+  `_emit_autoadd_notice_once()` helper guarded by module-level flag
+  `_AUTOADD_NOTICE_EMITTED`) instead of WARN-per-call. Multi-device runs
+  no longer drown the audit log. The lock-down path
+  (`PERGEN_SSH_STRICT_HOST_KEY=1` → Paramiko `RejectPolicy`) is
+  unchanged. Module docstring rewritten to make the intentional default
+  explicit.
+
+### Test additions / updates
+
+- `tests/test_security_audit_findings.py` — replaced two default-deny
+  tests with `_when_explicitly_opted_in` variants that set
+  `PERGEN_BLOCK_INTERNAL_PING=1`; added three new tests pinning the new
+  default-allow behaviour (`test_ping_allows_rfc1918_by_default`,
+  `test_ping_legacy_allow_env_var_remains_no_op`,
+  `test_ping_block_overrides_allow`).
+- `tests/test_security_audit_batch4.py` — parametrised cloud-metadata
+  test now sets `PERGEN_BLOCK_INTERNAL_PING=1` to exercise the guard.
+- `tests/test_network_ops_bp_phase5.py` — dropped the
+  `monkeypatch.setenv("PERGEN_ALLOW_INTERNAL_PING", "1")` lines (no
+  longer needed; allow is the default).
+- `tests/test_security_ssh_runner_autoadd_quiet.py` (NEW, 3 tests) —
+  pins that `_build_client()` emits zero WARN per call, that the
+  one-shot `_AUTOADD_NOTICE_EMITTED` flag exists, and that the
+  `PERGEN_SSH_STRICT_HOST_KEY=1` lock-down path still flips to
+  `RejectPolicy`.
+
+### Documentation sync
+
+- `AGENTS.md`, `HOWTOUSE.md`, `README.md`, `FUNCTIONS_EXPLANATIONS.md`
+  — env-var tables and audit-control rows updated to record the
+  deliberate posture change. Each location explicitly notes that this
+  is a relaxation tuned for the internal-only deployment threat model
+  and that the strict posture is one env var away.
+- `docs/security/DONE_audit_2026-04-23-wave7.md` — addendum recording
+  the posture change as an explicit threat-model decision (NOT an
+  oversight) so the audit trail stays honest.
+
+### Backwards compatibility
+
+- `PERGEN_ALLOW_INTERNAL_PING=1` continues to work (is now a no-op;
+  allow is the default). Operators with this env var in systemd /
+  `.env` files see no behaviour change.
+- `PERGEN_SSH_STRICT_HOST_KEY=1` continues to lock the runner down to
+  `RejectPolicy`. Same env-var name, same semantics, same audit
+  control.
+- Default `MAX_PING_DEVICES=64` cap and `InputSanitizer.sanitize_ip`
+  validation are unchanged. Worst-case execution time per `/api/ping`
+  request is still bounded; arbitrary IP literals still cannot reach
+  the system `ping` binary.
+
+### Verification
+
+- pytest: **1772 passed, 1 xfailed** (was 1767 + 1 xfail; +5 net new
+  ping tests + 3 new SSH tests − 0 removed)
+- Targeted suite (`test_security_audit_findings.py`,
+  `test_security_audit_batch4.py`, `test_network_ops_bp_phase5.py`,
+  `test_security_ssh_runner_autoadd_quiet.py`): all green
+- No production regression in any existing test
+- Lint (`ruff check`) clean on every file touched
+
+---
+
 ## v0.7.1 — Wave-7: audit followup (2026-04-23)
 
 **Scope:** post-`v0.7.0` security-reviewer + python-reviewer sweep

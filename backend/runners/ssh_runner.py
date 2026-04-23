@@ -1,11 +1,13 @@
 """
 SSH runner: run single command via Paramiko.
 
-Audit H1 hardening
-------------------
-Default behaviour preserved for backwards compatibility (operators
-who already have ``AutoAddPolicy`` working with their gear shouldn't
-break on upgrade), but two opt-in environment knobs are now available:
+Audit H1 + wave-7 follow-up
+---------------------------
+``AutoAddPolicy`` is the **intentional default** for an internal-only
+deployment: operators enroll new leaves / spines into Pergen by
+pointing it at the device and letting paramiko TOFU the host key on
+first contact. The lock-down path is one env var away for any
+deployment that does NOT trust the management network:
 
 * ``PERGEN_SSH_STRICT_HOST_KEY=1`` — flip from ``AutoAddPolicy`` to
   ``RejectPolicy``. Combined with a populated ``known_hosts`` file
@@ -13,8 +15,12 @@ break on upgrade), but two opt-in environment knobs are now available:
 * ``PERGEN_SSH_KNOWN_HOSTS=/path/to/known_hosts`` — explicit
   ``known_hosts`` path. When set, the runner loads it before connecting.
 
-Without either knob the runner remains compatible with the historical
-deployment (auto-add new keys, log a warning).
+Wave-7 follow-up: the AutoAdd notice fires **once per process at
+module import**, level INFO (not WARN per-call). The original
+per-``_build_client`` WARN was creating audit-log noise during
+multi-device runs (``/api/run/pre`` against a 50-device fleet would
+emit 50 identical WARN lines). The notice is still discoverable via
+``app.runner.ssh`` log filters; it just stops nagging.
 """
 from __future__ import annotations
 
@@ -39,6 +45,38 @@ _HOST_KEY_POLICY_NAME = (
     else "AutoAddPolicy"
 )
 
+# Wave-7 follow-up: one-shot flag. The policy notice fires exactly
+# once per process so multi-device runs don't drown the audit log in
+# identical lines. Tests pin the existence of this flag so a future
+# refactor can't silently regress to per-call logging.
+_AUTOADD_NOTICE_EMITTED = False
+
+
+def _emit_autoadd_notice_once() -> None:
+    """Log the AutoAddPolicy notice at INFO level, exactly once.
+
+    Wave-7 follow-up: the original implementation logged at WARN per
+    ``_build_client()`` call which spammed every multi-device run.
+    AutoAddPolicy is the intentional default for internal device
+    enrollment — surface that decision in logs without nagging.
+    """
+    global _AUTOADD_NOTICE_EMITTED
+    if _AUTOADD_NOTICE_EMITTED:
+        return
+    _AUTOADD_NOTICE_EMITTED = True
+    _log.info(
+        "ssh_runner using AutoAddPolicy (intentional default for internal "
+        "device enrollment); set PERGEN_SSH_STRICT_HOST_KEY=1 + "
+        "PERGEN_SSH_KNOWN_HOSTS=<path> to lock down for untrusted networks"
+    )
+
+
+# Fire the notice at module-import so it lands once, near the boot
+# banner, instead of on first device contact (which could be minutes
+# later or buried mid-run).
+if _HOST_KEY_POLICY_NAME == "AutoAddPolicy" and paramiko is not None:
+    _emit_autoadd_notice_once()
+
 
 def _build_client():  # type: ignore[no-untyped-def]
     """Construct an ``SSHClient`` with the configured host-key policy."""
@@ -49,11 +87,9 @@ def _build_client():  # type: ignore[no-untyped-def]
         client.set_missing_host_key_policy(paramiko.RejectPolicy())
     else:
         client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        # WARN once per process when running insecure default.
-        _log.warning(
-            "ssh_runner using AutoAddPolicy (audit H1) — "
-            "set PERGEN_SSH_STRICT_HOST_KEY=1 for SSH MITM protection"
-        )
+        # No per-call log: the one-shot INFO at module import already
+        # surfaced the policy choice. Re-logging here would defeat the
+        # whole point of the wave-7 quiet-default fix.
     known_hosts = os.environ.get("PERGEN_SSH_KNOWN_HOSTS")
     if known_hosts and os.path.isfile(known_hosts):
         try:

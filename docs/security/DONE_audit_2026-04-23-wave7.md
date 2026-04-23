@@ -424,3 +424,104 @@ pip  25.2    ECHO-7db2-03aa-5591 25.2+echo.1
 - **Per-finding traceability.** Every fix in §4 is pinned by exactly one new test file. The test files are named `test_security_<finding>.py` and self-document the audit ID at the top of each module docstring.
 
 — end of audit —
+
+---
+
+## Addendum — wave-7.1 deliberate posture relaxation (2026-04-23)
+
+Two HIGH-severity controls landed in this audit have been intentionally
+relaxed to operator-friendly defaults, with the strict postures preserved
+as one-env-var opt-ins. This addendum records the threat-model decision
+so the audit trail stays honest.
+
+### What changed
+
+**H-3 — `/api/ping` SSRF guard** flipped from default-deny to default-allow
+on internal targets (RFC1918 / loopback / link-local / multicast / reserved).
+
+- **Why:** Pergen is operated against the operator's own management network.
+  The operator's actual fleet (`10.59.1.x` leaves, `10.59.65.x` spines, etc.)
+  is RFC1918 by design. The original default-deny was rejecting every
+  legitimate ping with `WARNING ping rejected internal address ip=10.59.1.1`,
+  making the tool unusable for its intended internal-deployment use case.
+- **New default:** allow internal targets to reach the underlying
+  `single_ping` call.
+- **Lock-down:** `PERGEN_BLOCK_INTERNAL_PING=1` re-enables the original
+  audit-H3 default-deny — useful for internet-exposed deployments or
+  shared multi-tenant hosts where `/api/ping` could otherwise be abused
+  as a metadata-service oracle (`169.254.169.254`).
+- **Backward compat:** `PERGEN_ALLOW_INTERNAL_PING=1` still works as a
+  no-op (allow is the default). If both `ALLOW` and `BLOCK` are set,
+  `BLOCK` wins — explicit lock-down beats default-allow.
+
+**H-1 (SSH) — `AutoAddPolicy` notice** demoted from per-call WARN to a
+one-shot module-import INFO.
+
+- **Why:** Multi-device runs (`/api/run/pre` against a 50-device fleet)
+  emitted 50 identical WARN lines per request, drowning the audit trail
+  in policy-noise that an operator can do nothing about (Pergen is
+  intentionally TOFU-enrolling new leaves and spines on first contact).
+- **New behaviour:** the policy notice fires exactly once per process at
+  module import, level INFO, via a new `_emit_autoadd_notice_once()`
+  helper guarded by module-level flag `_AUTOADD_NOTICE_EMITTED`. The
+  notice remains discoverable via `app.runner.ssh` log filters; it just
+  stops nagging.
+- **Lock-down:** `PERGEN_SSH_STRICT_HOST_KEY=1` (paired with
+  `PERGEN_SSH_KNOWN_HOSTS=<path>`) still flips the policy to Paramiko
+  `RejectPolicy`. Audit control unchanged.
+
+### Threat-model justification
+
+These changes are **deliberate downgrades for an internal-only deployment
+posture**, not oversights. Pergen's threat model is:
+
+1. **Trusted network:** the operator's management VLAN is trusted by
+   policy (already a precondition for SSH-credential-bearing access to
+   every device in the fleet).
+2. **Authenticated callers:** in production (`PERGEN_API_TOKEN(S)` set),
+   only authenticated operators reach `/api/ping`. The metadata-service
+   oracle attack vector requires either a misconfigured open dev mode
+   OR an attacker who has already authenticated.
+3. **Operational requirement:** the tool must be usable. A security
+   control that rejects 100 % of legitimate use is a denial-of-service
+   on the operators, not a defence-in-depth.
+
+For deployments that violate any of these assumptions (internet-exposed
+host, shared multi-tenant, untrusted management network), the
+operator-friendly defaults are exactly one env var away from the strict
+audit-recommended posture.
+
+### What did NOT change
+
+- `MAX_PING_DEVICES=64` cap on `/api/ping` — bounds worst-case execution
+  time and stops single-request internal scans.
+- `InputSanitizer.sanitize_ip` validation — arbitrary IP literals still
+  cannot reach the system `ping` binary.
+- Auth gate (`PERGEN_API_TOKEN(S)`, cookie auth + CSRF) — `/api/ping` is
+  still gated in production.
+- All other wave-7 fixes (credential v2 bridge, SSH FD-leak fix, session
+  lifetime, ProxyFix, bind-host guard, username-enum mitigation) — none
+  of these are affected.
+
+### Tests
+
+- `tests/test_security_audit_findings.py` — three new tests pin the new
+  default-allow behaviour:
+  - `test_ping_allows_rfc1918_by_default`
+  - `test_ping_legacy_allow_env_var_remains_no_op`
+  - `test_ping_block_overrides_allow`
+- The two original default-deny tests are renamed
+  `_when_explicitly_opted_in` and now set `PERGEN_BLOCK_INTERNAL_PING=1`
+  to exercise the SSRF guard via the new opt-in env var.
+- `tests/test_security_audit_batch4.py::test_ping_blocks_internal_address_families`
+  — parametrised over cloud-metadata IPs; updated to set
+  `PERGEN_BLOCK_INTERNAL_PING=1`.
+- `tests/test_network_ops_bp_phase5.py` — dropped legacy
+  `monkeypatch.setenv("PERGEN_ALLOW_INTERNAL_PING", "1")` lines; tests
+  now exercise the default-allow posture.
+- `tests/test_security_ssh_runner_autoadd_quiet.py` (NEW, 3 tests) —
+  pins the per-call no-WARN behaviour, the existence of the
+  `_AUTOADD_NOTICE_EMITTED` module flag, and the still-working
+  lock-down path via `PERGEN_SSH_STRICT_HOST_KEY=1`.
+
+— end of addendum —

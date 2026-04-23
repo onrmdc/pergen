@@ -361,8 +361,17 @@ def test_transceiver_recover_resolves_device_from_inventory_not_request_body(cli
 # --------------------------------------------------------------------------- #
 
 
-def test_ping_blocks_loopback_by_default(client):
-    """127.0.0.1 must be rejected unless PERGEN_ALLOW_INTERNAL_PING=1."""
+def test_ping_blocks_loopback_when_explicitly_opted_in(client, monkeypatch):
+    """127.0.0.1 must be rejected when PERGEN_BLOCK_INTERNAL_PING=1.
+
+    Wave-7 follow-up: the original H3 SSRF guard was default-deny. For an
+    internal-only operator tool the default is now default-allow; the
+    SSRF guard is one explicit env var away (``PERGEN_BLOCK_INTERNAL_PING=1``)
+    for any operator who needs an internet-exposed posture. The guard
+    code path itself is unchanged — this test pins that the opt-in
+    still locks down the loopback range.
+    """
+    monkeypatch.setenv("PERGEN_BLOCK_INTERNAL_PING", "1")
     r = client.post(
         "/api/ping",
         json={"devices": [{"hostname": "lo", "ip": "127.0.0.1"}]},
@@ -373,10 +382,72 @@ def test_ping_blocks_loopback_by_default(client):
     assert body["results"][0]["reachable"] is False
 
 
-def test_ping_blocks_link_local_by_default(client):
+def test_ping_blocks_link_local_when_explicitly_opted_in(client, monkeypatch):
+    """169.254.169.254 (cloud metadata) must be rejected when the SSRF
+    guard is opted into via ``PERGEN_BLOCK_INTERNAL_PING=1``.
+    """
+    monkeypatch.setenv("PERGEN_BLOCK_INTERNAL_PING", "1")
     r = client.post(
         "/api/ping",
         json={"devices": [{"hostname": "ll", "ip": "169.254.169.254"}]},
+    )
+    assert r.status_code == 200
+    assert r.get_json()["results"][0]["reachable"] is False
+
+
+def test_ping_allows_rfc1918_by_default(client, monkeypatch):
+    """Wave-7 follow-up: default-allow posture for internal-only deployment.
+
+    With NEITHER ``PERGEN_BLOCK_INTERNAL_PING`` nor any other guard
+    knob set, an RFC1918 target (the operator's actual fleet, e.g.
+    ``10.59.1.1``) must reach ``single_ping`` instead of being short-
+    circuited by the SSRF guard. This pins the deliberate posture
+    change recorded in ``docs/security/DONE_audit_2026-04-23-wave7.md``.
+    """
+    from unittest.mock import patch
+
+    monkeypatch.delenv("PERGEN_BLOCK_INTERNAL_PING", raising=False)
+    monkeypatch.delenv("PERGEN_ALLOW_INTERNAL_PING", raising=False)
+    with patch("backend.utils.ping.single_ping", return_value=True) as mock_ping:
+        r = client.post(
+            "/api/ping",
+            json={"devices": [{"hostname": "leaf-01", "ip": "10.59.1.1"}]},
+        )
+    assert r.status_code == 200
+    assert r.get_json()["results"][0]["reachable"] is True
+    assert mock_ping.called, (
+        "default posture must let RFC1918 targets reach single_ping"
+    )
+
+
+def test_ping_legacy_allow_env_var_remains_no_op(client, monkeypatch):
+    """Backward compat: ``PERGEN_ALLOW_INTERNAL_PING=1`` still works as
+    a no-op (allow is already the default). Operators with the env var
+    set in systemd / .env files don't see a behaviour change.
+    """
+    from unittest.mock import patch
+
+    monkeypatch.setenv("PERGEN_ALLOW_INTERNAL_PING", "1")
+    monkeypatch.delenv("PERGEN_BLOCK_INTERNAL_PING", raising=False)
+    with patch("backend.utils.ping.single_ping", return_value=True):
+        r = client.post(
+            "/api/ping",
+            json={"devices": [{"hostname": "leaf-01", "ip": "10.0.0.1"}]},
+        )
+    assert r.status_code == 200
+    assert r.get_json()["results"][0]["reachable"] is True
+
+
+def test_ping_block_overrides_allow(client, monkeypatch):
+    """If both env vars are set, BLOCK wins (explicit lock-down beats
+    default-allow). Operators should be able to flip the guard back on
+    even if the legacy allow knob is still in their environment.
+    """
+    monkeypatch.setenv("PERGEN_ALLOW_INTERNAL_PING", "1")
+    monkeypatch.setenv("PERGEN_BLOCK_INTERNAL_PING", "1")
+    r = client.post(
+        "/api/ping",
+        json={"devices": [{"hostname": "lo", "ip": "127.0.0.1"}]},
     )
     assert r.status_code == 200
     assert r.get_json()["results"][0]["reachable"] is False

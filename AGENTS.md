@@ -198,9 +198,9 @@ or writing tests:
 | **`PERGEN_DEV_BIND_HOST`** | **`127.0.0.1`** | Bind host for the legacy `python -m backend.app __main__` entry point. | **Wave-7 H-3** |
 | **`PERGEN_DEV_ALLOW_PUBLIC_BIND`** | unset | Override for the bind-host guard. Required only for `python -m backend.app`; production should always boot via `FLASK_APP=backend.app_factory:create_app`. | **Wave-7 H-3** |
 | `PERGEN_REQUIRE_DESTRUCTIVE_CONFIRM` | unset (dev) / always-on (prod) | `/api/transceiver/recover` and `/api/transceiver/clear-counters` require `X-Confirm-Destructive: yes`. | C-4 |
-| `PERGEN_ALLOW_INTERNAL_PING` | unset | When `=1`, `/api/ping` allowed against loopback / link-local / multicast / private / reserved IPs. Default-deny prevents the endpoint becoming an internal-network scanner. | H-3 |
+| `PERGEN_BLOCK_INTERNAL_PING` | unset | **Wave-7.1 (2026-04-23) deliberate posture change.** `/api/ping` now defaults to **allow** internal targets (RFC1918 / loopback / link-local / multicast / reserved) because Pergen is operated against the operator's own management network. Set `=1` to re-enable the audit-H3 default-deny SSRF guard for an internet-exposed deployment. The legacy `PERGEN_ALLOW_INTERNAL_PING=1` is honoured as a no-op (allow is the default); if BOTH are set, BLOCK wins. | H-3 (relaxed) |
 | `PERGEN_DEV_OPEN_API` | unset | When `=1`, dev/test boot with no token gate is allowed. Without it, a missing `PERGEN_API_TOKEN(S)` in development is a hard error. | Audit wave-2 H-05 |
-| `PERGEN_SSH_STRICT_HOST_KEY` / `PERGEN_SSH_KNOWN_HOSTS` | unset / unset | When `=1`, SSH runner uses Paramiko `RejectPolicy`. Pair with `PERGEN_SSH_KNOWN_HOSTS=<path>`. | H1-ssh |
+| `PERGEN_SSH_STRICT_HOST_KEY` / `PERGEN_SSH_KNOWN_HOSTS` | unset / unset | **Default `AutoAddPolicy` is intentional** for an internal-only Pergen deployment — it lets paramiko TOFU the host key on first contact so new leaves / spines auto-enroll. Set `=1` (paired with `PERGEN_SSH_KNOWN_HOSTS=<path>`) to lock the runner down to Paramiko `RejectPolicy` for an untrusted-network deployment. **Wave-7.1**: the AutoAdd notice now fires once per process at module-import (level INFO), not WARN-per-call — multi-device runs no longer drown the audit log. | H1-ssh (intentional default) |
 
 ## Pergen credential store — wave-7 v2 fall-through bridge
 

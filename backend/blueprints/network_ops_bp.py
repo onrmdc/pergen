@@ -4,8 +4,7 @@ Network operations blueprint — ICMP probes + SPA fallback.
 Phase-5 deliverable. Replaces the legacy ``api_ping`` and ``index``
 routes from ``backend/app.py``.
 
-The ``/api/ping`` endpoint preserves the Phase-13 hardening AND adds
-the audit-H3 SSRF guard:
+The ``/api/ping`` endpoint preserves the Phase-13 hardening:
 
 * ``InputSanitizer.sanitize_ip`` short-circuits invalid IPs *before*
   any process exec, so a malicious IP literal cannot reach the system
@@ -13,13 +12,29 @@ the audit-H3 SSRF guard:
 * The request ``devices`` list is capped at ``MAX_PING_DEVICES`` (64)
   to bound worst-case execution time and stop SSRF-style internal
   scans from a single request.
-* **Audit H3**: loopback / link-local / multicast / reserved /
-  private addresses are rejected unless the operator explicitly
-  enables internal pinging via ``PERGEN_ALLOW_INTERNAL_PING=1``.
-  The default-deny posture stops unauthenticated callers from using
-  the endpoint as a network scanner against the host's internal
-  segments.
 * Each device gets up to 5 attempts; first success wins.
+
+Audit H3 — SSRF guard (wave-7 follow-up posture change)
+-------------------------------------------------------
+
+Pergen is operated against the operator's own internal management
+network. RFC1918, loopback, and link-local addresses are the
+EXPECTED targets of ``/api/ping`` (e.g. ``10.59.1.1`` leaf, ``10.59.65.x``
+spine), not exotic edge cases.
+
+* **Default**: internal addresses are ALLOWED to reach the underlying
+  ``single_ping`` call. This is the deliberate posture for an
+  internal-only deployment, recorded in
+  ``docs/security/DONE_audit_2026-04-23-wave7.md``.
+* **Opt-in lock-down**: set ``PERGEN_BLOCK_INTERNAL_PING=1`` to
+  re-enable the original audit-H3 default-deny — useful for
+  internet-exposed deployments or shared multi-tenant hosts where
+  ``/api/ping`` could otherwise be abused as a metadata-service
+  oracle (e.g. ``169.254.169.254``).
+* **Backward compat**: the legacy ``PERGEN_ALLOW_INTERNAL_PING=1``
+  env var is honoured as a no-op (allow is now the default). If both
+  ``ALLOW`` and ``BLOCK`` are set, ``BLOCK`` wins — explicit lock-down
+  beats default-allow.
 
 The ``/`` endpoint serves the built SPA when present (``index.html``
 under ``app.static_folder``), falling back to a JSON sentinel for
@@ -42,13 +57,12 @@ network_ops_bp = Blueprint("network_ops", __name__)
 
 
 def _is_internal_address(ip: str) -> bool:
-    """Return True for addresses that should never be probed by an
-    unauthenticated /api/ping caller.
+    """Return True for addresses that the SSRF guard considers internal.
 
-    Conservative — flag *anything* that is not globally routable: private
+    Conservative — flags *anything* that is not globally routable: private
     (RFC1918), loopback, link-local, multicast, reserved, unspecified.
-    The carve-out is ``PERGEN_ALLOW_INTERNAL_PING=1`` for operators who
-    legitimately use this endpoint against management subnets.
+    Whether to BLOCK these or let them through is decided by
+    ``_ssrf_guard_enabled()`` based on the env-var posture.
     """
     try:
         addr = ipaddress.ip_address(ip)
@@ -66,6 +80,21 @@ def _is_internal_address(ip: str) -> bool:
     )
 
 
+def _ssrf_guard_enabled() -> bool:
+    """Resolve the wave-7 posture for the /api/ping SSRF guard.
+
+    Default: False (allow internal targets — the operator's actual
+    fleet is on RFC1918, so the original default-deny was making the
+    tool unusable for its intended internal-deployment use case).
+
+    Opt-in lock-down: ``PERGEN_BLOCK_INTERNAL_PING=1`` re-enables the
+    audit-H3 default-deny posture. This wins over the legacy
+    ``PERGEN_ALLOW_INTERNAL_PING`` env var (explicit lock-down beats
+    backward-compat allow).
+    """
+    return os.environ.get("PERGEN_BLOCK_INTERNAL_PING") == "1"
+
+
 @network_ops_bp.route("/api/ping", methods=["POST"])
 def api_ping():
     """ICMP-probe up to 64 devices; first reply within 5 attempts wins."""
@@ -79,7 +108,7 @@ def api_ping():
             400,
         )
 
-    allow_internal = os.environ.get("PERGEN_ALLOW_INTERNAL_PING") == "1"
+    block_internal = _ssrf_guard_enabled()
 
     max_attempts = 5
     results: list[dict] = []
@@ -90,9 +119,11 @@ def api_ping():
         if not ok:
             results.append({"hostname": hostname, "ip": ip, "reachable": False})
             continue
-        # Audit H3: SSRF guard — reject internal targets by default.
-        if not allow_internal and _is_internal_address(ip):
-            _log.warning("ping rejected internal address ip=%s", ip)
+        # Audit H3 (wave-7 follow-up): the SSRF guard is opt-in via
+        # ``PERGEN_BLOCK_INTERNAL_PING=1``. Default posture allows
+        # internal targets because the operator's fleet is internal.
+        if block_internal and _is_internal_address(ip):
+            _log.info("ping ssrf-guard rejected internal address ip=%s", ip)
             results.append({"hostname": hostname, "ip": ip, "reachable": False})
             continue
         reachable = False

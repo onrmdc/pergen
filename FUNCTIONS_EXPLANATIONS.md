@@ -347,10 +347,18 @@ in `tests/parsers/generic/test_field_engine.py`.
 - `GET /api/commands`, `/api/parsers/fields`, `/api/parsers/<command_id>` —
   pure pass-through to `backend.config.commands_loader`.
 
-### `network_ops_bp` (Phase 5 + audit H3)
-- `POST /api/ping` — ICMP-probe up to 64 devices. **Audit H3**: rejects
-  loopback / link-local / multicast / private / reserved targets unless
-  `PERGEN_ALLOW_INTERNAL_PING=1`.
+### `network_ops_bp` (Phase 5 + audit H3 + wave-7.1 posture)
+- `POST /api/ping` — ICMP-probe up to 64 devices.
+  **Wave-7.1 (2026-04-23) posture change**: internal targets
+  (RFC1918 / loopback / link-local / multicast / reserved) are now
+  ALLOWED by default. Pergen is operated against the operator's own
+  management network, so the original audit-H3 default-deny was
+  making the tool unusable for its intended use case. Set
+  `PERGEN_BLOCK_INTERNAL_PING=1` to re-enable the SSRF guard for an
+  internet-exposed deployment; legacy `PERGEN_ALLOW_INTERNAL_PING=1`
+  is a backward-compat no-op (allow is now the default). Implemented
+  in `_ssrf_guard_enabled()`; the original `_is_internal_address()`
+  classifier is unchanged.
 - `GET /` — SPA fallback (serves `index.html` if present, else JSON sentinel).
 
 ### `credentials_bp` (Phase 6 + audit C3)
