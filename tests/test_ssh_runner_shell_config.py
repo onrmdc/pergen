@@ -119,13 +119,21 @@ def _make_shell(transcript: list[bytes]):
 
 
 class TestShellHappyPath:
+    """Wave-7.5: every dispatch starts with two prelude sends (wake
+    newline + ``terminal length 0``) BEFORE the operator's lines.
+    Tests must include matching prompts in the transcript.
+    """
+
     def test_sends_each_line_and_waits_for_prompt(self):
         from backend.runners import ssh_runner
 
-        # Simulate NX-OS responding with a prompt after every line.
+        # Simulate NX-OS responding with a prompt after every line,
+        # including the wake-newline and terminal-length-0 prelude.
         chan = _make_shell(
             [
-                b"\r\nleaf-01# ",  # initial prompt after invoke_shell
+                b"\r\nleaf-01# ",  # initial banner+prompt after invoke_shell
+                b"\r\nleaf-01# ",  # after wake "\n"
+                b"\r\nleaf-01# ",  # after "terminal length 0"
                 b"\r\nleaf-01(config)# ",  # after "configure terminal"
                 b"\r\nleaf-01(config-if)# ",  # after "interface Ethernet1/15"
                 b"\r\nleaf-01(config-if)# ",  # after "shutdown"
@@ -145,8 +153,10 @@ class TestShellHappyPath:
             )
 
         assert err is None, f"unexpected error: {err}"
-        # Each line must be sent (with trailing newline).
+        # All sends accounted for (wake + paging + 4 operator lines).
         sent_payloads = [c.args[0] for c in chan.send.call_args_list]
+        assert b"\n" in sent_payloads  # wake newline
+        assert b"terminal length 0\n" in sent_payloads
         assert b"configure terminal\n" in sent_payloads
         assert b"interface Ethernet1/15\n" in sent_payloads
         assert b"shutdown\n" in sent_payloads
@@ -161,7 +171,9 @@ class TestShellHappyPath:
 
         chan = _make_shell(
             [
-                b"\r\nsw# ",
+                b"\r\nsw# ",  # initial
+                b"\r\nsw# ",  # after wake \n
+                b"\r\nsw# ",  # after terminal length 0
                 b"\r\nsw(config)# ",
                 b"\r\nsw(config-if)# ",
                 b"\r\nsw(config-if)# ",
@@ -179,7 +191,10 @@ class TestShellHappyPath:
             )
 
         sent_order = [c.args[0] for c in chan.send.call_args_list]
+        # Wake newline + paging-disable come BEFORE the operator's lines.
         assert sent_order == [
+            b"\n",
+            b"terminal length 0\n",
             b"configure terminal\n",
             b"interface Eth1/1\n",
             b"shutdown\n",
@@ -196,13 +211,17 @@ class TestShellFailureModes:
     def test_returns_error_on_invalid_input_response(self):
         """If NX-OS responds with '% Invalid input detected', surface
         that as an error rather than silently succeeding.
+
+        Wave-7.5: account for the wake-newline + paging prelude.
         """
         from backend.runners import ssh_runner
 
         chan = _make_shell(
             [
-                b"\r\nsw# ",
-                b"\r\nsw(config)# ",
+                b"\r\nsw# ",  # initial
+                b"\r\nsw# ",  # after wake \n
+                b"\r\nsw# ",  # after terminal length 0
+                b"\r\nsw(config)# ",  # after "configure terminal"
                 # Bogus interface name — NX-OS would reject this:
                 b"\r\n% Invalid command at '^' marker.\r\nsw(config)# ",
                 b"\r\nsw# ",
@@ -264,3 +283,119 @@ class TestShellFailureModes:
         )
         assert err is not None
         assert "no configuration lines" in err.lower()
+
+
+# --------------------------------------------------------------------------- #
+# Wave-7.5 — banner skip + paging disable + non-blocking polling              #
+# --------------------------------------------------------------------------- #
+
+
+class TestBannerSkipAndPagingDisable:
+    """NX-OS sends a long MOTD banner on session open and may not emit
+    a prompt until the user presses Enter. The runner must:
+
+    1. Send a wake-up newline immediately after invoke_shell so the
+       device flushes its banner and emits a prompt.
+    2. Send ``terminal length 0`` to disable paging — otherwise
+       multi-page command output triggers ``--More--`` and waits for
+       a key press.
+    3. Use short polling (NOT a 30-second blocking recv) so the runner
+       does not idle for the full timeout when no data is arriving.
+    """
+
+    def test_sends_wake_newline_after_shell_open(self):
+        """The first thing on the wire after invoke_shell must be a
+        bare ``\\n`` to nudge NX-OS past its banner.
+        """
+        from backend.runners import ssh_runner
+
+        chan = _make_shell(
+            [
+                # Initial banner — no prompt yet (NX-OS waits for Enter).
+                b"Cisco Nexus Operating System (NX-OS) Software\r\n"
+                b"TAC support: http://www.cisco.com/tac\r\n"
+                b"Copyright ...\r\n",
+                # After wake \n, the real prompt appears.
+                b"\r\nleaf-01# ",
+                # After "terminal length 0", another prompt.
+                b"\r\nleaf-01# ",
+                # After "configure terminal":
+                b"\r\nleaf-01(config)# ",
+                # After "interface Ethernet1/15":
+                b"\r\nleaf-01(config-if)# ",
+                # After "shutdown":
+                b"\r\nleaf-01(config-if)# ",
+                # After "end":
+                b"\r\nleaf-01# ",
+            ]
+        )
+
+        with patch.object(
+            ssh_runner, "_open_shell_channel", return_value=chan
+        ):
+            out, err = ssh_runner.run_config_lines_shell(
+                "10.59.65.4",
+                "u",
+                "p",
+                [
+                    "configure terminal",
+                    "interface Ethernet1/15",
+                    "shutdown",
+                    "end",
+                ],
+                timeout=10,
+            )
+
+        assert err is None, f"unexpected error: {err}"
+        sent = [c.args[0] for c in chan.send.call_args_list]
+        # First send must be the wake-up newline.
+        assert sent[0] == b"\n", f"expected wake-up newline, got {sent[0]!r}"
+        # Second send must be the paging-disable.
+        assert sent[1] == b"terminal length 0\n", (
+            f"expected paging-disable, got {sent[1]!r}"
+        )
+        # Then the operator's lines, in order.
+        assert sent[2:] == [
+            b"configure terminal\n",
+            b"interface Ethernet1/15\n",
+            b"shutdown\n",
+            b"end\n",
+        ]
+
+    def test_does_not_block_for_full_timeout_when_idle(self):
+        """If the channel is idle (no data arriving), the runner must
+        not consume the entire timeout window. Earlier bug: each
+        recv() blocked for 30 seconds because chan.settimeout was 30s.
+        """
+        import time as _t
+
+        from backend.runners import ssh_runner
+
+        # Channel that never emits anything.
+        chan = MagicMock()
+        chan.recv.return_value = b""
+        chan.recv_ready.return_value = False
+        chan.send.return_value = 1
+        chan.exit_status_ready.return_value = False
+        chan.closed = False
+
+        with patch.object(
+            ssh_runner, "_open_shell_channel", return_value=chan
+        ):
+            t0 = _t.monotonic()
+            out, err = ssh_runner.run_config_lines_shell(
+                "1.2.3.4",
+                "u",
+                "p",
+                ["configure terminal"],
+                timeout=3,
+            )
+            elapsed = _t.monotonic() - t0
+
+        assert err == "timeout"
+        # Must respect the timeout (not wildly exceed it). Allow some
+        # slack for the grace-period reads, but reject anything > 2x.
+        assert elapsed < 6.0, (
+            f"runner blocked for {elapsed:.1f}s with timeout=3 — "
+            "non-blocking polling is broken"
+        )

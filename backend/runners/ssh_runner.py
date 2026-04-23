@@ -294,6 +294,12 @@ def _open_shell_channel(  # type: ignore[no-untyped-def]
     Extracted as a separate helper so tests can monkey-patch it without
     touching paramiko itself. On failure returns ``None`` and a bucketed
     error string via raising — callers should wrap in try/except.
+
+    Wave-7.5: ``chan.settimeout(0.5)`` for **non-blocking polling**.
+    Earlier 30-second blocking recv meant a single idle window blocked
+    the runner for the full session timeout — operator log evidence
+    2026-04-23: NX-OS sent the MOTD banner but no prompt, runner sat
+    blocked for 60 seconds, then returned timeout.
     """
     if paramiko is None:
         raise RuntimeError("paramiko not installed")
@@ -309,14 +315,16 @@ def _open_shell_channel(  # type: ignore[no-untyped-def]
         look_for_keys=False,
     )
     chan = client.invoke_shell(width=200, height=50)
-    chan.settimeout(min(30, timeout))
+    # Short polling timeout — _read_until_prompt loops until its own
+    # deadline. The recv side just needs to not block forever.
+    chan.settimeout(0.5)
     # Stash the client on the channel so the caller can close both.
     chan._pergen_client = client  # type: ignore[attr-defined]
     return chan
 
 
 def _read_until_prompt(  # type: ignore[no-untyped-def]
-    chan, deadline: float, *, idle_grace_s: float = 0.5
+    chan, deadline: float, *, idle_grace_s: float = 0.3
 ) -> tuple[str, bool]:
     """Read from ``chan`` until a config prompt arrives or ``deadline``.
 
@@ -327,9 +335,13 @@ def _read_until_prompt(  # type: ignore[no-untyped-def]
     ``idle_grace_s`` is a small extra wait after the prompt is
     detected, in case the device is still flushing output past the
     prompt (some NX-OS releases double-print).
+
+    Wave-7.5: relies on the channel having a SHORT recv timeout
+    (~0.5s) set in ``_open_shell_channel`` so each ``recv()`` call
+    polls and returns quickly. Earlier 30-second blocking recv could
+    block the whole timeout window on a single empty read.
     """
     buf = bytearray()
-    last_data_ts = time.time()
     prompt_seen = False
     while time.time() < deadline:
         try:
@@ -338,7 +350,6 @@ def _read_until_prompt(  # type: ignore[no-untyped-def]
             chunk = b""
         if chunk:
             buf.extend(chunk)
-            last_data_ts = time.time()
             text = buf.decode("utf-8", errors="replace")
             if _CONFIG_PROMPT_RE.search(text):
                 prompt_seen = True
@@ -355,12 +366,10 @@ def _read_until_prompt(  # type: ignore[no-untyped-def]
                         time.sleep(0.05)
                 break
         else:
-            # No data yet — small sleep and re-check.
+            # No data this poll — short sleep then re-check. We do NOT
+            # bail on idle; the operator might just have a slow
+            # device. We rely solely on the deadline.
             time.sleep(0.05)
-            # If we've been idle for >2s without ever getting data,
-            # bail early so we don't churn until the deadline.
-            if time.time() - last_data_ts > 2.0 and not buf:
-                break
     return buf.decode("utf-8", errors="replace"), prompt_seen
 
 
@@ -373,13 +382,25 @@ def run_config_lines_shell(
 ) -> tuple[str | None, str | None]:
     """Run config lines via an interactive shell with per-line prompts.
 
-    Wave-7.4 fix for transceiver recovery: the wave-7.3 split-into-two-
-    sessions plan was correct, but the per-stanza dispatch via
-    ``exec_command`` was not actually executing the config on NX-OS
-    boxes. Each line is now sent individually via ``invoke_shell()``;
-    we wait for the device prompt before sending the next line and
-    capture the response so the audit log can show what the device
-    really did.
+    Wave-7.4 fix for transceiver recovery: dispatch each line via
+    ``invoke_shell()`` and wait for the device prompt between commands.
+
+    Wave-7.5 hardening (operator log evidence 2026-04-23): NX-OS sent
+    its MOTD banner but no prompt — the runner blocked 60s waiting,
+    nothing was ever sent to the device. Two failure modes addressed:
+
+    1. **Banner pause**: NX-OS does not always emit a prompt right
+       after the banner. Send a wake-up ``\\n`` immediately after
+       ``invoke_shell()`` to nudge the device past the banner.
+    2. **Paging**: NX-OS's default terminal length triggers
+       ``--More--`` on multi-page output and waits for a key press.
+       Send ``terminal length 0`` before any other command.
+
+    Both are sent automatically before the operator's first line. They
+    are NOT subject to the strict allowlist — those are runner-internal
+    setup commands, not config lines from the caller. Operator-supplied
+    lines still pass through ``_assert_lines_allowed`` upstream in
+    ``interface_recovery``.
 
     Returns ``(combined_output_text, error_or_None)``.
     """
@@ -404,12 +425,35 @@ def run_config_lines_shell(
         client = getattr(chan, "_pergen_client", None)
 
         deadline = time.time() + max(5, int(timeout))
-        # Wait for the initial banner + prompt.
-        banner, prompt_ok = _read_until_prompt(chan, deadline)
-        if not prompt_ok:
-            return banner or None, "timeout"
-        out_buf = [banner]
+        out_buf: list[str] = []
 
+        # --- Wave-7.5 prelude: wake the prompt + disable paging ----- #
+        # Step 1: send a bare newline to trigger the prompt past the
+        # MOTD banner. We deliberately do NOT require a prompt to
+        # match before this send — NX-OS may have sent the banner with
+        # no prompt at all, and we'd block forever.
+        try:
+            chan.send(b"\n")
+        except Exception as exc:  # noqa: BLE001
+            bucket = _classify_ssh_error(exc)
+            _log.warning(
+                "ssh_runner: wake-newline failed (%s): %r", bucket, exc
+            )
+            return None, bucket
+        wake_text, wake_ok = _read_until_prompt(chan, deadline)
+        out_buf.append(wake_text)
+        if not wake_ok:
+            return "".join(out_buf), "timeout"
+
+        # Step 2: disable paging. ``terminal length 0`` is exec-mode
+        # only — must be sent BEFORE we enter configure terminal.
+        chan.send(b"terminal length 0\n")
+        page_text, page_ok = _read_until_prompt(chan, deadline)
+        out_buf.append(page_text)
+        if not page_ok:
+            return "".join(out_buf), "timeout"
+
+        # --- Operator's lines (already allowlist-vetted upstream) --- #
         for line in lines:
             payload = (line + "\n").encode("utf-8")
             chan.send(payload)

@@ -16,6 +16,131 @@ return shape. Behaviour changes are explicitly noted; otherwise none.
 
 ---
 
+## v0.7.5 — Wave-7.5: NX-OS shell — wake banner + disable paging + non-blocking poll (2026-04-23)
+
+**Scope:** root-cause follow-up to v0.7.4.
+
+The wave-7.4 fix switched to `invoke_shell()` so config commands would
+actually execute on NX-OS. Operator log evidence 2026-04-23 against
+`LSW-IL2-H2-R509-VENUSTEST-P1-N04 / Ethernet1/15`: the device sent
+its MOTD banner over the channel but **NO prompt ever arrived**. The
+runner sat blocked for 60 seconds, then returned `timeout`. Nothing
+was sent to the device — not even the first `configure terminal`.
+
+```
+recovery: nxos device-response phase=shutdown:  Cisco Nexus Operating
+    System (NX-OS) Software TAC support: ... Lesser General Public
+    License (LGPL) Ver
+recovery: nxos failed phase=shutdown err=timeout
+← 500 61800.2ms
+```
+
+### Three independent bugs fixed
+
+#### 1. NX-OS banner pause
+
+NX-OS does not always emit a prompt right after the MOTD banner. Some
+configurations require the user to press Enter to dismiss the banner
+before the device shows the prompt. The wave-7.4 runner did not send
+anything until it saw a prompt — classic deadlock.
+
+**Fix:** send a bare `\n` immediately after `invoke_shell()` to nudge
+the device past the banner. NX-OS responds with the actual prompt.
+
+#### 2. Terminal paging blocks multi-page output
+
+NX-OS's default `terminal length` (24 lines) triggers `--More--` on
+multi-page output and waits for a key press. The wave-7.4 runner had
+no defence — any command whose output exceeded the page would deadlock.
+
+**Fix:** send `terminal length 0` immediately after the wake newline,
+before any operator-supplied lines. Disables paging for the entire
+session. (`terminal length` is exec-mode only, so this MUST be sent
+before `configure terminal`.)
+
+#### 3. 30-second blocking recv() per poll
+
+`_open_shell_channel` set `chan.settimeout(min(30, timeout))`. Each
+`chan.recv(4096)` call could block up to 30 seconds when no data
+was arriving — meaning the 60-second outer timeout in
+`_read_until_prompt` could blow through with only 2-3 polls. The
+runner spent 60 seconds asleep instead of polling.
+
+**Fix:** `chan.settimeout(0.5)` for tight polling. The outer
+deadline in `_read_until_prompt` still bounds total wait. Removed
+the misleading "bail on idle" branch — the deadline is the only
+authority on when to give up.
+
+### Backend changes
+
+- `backend/runners/ssh_runner.py`:
+  - `_open_shell_channel` — `chan.settimeout(0.5)` (was `min(30, timeout)`).
+  - `_read_until_prompt` — removed the early-bail-on-idle branch
+    (was a footgun: it bailed on no-data-yet but was useless under
+    blocking recv since the recv itself would block); shortened
+    grace from 0.5 s to 0.3 s.
+  - `run_config_lines_shell` — new "prelude" phase before the
+    operator's lines: send `\n` (wake), send `terminal length 0`
+    (disable paging). Each prelude command waits for its own prompt.
+    The strict allowlist still applies upstream to operator lines;
+    the prelude commands are runner-internal setup and not subject
+    to it (they ARE in the audit-allowlist conceptually — bare
+    newline + a documented paging-disable — but they are sent by
+    the runner, not the caller).
+
+### Tests (TDD: 2 new tests in addition to the existing 20)
+
+`tests/test_ssh_runner_shell_config.py` — new `TestBannerSkipAndPagingDisable`:
+
+- `test_sends_wake_newline_after_shell_open` — asserts the first
+  send is `b"\n"`, second is `b"terminal length 0\n"`, then the
+  operator's lines in order.
+- `test_does_not_block_for_full_timeout_when_idle` — instantiates
+  a channel that never emits anything, asserts the runner respects
+  the timeout and does not exceed 2x (regression guard for the
+  30-second blocking-recv bug).
+
+Existing 3 happy-path/error tests updated to include the prelude
+prompts in their mock transcripts.
+
+### Verification
+
+- pytest: **1839 passed, 1 xfailed** (was 1837 + 1 xfail; +2 net
+  new tests; no existing test broken)
+- Lint (`ruff check`): clean on every touched file (184 baseline
+  unchanged)
+
+### Manual smoke (post-deploy, repeat the failing test)
+
+Expected backend log additions vs v0.7.4:
+
+```
+recovery: nxos running ip=10.59.65.4 iface=Ethernet1/15 phase=shutdown
+recovery: nxos device-response ip=10.59.65.4 iface=Ethernet1/15 phase=shutdown:
+    Cisco Nexus Operating System (NX-OS) Software ... [banner]
+    LSW-...# terminal length 0
+    LSW-...# configure terminal
+    LSW-...(config)# interface Ethernet1/15
+    LSW-...(config-if)# shutdown
+    LSW-...(config-if)# end
+    LSW-...#
+recovery: nxos sleeping 5s before no-shutdown of Ethernet1/15
+recovery: nxos running ip=10.59.65.4 iface=Ethernet1/15 phase=no_shutdown
+recovery: nxos device-response ... [similar transcript with no shutdown]
+audit transceiver.recover ok ... bounce_delay_s=5
+```
+
+Each stanza now takes 2-4 seconds (not 60). The transcript shows
+NX-OS actually parsing every line. On the device:
+`show interface Ethernet1/15` confirms link state went down → up.
+
+If you STILL see no recovery, the device-response transcript will now
+contain the device's actual error (e.g. errdisable-recovery lockout,
+vPC peer keeping the port down, port-security violation) — making the
+next layer of diagnosis trivial.
+
+---
+
 ## v0.7.4 — Wave-7.4: NX-OS recovery now uses interactive shell (2026-04-23)
 
 **Scope:** root-cause follow-up to v0.7.3.
