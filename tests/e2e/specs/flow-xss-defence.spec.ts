@@ -45,14 +45,12 @@ test.describe("XSS defence in result tables (audit H-02)", () => {
     const app = new AppShell(page);
     await app.gotoHash("findleaf");
 
-    const ipInput = page.locator("#findLeafIp, input[type=text]").first();
+    // Scope to the findleaf page — the previous union selector
+    // `#findLeafIp, input[type=text]` resolved to #customCommandInput
+    // on the prepost page (hidden but still in the DOM).
+    const ipInput = page.locator("#page-findleaf #findLeafIp");
     await ipInput.fill("10.0.0.99");
-    const btn = page.locator("button:has-text('Find'), #findLeafBtn").first();
-    if (await btn.isVisible().catch(() => false)) {
-      await btn.click();
-    } else {
-      await ipInput.press("Enter");
-    }
+    await page.locator("#findLeafBtn").click();
     await page.waitForTimeout(800);
 
     // No <img src=x> element should ever appear.

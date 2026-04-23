@@ -19,35 +19,12 @@ playwright/.cache/
 
 # Coverage build artifacts
 coverage_audit.json
-.coverage
 htmlcov/
 coverage.xml
-
-
-# ECC (Everything Claude Code)
-.cursor/hooks/
-.cursor/hooks.json
-.cursor/scripts/
-.cursor/skills/
-.cursor/commands/
-.cursor/agents/
-.cursor/mcp.json
-
-# Test / coverage
-.pytest_cache/
-.ruff_cache/
-.coverage
 coverage.xml
 htmlcov/
-
-# Logs (created by LoggingConfig in later phases)
-logs/
-
-# Phase-12 noise (Cursor & local docs / coverage artifacts)
-.cursor/rules/
-AGENTS.md
-ECC_USAGE_GUIDE.md
 coverage.json
+coverage/
 # Coverage build artifacts from audit runs (regenerated each pass)
 docs/test-coverage/coverage_*.json
 

@@ -44,6 +44,8 @@ Initialisation order
 from __future__ import annotations
 
 import logging
+import os
+import time
 from typing import Any
 
 from flask import Flask
@@ -118,6 +120,34 @@ def create_app(config_name: str = "default") -> Flask:
     app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
     app.config["SESSION_COOKIE_SECURE"] = config_name == "production"
     app.config["SESSION_COOKIE_NAME"] = "pergen_session"
+    # Audit (Security review H-1): when running behind a trusted reverse
+    # proxy (nginx, Caddy, cloud LB), mount ``ProxyFix`` so
+    # ``request.remote_addr`` reflects the original client IP instead of
+    # the proxy address. Gated on ``PERGEN_TRUST_PROXY=1`` to keep the
+    # default safe — naively trusting ``X-Forwarded-For`` from an
+    # un-proxied deployment lets the login throttle be bypassed by an
+    # attacker who rotates the header value.
+    if os.environ.get("PERGEN_TRUST_PROXY") == "1":
+        from werkzeug.middleware.proxy_fix import ProxyFix
+
+        app.wsgi_app = ProxyFix(  # type: ignore[method-assign]
+            app.wsgi_app, x_for=1, x_proto=1, x_host=1
+        )
+        _log.info("ProxyFix mounted (PERGEN_TRUST_PROXY=1)")
+    # Audit (Security review H-2): bound the lifetime of a stolen session
+    # cookie. Default Flask behaviour with ``session.permanent = True``
+    # (which the auth blueprint sets) is a 31-day expiry — far too long
+    # for an operator tool with SSH credential authority. Override here
+    # via ``PERGEN_SESSION_LIFETIME_HOURS`` (default 8h, matches a
+    # typical ops shift). The auth gate also enforces an idle-timeout
+    # check on every request via ``session["iat"]``.
+    import datetime as _dt
+
+    _lifetime_hours = int(os.environ.get("PERGEN_SESSION_LIFETIME_HOURS", "8"))
+    app.config["PERMANENT_SESSION_LIFETIME"] = _dt.timedelta(hours=_lifetime_hours)
+    app.config["PERGEN_SESSION_IDLE_HOURS"] = int(
+        os.environ.get("PERGEN_SESSION_IDLE_HOURS", str(_lifetime_hours))
+    )
 
     # --- Step 5: structured logging. ------------------------------------- #
     LoggingConfig.configure(app)
@@ -399,6 +429,25 @@ def _install_api_token_gate(app: Flask) -> None:
                 return None
             session_actor = session.get("actor")
             session_csrf = session.get("csrf")
+            # Audit (Security review H-2): idle-timeout check. The auth
+            # blueprint stamps ``session["iat"]`` at login; if a request
+            # arrives more than ``PERGEN_SESSION_IDLE_HOURS`` after it,
+            # clear the session and treat it as anonymous — the next
+            # response will surface a 401 and the SPA must re-auth.
+            if session_actor:
+                _iat = session.get("iat")
+                _idle_hrs = app.config.get("PERGEN_SESSION_IDLE_HOURS") or 8
+                _max_age = int(_idle_hrs) * 3600
+                if isinstance(_iat, int) and (int(time.time()) - _iat) > _max_age:
+                    logging.getLogger("app.audit").info(
+                        "audit auth.session.expired actor=%s ip=%s age_s=%d",
+                        session_actor,
+                        request.remote_addr or "-",
+                        int(time.time()) - _iat,
+                    )
+                    session.clear()
+                    session_actor = None
+                    session_csrf = None
             if session_actor and session_actor in tokens:
                 # Safe methods (GET/HEAD/OPTIONS): cookie alone grants read
                 # access. Unsafe methods MUST also carry a matching CSRF

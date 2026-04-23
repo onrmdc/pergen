@@ -95,3 +95,47 @@ The wave-4 audit is fully addressed. Every remaining item in
 `docs/refactor/` is reclassified as **future feature work**, not
 unfinished refactor debt — see the "Reclassified" section in
 `wave3_roadmap.md`.
+
+---
+
+## Wave-7 follow-up (2026-04-23)
+
+The wave-4 audit and follow-ups remain closed. Wave-6 shipped the 5
+reclassified items (`v0.7.0`); wave-7 then did a fresh end-to-end audit
+sweep and surfaced a NEW cluster of CRITICAL+HIGH findings in the seams
+between the new wave-6 code and the unchanged legacy modules:
+
+- **C-1 / H-4** — `credential_store.get_credential()` blind to v2 writes
+  (fresh-install break). Fixed via the v2 fall-through bridge — see
+  `docs/refactor/DONE_credential_store_migration.md` "Wave-7 update"
+  section.
+- **H-1** — login throttle bypassable behind a reverse proxy. Fixed via
+  optional `ProxyFix` mount gated on `PERGEN_TRUST_PROXY=1`.
+- **H-2** — 31-day session cookies. Fixed via `PERGEN_SESSION_LIFETIME_HOURS`
+  (default 8h) + `PERGEN_SESSION_IDLE_HOURS` idle-timeout enforcement.
+- **H-3** — `python -m backend.app __main__` bound 0.0.0.0 with no auth.
+  Fixed via `PERGEN_DEV_BIND_HOST` / `PERGEN_DEV_ALLOW_PUBLIC_BIND` guard.
+- **H-5** — audit-log injection via inventory hostname on find-leaf /
+  nat-lookup. Fixed via `_safe_audit_str` control-char strip.
+- **H-6** — username-existence oracle in audit log volume. Fixed by
+  recording `actor=<unknown>` for unknown usernames.
+- Python-review **C-4 / C-5** — SSH runner FD leak + credential-tail echo.
+  Fixed via `try/finally` + `_classify_ssh_error()` bucketing.
+
+All 7 fixes shipped in the same session, pinned by **9 new test files
+(51 tests)**. Suite went from **1717 + 0 xfailed** → **1767 + 1 xfailed**.
+
+Open MEDIUM cluster (14 wave-7 + 13 Python-review carry-overs) is
+documented in `docs/security/DONE_audit_2026-04-23-wave7.md` §3.3 and
+`docs/code-review/DONE_python_review_2026-04-23-wave7.md` §3 / §5. None
+are directly exploitable under the internal-tool threat model; they are
+the natural next-wave focus.
+
+Cross-reference:
+
+- `docs/security/DONE_audit_2026-04-23-wave7.md`
+- `docs/code-review/DONE_python_review_2026-04-23-wave7.md`
+- `docs/test-coverage/DONE_coverage_audit_2026-04-23-wave7.md`
+- `docs/test-coverage/DONE_e2e_gap_analysis_2026-04-23-wave7.md`
+
+— end of follow-up note —

@@ -47,7 +47,7 @@ business logic, inline credential handling, and inline runner dispatch. After th
 | Vendor runner classes | 0 (procedural) | **3** (Cisco, Arista, SSH) + factory + base | new abstraction |
 | Test files | 6 | **58** | +52 (≈ 9.7×) |
 | Test functions | unknown | **861** (852 pass + 9 xfail) | new TDD safety net |
-| Coverage (line %) | not measured | **90.23 %** combined / **93+ %** line | enforced via `Makefile cov` (gate 45 %); wave-3 god-module split + wave-4 Tier-1 unit tests + wave-5 close-out lifted from 0 → 90 % |
+| Coverage (line %) | not measured | **90.79 %** combined (post wave-7) | enforced via `Makefile cov` (gate 45 %); wave-3 god-module split + wave-4 Tier-1 unit tests + wave-5 close-out + wave-6 reclassified items + wave-7 SSH runner / credential bridge fixes lifted from 0 → 90.79 % |
 | End-to-end suite | none | **62 Playwright tests** in 20 specs | Chromium, ~8 s, real Flask boot |
 | Top-level docs | 1 (`README.md`) | **8** (+ARCHITECTURE, HOWTOUSE, FUNCTIONS_EXPLANATIONS, TEST_RESULTS, patch_notes…) | +7 |
 | Tooling files | `run.sh` only | `Makefile`, `pyproject.toml`, `pytest.ini`, `requirements-dev.txt` | full dev loop |
@@ -384,6 +384,11 @@ HIGH, 11 MEDIUM) raised by automated reviewers (`security-reviewer`, `python-rev
 - **Path-handling hardened with `pathlib`** — Audit H-9 batch 3.
 - **TLS verification flags** correctly defaulted in `_http.py`.
 - **Encrypted credential storage** replaces upstream's base64 fallback in `credential_store.py`.
+- **Credential v2 fall-through bridge** (Wave-7, 2026-04-23 — audit C-1 / H-4): `credential_store.get_credential()` now falls through to `instance/credentials_v2.db` (PBKDF2 600k → AES-CBC + HMAC-SHA256) via a new `_read_from_v2()` helper when the legacy DB has no row. Closes the fresh-install device-exec break that the wave-3 / wave-6 split intentionally deferred. **Upstream `main` had a single legacy store; the refactor's two-store split was a temporary state during the in-flight migration that the wave-7 bridge transparently reconciled.** Operators with rows in the legacy DB see no behavioural change.
+- **SSH client always closed; exceptions bucketed** (Wave-7, audit Python-review C-4 / C-5): `backend/runners/ssh_runner.py::run_command` and `run_config_lines_pty` wrap the full session in `try/finally: client.close()` (FD leak fix) and route exceptions through `_classify_ssh_error()` (controlled vocabulary: `auth_failed` / `network` / `timeout` / `banner_mismatch` / `other`) instead of returning `str(exc)` to the caller. **Upstream `main` returned the raw paramiko exception string to the operator's JSON envelope, leaking usernames and (under unusual server bounce conditions) password tail material; the refactor's wave-7 fix bucketizes the error at the runner boundary.**
+- **Bounded session lifetime + idle-timeout** (Wave-7, audit H-2): `PERMANENT_SESSION_LIFETIME` set from `PERGEN_SESSION_LIFETIME_HOURS` (default 8h) instead of Flask's 31-day default; cookie-auth branch enforces idle-timeout via `session["iat"]` stamp. **Upstream `main` had no concept of cookie auth; the refactor's wave-6 cookie-auth path inherited Flask's defaults until wave-7 bounded them to operator-tool-appropriate values.**
+- **`__main__` bind-host guard** (Wave-7, audit H-3): `python -m backend.app` refuses any non-loopback bind unless `PERGEN_DEV_ALLOW_PUBLIC_BIND=1`. **Upstream `main` had a 1,727-line monolith with `app.run(host="0.0.0.0")` in `__main__` that was the canonical entry point; the refactor reduced this file to an 87-line shim with zero routes, but `app.run("0.0.0.0", ...)` survived in the shim's `__main__` until wave-7 closed the latent foot-gun.**
+- **Optional ProxyFix** (Wave-7, audit H-1): `werkzeug.middleware.proxy_fix.ProxyFix` mounted only when `PERGEN_TRUST_PROXY=1` so the login throttle keys on the real client IP behind a reverse proxy. **Upstream `main` had no rate-limit / throttle anywhere; the refactor's wave-6 cookie-auth path added one but it was bypassable behind a proxy until wave-7's opt-in fix.**
 
 ### 8.3 Security test corpus
 
@@ -430,16 +435,17 @@ tests/                                          (44 test modules + helpers)
 | Metric | Value |
 |---|---|
 | Total test modules | **58** |
-| Total test functions | **1631 pytest** — all passing, 0 xfailed (refactor SEALED) + 37 Vitest + 90 Playwright |
-| Coverage — line | **93+ %** (combined 90.23 %) |
-| Coverage — branch | **64 %** (1,449 / 2,270 branches) |
-| Coverage — new OOD layer (blueprints + services + utils) | **94 %** (target gate: 90 %) |
-| Coverage — whole-project gate | 45 % (legacy modules drag the average down) |
+| Total test functions | **1767 pytest + 1 strict xfail** + 45 Vitest + 100 Playwright (post wave-7, 2026-04-23) |
+| Coverage — line | **90.79 %** combined (whole-project) |
+| Coverage — branch | **~88 %** (was 64 % at wave-2 close; +24 pp from wave-3 god-module split + wave-5 OOD-layer backfill + wave-6 reclassified items + wave-7 close) |
+| Coverage — new OOD layer (blueprints + services + utils + factory) | **91.34 %** (`make cov-new`, gate 85 %) |
+| Coverage — frontend extracted helpers (subnet.js, utils.js) | **100 %** Vitest |
+| Coverage — whole-project gate | 45 % (legacy parser surface drags the average; 6 files <80 % post wave-7, all chronic operator-output-variance gaps + the legacy `credential_store` shim) |
 | Lint (`ruff check` on new code) | **0 errors** |
-| Lint (`ruff check`) whole-backend | **44 findings** (down from 53 in audit-wave-1) |
-| Audit findings remediated | **38 / 38** (batches 1–4) + **7 frontend XSS** (audit-wave-1) |
-| Audit findings tracked via `xfail` | **9** (audit-wave-1, await architectural follow-up) |
-| End-to-end (Playwright) | **62 / 62** in ~8 s — added in audit-wave-1 |
+| Lint (`ruff check`) whole-backend | **44 findings** (down from 53 in audit-wave-1; unchanged through wave-7) |
+| Audit findings remediated | **38** (batches 1–4) + **7 frontend XSS** (audit-wave-1) + **24** (wave-3) + **6** (wave-4) + **5 reclassified items** (wave-6) + **9** (wave-7: 1 CRITICAL + 6 HIGH security + 2 CRITICAL Python-review) |
+| Audit findings tracked via `xfail` | **1** (wave-7 audit GAP #8 — inventory import row cap) |
+| End-to-end (Playwright) | **100 / 100 passing** in 43 spec files (was 88 / 12 failing at wave-6 close; wave-7 stabilised 12 brittle specs with test-only changes) |
 
 `pytest.ini` defines test markers (`unit`, `integration`, `security`, `golden`) and `filterwarnings`. `Makefile cov`
 and `Makefile cov-new` enforce the coverage gates.

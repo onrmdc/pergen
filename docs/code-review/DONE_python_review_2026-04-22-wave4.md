@@ -798,3 +798,32 @@ review (LOW-3, LOW-5, MED-11, NIT-10) that wave-3 explicitly deferred per
 `wave3_roadmap.md`.
 
 **Approve with one HIGH fix.**
+
+---
+
+## Wave-7 follow-up (2026-04-23)
+
+Wave-4 HIGH-1 (`api_run_post_complete` IDOR scoping bypass) closed in
+wave-4 (`docs/refactor/DONE_wave4_followups.md`); the wave-7 review
+re-confirmed the fix is intact via `tests/test_security_run_post_complete_actor_scoping.py`.
+
+Wave-4 MEDIUM carry-overs **still open** in wave-7:
+
+- **MED-1** — duplicated `_actor()` / `_current_actor()` across 6 blueprints. Promoted to wave-7 review's MED-1 (top-of-list).
+- **MED-2** — `RunStateStore.update(**fields)` ownership-marker spoof. Wave-7 MED-2.
+- **MED-1 + MED-6** — two NEW bare excepts in `find_leaf/` (no `noqa`, no log). Wave-7 MED-3.
+- **MED-7** — private `_get_credentials` reach-through (now 6 importers). Wave-7 MED-7. The wave-7 v2 fall-through bridge in `credential_store.py` makes the rename to `get_credentials_from_store` a low-risk cleanup.
+
+Wave-4 LOW carry-overs **still open** in wave-7 — see `DONE_python_review_2026-04-23-wave7.md` §3.4.
+
+Wave-4 NIT carry-overs **still open** — same.
+
+The wave-4 closing observation that the IDOR bypass was "exactly the
+kind of finding the actor-scoping wave was designed to prevent" recurs
+in wave-7 review's MED-1 — until the unified `_actor_helpers.py`
+promotion lands, the same class of regression remains tractable for any
+new blueprint route that follows the wrong template.
+
+Cross-reference: `docs/code-review/DONE_python_review_2026-04-23-wave7.md`.
+
+— end of follow-up note —

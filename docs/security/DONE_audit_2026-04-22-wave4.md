@@ -554,3 +554,32 @@ All nine are conceptually small (≤30 LOC each) and follow the existing `tests/
 - **The new HIGH (W4-H-01) is a textbook "one route forgot the safety check" miss** — exactly the kind of finding the actor-scoping wave was designed to prevent. Recommend pairing the W4-H-01 fix with a small grep guard in the test suite that asserts `_state_store().get(...)` is always called with `actor=` inside `runs_bp.py`.
 
 — end of audit —
+
+---
+
+## Wave-7 follow-up (2026-04-23)
+
+All wave-4 findings (W4-H-01, W4-M-01..05, W4-L-01..04) closed in wave-4 /
+wave-5 (per `docs/refactor/DONE_wave4_followups.md`) remain closed; the
+wave-7 audit (`docs/security/DONE_audit_2026-04-23-wave7.md`) re-swept the
+same surface and found no regressions.
+
+Wave-7 surfaced **6 NEW HIGH** findings (H-1 ProxyFix gating, H-2 session
+lifetime, H-3 `__main__` bind guard, H-4 credential-store bridge, H-5 audit
+hostname scrubbing, H-6 username-enumeration via audit volume) **plus 1 NEW
+CRITICAL** (C-1, same root cause as H-4 from the data-flow angle). All 7
+were **fixed in the same session** and pinned by 9 new test files (51 tests).
+
+The wave-4 design observation — "the actor-scoping wave was designed to
+prevent exactly this miss" — recurs in wave-7 as the Python-review's
+MED-1 (still-duplicated `_actor()` / `_current_actor()` across 6
+blueprints). That cleanup remains open and is the natural next-wave focus.
+
+Cross-references:
+
+- Full wave-7 report: `docs/security/DONE_audit_2026-04-23-wave7.md`
+- Python-review wave-7: `docs/code-review/DONE_python_review_2026-04-23-wave7.md`
+- Coverage audit: `docs/test-coverage/DONE_coverage_audit_2026-04-23-wave7.md`
+- E2E gap analysis: `docs/test-coverage/DONE_e2e_gap_analysis_2026-04-23-wave7.md`
+
+— end of follow-up note —

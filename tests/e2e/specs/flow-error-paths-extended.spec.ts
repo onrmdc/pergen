@@ -104,10 +104,12 @@ test("find-leaf with aborted request leaves the page in a sane state", async ({
   const app = new AppShell(page);
   await app.gotoHash("findleaf");
 
-  const ipInput = page.locator("#findLeafIp, input[type=text]").first();
+  // Scope to the findleaf page section — the previous union selector
+  // `#findLeafIp, input[type=text]` resolved to #customCommandInput on
+  // the prepost page (still present in DOM, just hidden via .active).
+  const ipInput = page.locator("#page-findleaf #findLeafIp");
   await ipInput.fill("10.99.99.99");
-  const button = page.locator("button:has-text('Find'), #findLeafBtn").first();
-  await button.click();
+  await page.locator("#findLeafBtn").click();
 
   // Navigate away — should cancel the in-flight request without exception.
   await page.waitForTimeout(300);

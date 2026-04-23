@@ -115,14 +115,20 @@ test("PRE run completes and creates a saved report (mocked devices)", async ({
   await app.gotoHash("prepost");
 
   // Wait for fabric to populate, pick it (selectOption fires change).
+  // Cascade: fabric → site → hall → role → devices. loadDevices is wired
+  // to the Role select's change event (app.js:2224), so we must select a
+  // role before the device list renders.
   const fabric = page.locator("#fabric");
   await expect.poll(async () => fabric.locator("option").count(), { timeout: 5_000 }).toBeGreaterThan(1);
   await fabric.selectOption("E2E-FAB");
   const site = page.locator("#site");
   await expect.poll(async () => site.locator("option").count(), { timeout: 5_000 }).toBeGreaterThan(1);
   await site.selectOption("E2E-Site");
+  const role = page.locator("#role");
+  await expect.poll(async () => role.locator("option").count(), { timeout: 5_000 }).toBeGreaterThan(1);
+  await role.selectOption("Leaf");
 
-  // Devices render after fabric/site selection. Wait for our mock rows.
+  // Devices render after fabric/site/role selection. Wait for our mock rows.
   await expect(page.locator("#deviceList .device-row")).toHaveCount(2, { timeout: 5_000 });
 
   // Select all and click Run.

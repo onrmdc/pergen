@@ -134,8 +134,7 @@ tests/                           # 861 tests (852 pass + 9 xfail) across 58 file
 └── test_runner_dispatch_coverage.py    # 13 runner.run_device_commands branches
 ```
 
-**Total tests: 1717 pytest (all passing, 0 xfailed) + 45 Vitest + 100 Playwright** — refactor program FULLY COMPLETE at wave-6; every plan in `docs/refactor/` is DONE_*-prefixed,
-all green. Lint clean on every blueprint, service, util, factory,
+**Total tests: 1767 pytest + 1 strict xfail + 45 Vitest + 100 Playwright** — refactor program FULLY COMPLETE at wave-6 (all 5 reclassified items shipped); wave-7 (2026-04-23) closed an additional 1 CRITICAL + 6 HIGH (security audit) + 2 CRITICAL (python review) findings in the seams between the wave-6 surface and the unchanged legacy modules. Every plan in `docs/refactor/` is `DONE_*`-prefixed, all green. The single strict xfail tracks audit GAP #8 (inventory import row cap). Lint clean on every blueprint, service, util, factory,
 app.py, config, hardened runner, security module, and request_logging.
 Audit batch 4 added 24 security-regression tests
 (`tests/test_security_audit_batch4.py`) and 13 runner-dispatch coverage
@@ -317,7 +316,7 @@ blueprints incrementally.
 The test suite is now stratified across three runtimes, each with
 a different feedback loop and ownership boundary.
 
-### 7.1 Python — pytest (1717 passed + 0 xfailed in ~79 s)
+### 7.1 Python — pytest (1767 passed + 1 xfailed in ~93 s)
 
 The classical layer. Owned by every code change. Three sub-tiers:
 
@@ -400,11 +399,16 @@ module split is queued); audit-wave-1 dropped the count from
 ### 7.4 Coverage gates (Makefile)
 
 - `make cov` — whole-project line coverage (gate 45 %, current
-  90.51 % post-wave-6; legacy RIPEStat helpers drag the average; their
-  public APIs are all covered, only deep parser branches remain.
+  **90.79 %** post-wave-7; legacy parser surface drags the average; their
+  public APIs are all covered, only deep operator-output-variance branches
+  remain).
 - `make cov-new` — new-OOD-layer-only coverage (gate 85 %, current
-  94 %). This is the gate that *must* hold green; the global gate
-  is informational only.
+  **91.34 %** post-wave-7). This is the gate that *must* hold green;
+  the global gate is informational only. (Note: OOD-scoped dropped from
+  94 % at wave-6 close to 91.34 % at wave-7 close because the wave-7
+  fixes added new code paths in `app_factory` + `ssh_runner` +
+  `credential_store` slightly faster than the matching tests filled in
+  the denominator. Both gates remain green.)
 
 ---
 
@@ -449,3 +453,70 @@ into the architecture.  Each item is testable from
 | **Destructive confirmation gate is always-on in production** (was opt-in via env in dev/test) | Blueprint | `backend/blueprints/transceiver_bp.py::_require_destructive_confirm` | C-1 / C-4 |
 | **XPath-safe quote alternation** in PAN-OS rule lookup (XPath 1.0 has no escape; rules with both quote types are rejected) | XML adapter | `backend/nat_lookup.py` | py-H7 |
 | **Narrowed exception handling** in eAPI / NX-API runners — only `RequestException` and `ValueError` are caught; programmer errors propagate | Runner | `backend/runners/{arista_eapi,cisco_nxapi}.py` | py-H3 |
+
+### 10.2. Wave-7 audit controls (2026-04-23)
+
+| Control | Layer | Implementation | Audit ID |
+|---------|-------|----------------|----------|
+| **Credential v2 read fall-through bridge**: legacy `credential_store.get_credential()` now falls through to `credentials_v2.db` (via `CredentialRepository` + `EncryptionService.from_secret`) when the legacy DB has no row. Closes the fresh-install device-exec break for operators who only used the new HTTP CRUD. The bridge is best-effort (failures swallowed, returns None) so the legacy code path stays at-least-as-functional. | Crypto / Repository | `backend/credential_store.py::_v2_db_path()`, `_read_from_v2()` | W7-C-1 / W7-H-4 |
+| **Optional ProxyFix mount** for reverse-proxy deployments. `werkzeug.middleware.proxy_fix.ProxyFix(x_for=1, x_proto=1, x_host=1)` is mounted only when `PERGEN_TRUST_PROXY=1`. Default behaviour unchanged — naively trusting `X-Forwarded-For` from un-proxied deployments lets an attacker rotate the header value to bypass the login throttle. | App factory | `backend/app_factory.py:123-136` | W7-H-1 |
+| **Bounded session lifetime + idle-timeout**. `PERMANENT_SESSION_LIFETIME` set from `PERGEN_SESSION_LIFETIME_HOURS` (default 8h, was Flask's 31-day default). Cookie-auth branch of `_enforce_api_token` checks `now - session["iat"] > PERGEN_SESSION_IDLE_HOURS * 3600` and clears the session on overflow. `auth_bp.api_auth_login` stamps `iat` on every successful login. Audit line emitted on idle-timeout: `audit auth.session.expired actor=<name> ip=<ip> age_s=<seconds>`. | App factory + auth blueprint | `backend/app_factory.py:137-150,432-450`, `backend/blueprints/auth_bp.py::api_auth_login` | W7-H-2 |
+| **`__main__` bind-host guard** for `python -m backend.app`. Refuses any non-loopback bind unless `PERGEN_DEV_ALLOW_PUBLIC_BIND=1` is set; binds via `PERGEN_DEV_BIND_HOST` (default `127.0.0.1`). Closes the latent foot-gun where the 87-line shim's `__main__` could expose every route publicly without auth if a future contributor restored blueprint imports there (the API token gate is mounted by `create_app()`, not by `backend.app`). | Legacy entry shim | `backend/app.py:86-103` | W7-H-3 |
+| **Audit-log control-char scrub on find-leaf / nat-lookup**. Every interpolated string in `_audit.info(...)` calls is routed through a small `_safe_audit_str(...)` helper that strips `\x00-\x1f`/`\x7f` and caps length at 256 chars. Closes the audit-log injection vector when inventory rows seeded from outside the app carry CRLF in `hostname` (the row-validator only sanitises NEW writes, not boot-time CSV reads). | Service layer | `backend/find_leaf/service.py`, `backend/nat_lookup/service.py` | W7-H-5 |
+| **Username-existence-oracle closure** in `auth.login.fail` audit lines. Audit line records `actor=<unknown>` for usernames that are not in the configured token map; throttle key continues to use the real `(ip, username)` pair so rate-limit semantics are unchanged. | Auth blueprint | `backend/blueprints/auth_bp.py::api_auth_login` | W7-H-6 |
+| **SSH client always closed; exceptions bucketed** through `_classify_ssh_error()` (controlled vocabulary: `auth_failed` / `network` / `timeout` / `banner_mismatch` / `other`). Both `run_command` and `run_config_lines_pty` wrap the full session in `try/finally: client.close()` (FD-leak fix); the original `repr(e)` is logged server-side via `_log.warning(...)` for triage. Returned error string is bucket name only — no credential-tail leak. | Runner | `backend/runners/ssh_runner.py:120-200` | W7-py-C-4 / W7-py-C-5 |
+
+### 10.3. Wave-7 data-flow change — credential read path
+
+The credential write path is unchanged: `POST /api/credentials` →
+`CredentialService` → `CredentialRepository` → `EncryptionService` →
+`instance/credentials_v2.db` (PBKDF2 600k + AES-128-CBC + HMAC-SHA256).
+
+The credential **read path** now has a two-tier fall-through:
+
+```
+                    ┌─────────────────────────────────────┐
+                    │  legacy callers: 5 blueprints +     │
+                    │  runner.py + find_leaf + nat_lookup │
+                    └──────────────────┬──────────────────┘
+                                       ▼
+                    ┌─────────────────────────────────────┐
+                    │  credential_store.get_credential()  │
+                    │  ─ tries instance/credentials.db    │
+                    │    (legacy SHA-256 → Fernet)        │
+                    └──────────────────┬──────────────────┘
+                                       │ row found? → return
+                                       │ row missing? ↓
+                    ┌─────────────────────────────────────┐
+                    │  _read_from_v2(name, secret_key)    │  ← Wave-7 bridge
+                    │  ─ tries instance/credentials_v2.db │
+                    │    via CredentialRepository +       │
+                    │    EncryptionService.from_secret    │
+                    │    (PBKDF2 600k + AES-CBC+HMAC)     │
+                    └──────────────────┬──────────────────┘
+                                       │ row found? → return
+                                       │ row missing or decrypt fails? ↓
+                                                  return None
+```
+
+The bridge is **additive and best-effort**:
+
+- Operators with rows in the legacy `instance/credentials.db` see no
+  behavioural change — the legacy DB hit still takes precedence.
+- Fresh-install operators who only used the new `POST /api/credentials`
+  HTTP CRUD now see working device-exec routes immediately. Before
+  wave-7 every device run returned "no credential found" because the
+  read path was blind to v2 writes.
+- Decrypt failures inside the v2 read path are swallowed (returns
+  `None`) so the legacy code path stays at-least-as-functional as
+  before. Operators with a wrong `SECRET_KEY` see the same "not found"
+  outcome they got before the bridge.
+- The bridge is a transition aid, **not** a replacement for the
+  migration script (`scripts/migrate_credentials_v1_to_v2.py`). The
+  script remains the canonical operator action when the legacy DB has
+  data that needs the stronger PBKDF2 KDF; the bridge just stops the
+  fresh-install break.
+
+Detailed plan + acceptance criteria for the eventual deletion of the
+legacy module and DB file: `docs/refactor/DONE_credential_store_migration.md`
+"Wave-7 update" section.

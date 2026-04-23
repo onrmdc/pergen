@@ -89,6 +89,19 @@ to `actor=shared`.
 | `PERGEN_SSH_STRICT_HOST_KEY` | unset | When `=1`, the SSH runner uses Paramiko `RejectPolicy` instead of the default `AutoAddPolicy`. Pair with `PERGEN_SSH_KNOWN_HOSTS` to enroll your devices. |
 | `PERGEN_SSH_KNOWN_HOSTS` | unset | Path to a managed `known_hosts` file. Loaded before `connect()`. |
 
+#### Wave-7 knobs (audit followup 2026-04-23)
+
+These knobs were added in wave-7 to close audit findings H-1, H-2, and H-3.
+All default to safe values; existing deployments require no operator action.
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `PERGEN_SESSION_LIFETIME_HOURS` | `8` | Maximum lifetime of a `pergen_session` cookie (the optional cookie-auth path). Was Flask's 31-day default; that was far too long for an operator tool with SSH credential authority. (Wave-7 H-2.) |
+| `PERGEN_SESSION_IDLE_HOURS` | = `PERGEN_SESSION_LIFETIME_HOURS` | Idle-timeout threshold. Cookie-auth branch of `_enforce_api_token` clears the session and treats it as anonymous when `now - session["iat"] > PERGEN_SESSION_IDLE_HOURS * 3600`. Audit line emitted: `audit auth.session.expired actor=<name> ip=<ip> age_s=<seconds>`. (Wave-7 H-2.) |
+| `PERGEN_TRUST_PROXY` | unset | When `=1`, mount `werkzeug.middleware.proxy_fix.ProxyFix(x_for=1, x_proto=1, x_host=1)` so `request.remote_addr` reflects the original client IP instead of the reverse proxy. **Required behind nginx / Caddy / cloud LB** for the login throttle to key correctly on `(client_ip, username)`. **Do NOT set this on deployments that are NOT behind a proxy** — naively trusting `X-Forwarded-For` from un-proxied deployments lets an attacker rotate the header value to bypass the throttle. (Wave-7 H-1.) |
+| `PERGEN_DEV_BIND_HOST` | `127.0.0.1` | Bind host for the legacy `python -m backend.app __main__` entry point. (Wave-7 H-3.) |
+| `PERGEN_DEV_ALLOW_PUBLIC_BIND` | unset | Override for the bind-host guard. Required only for `python -m backend.app`; production should always boot via `FLASK_APP=backend.app_factory:create_app`. The shim refuses any non-loopback bind unless this is `=1`. (Wave-7 H-3.) |
+
 > **Inventory-binding posture (not configurable).** Every device-targeted route (`/api/run/device`, `/api/run/pre`, `/api/arista/run-cmds`, `/api/custom-command`, `/api/transceiver/recover`, `/api/transceiver/clear-counters`) RESOLVES the device against the inventory CSV by hostname/IP and uses the inventory's `credential` field. Caller-supplied `credential`, `vendor` and `model` fields are ignored. Audit H-2 prevents an attacker from binding an arbitrary IP to a privileged credential.
 
 > **Device TLS posture (not configurable).** All HTTPS calls to network devices (Arista eAPI, Cisco NX-API, Palo Alto XML API) are sent with `verify=False` because devices in this fleet present local self-signed certificates. The single source of truth is `DEVICE_TLS_VERIFY` in `backend/runners/_http.py`. If you deploy CA-signed device certs in the future, flip that constant rather than reintroducing per-runner toggles. Public APIs (RIPE, PeeringDB) keep `verify=True`.
@@ -139,6 +152,27 @@ FLASK_APP=backend.app flask run                         # ❌ broken
 
 If you see 404s from a freshly-cloned tree, this is the cause —
 switch `FLASK_APP` to `backend.app_factory:create_app`.
+
+**Wave-7 bind-host guard.** The `python -m backend.app __main__` branch
+now binds via `PERGEN_DEV_BIND_HOST` (default `127.0.0.1`) and refuses
+any non-loopback bind unless `PERGEN_DEV_ALLOW_PUBLIC_BIND=1` is set.
+Closes the latent foot-gun where the shim could expose every route
+publicly without auth if a future contributor restored
+`from backend.blueprints import …` here (the API token gate is mounted
+by `create_app()`, not by `backend.app`):
+
+```bash
+# Refused — exits with a documented error message:
+PERGEN_DEV_BIND_HOST=0.0.0.0 python -m backend.app
+
+# Allowed (with the override):
+PERGEN_DEV_ALLOW_PUBLIC_BIND=1 PERGEN_DEV_BIND_HOST=0.0.0.0 python -m backend.app
+```
+
+The override should never be set in production. Use
+`FLASK_APP=backend.app_factory:create_app flask run --host 0.0.0.0`
+instead — that path goes through `create_app()` which mounts the
+API token gate.
 
 ### 4.4 Production (gunicorn or similar)
 
@@ -389,10 +423,10 @@ byte-for-byte against the pre-refactor baseline.
 ## 10. Tests
 
 ```bash
-make test                          # full suite (1717 passed + 0 xfailed, ~79 s)
-make cov                           # whole-project coverage report (gate 45 %, currently 90.51 %)
+make test                          # full suite (1767 passed + 1 xfailed, ~93 s)
+make cov                           # whole-project coverage report (gate 45 %, currently 90.79 %)
 npm run test:frontend              # Vitest frontend unit tests (45 tests, <1 s)
-npx playwright test                # Playwright E2E (100 tests / 43 specs, ~10–30 s)
+npx playwright test                # Playwright E2E (100 / 100 passing, 43 specs, ~10–30 s)
 
 # Operator CLI (wave-5):
 python -m backend.cli.backfill_report_actors --dry-run   # preview legacy report stamping
@@ -405,7 +439,7 @@ python scripts/migrate_credentials_v1_to_v2.py --verbose             # real run
 node scripts/audit/innerhtml_classifier.mjs                          # generate XSS site CSV
 # SPA cookie auth (wave-6 Phase F) — opt-in:
 export PERGEN_AUTH_COOKIE_ENABLED=1                                  # then restart app
-make cov-new                       # OOD-layer-only coverage report (gate 85 %, currently 94 %)
+make cov-new                       # OOD-layer-only coverage report (gate 85 %, currently 91.34 %)
 venv/bin/python -m pytest tests/golden/ -q                # golden / characterisation
 venv/bin/python -m pytest -k phase9 -q                    # phase-9 only
 venv/bin/python -m pytest tests/test_services.py -q       # service layer
@@ -422,12 +456,15 @@ Useful environment knobs:
 
 ### 10.1 End-to-end (Playwright)
 
-The Playwright suite (added in `v0.2.0-audit-wave-1`) drives the
-real SPA against a real Flask server. Single command, no mocks.
+The Playwright suite (added in `v0.2.0-audit-wave-1`, expanded through
+wave-3 / wave-5 / wave-6) drives the real SPA against a real Flask server.
+Single command, no mocks. **Wave-7 stabilised 12 brittle specs that were
+failing at wave-6 close** (test-only changes; no SPA / backend
+modifications).
 
 ```bash
 make e2e-install                   # one-time: npm install + npx playwright install chromium
-make e2e                           # 20 spec files / 62 tests, ~6–8 s on a warm Mac
+make e2e                           # 43 spec files / 100 tests, ~10–30 s on a warm Mac
 ```
 
 `playwright.config.ts` boots `./run.sh` automatically via `webServer`

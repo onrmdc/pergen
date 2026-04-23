@@ -108,10 +108,52 @@ def list_credentials(secret_key: str) -> list[dict]:
     return [{"name": r["name"], "method": r["method"], "updated_at": r["updated_at"]} for r in rows]
 
 
+def _v2_db_path() -> str:
+    base = os.path.dirname(os.path.abspath(__file__))
+    return os.path.join(base, "instance", "credentials_v2.db")
+
+
+def _read_from_v2(name: str, secret_key: str) -> dict | None:
+    """Best-effort read from the v2 (PBKDF2 + AES-CBC+HMAC) store.
+
+    Audit (Python review C-1 / Security audit H-4): writes through
+    ``CredentialService`` go to ``credentials_v2.db``; the legacy
+    blueprints still read via this module's ``get_credential``.
+    Without this fall-through, a credential created via the API
+    cannot be used by any device-exec route on a fresh install.
+
+    We re-use the new ``CredentialRepository`` + ``EncryptionService``
+    so the v2 cipher format is honoured. Failures are swallowed
+    (returns ``None``) so the legacy path stays best-effort.
+    """
+    db_path = _v2_db_path()
+    if not os.path.exists(db_path):
+        return None
+    try:
+        from backend.repositories.credential_repository import CredentialRepository
+        from backend.security.encryption import EncryptionService
+
+        # Use the documented factory ``from_secret`` — the raw
+        # ``EncryptionService(...)`` ctor takes a backend, not a secret.
+        enc = EncryptionService.from_secret(secret_key)
+        repo = CredentialRepository(db_path, enc)
+        return repo.get((name or "").strip())
+    except Exception:  # noqa: BLE001 — best-effort fall-through
+        return None
+
+
 def get_credential(name: str, secret_key: str) -> dict | None:
     """
     Return credential payload: for basic -> {username, password}, for api_key -> {api_key}.
     Returns None if not found.
+
+    Audit (Python review C-1 / Security audit H-4): falls through to
+    the v2 store when the legacy DB has no row, so credentials
+    created via ``CredentialService`` are reachable from every legacy
+    consumer (5 blueprints + ``backend/runners/runner.py`` +
+    ``find_leaf`` + ``nat_lookup``). The migration to read directly
+    via ``CredentialService`` continues; this is the temporary
+    bridge that keeps the system functional during the transition.
     """
     conn = sqlite3.connect(_db_path())
     row = conn.execute(
@@ -119,7 +161,8 @@ def get_credential(name: str, secret_key: str) -> dict | None:
     ).fetchone()
     conn.close()
     if not row:
-        return None
+        # Fall through to the v2 store before declaring "not found".
+        return _read_from_v2(name, secret_key)
     fernet = _fernet(secret_key)
     payload = _decrypt(fernet, row[2])
     return {"name": row[0], "method": row[1], **payload}

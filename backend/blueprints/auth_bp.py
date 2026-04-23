@@ -207,9 +207,14 @@ def api_auth_login():
 
     if not matched:
         _throttle_record_fail()
+        # Audit (Security review H-6): redact the username in the audit
+        # log when it does not match any configured actor — otherwise
+        # an attacker who can read logs (or correlate audit-line volume
+        # per username) can confirm valid usernames. The audit line
+        # still carries the IP for forensic correlation.
         _audit.warning(
             "audit auth.login.fail actor=%s ip=%s",
-            username or "-",
+            username if username in tokens else "<unknown>",
             request.remote_addr or "-",
         )
         return jsonify({"error": "invalid credentials"}), 401

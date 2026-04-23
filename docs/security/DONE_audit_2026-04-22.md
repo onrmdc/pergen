@@ -549,3 +549,34 @@ These were **not** re-derived in this audit per the prompt; the count breakdown 
 - The `parsers/` refactor is clean and introduces no regressions.
 
 — end of audit —
+
+---
+
+## Wave-7 follow-up (2026-04-23)
+
+This audit's CRITICAL+HIGH findings closed in wave-3 / wave-4 / wave-5 / wave-6
+remain closed; the wave-7 audit (`docs/security/DONE_audit_2026-04-23-wave7.md`)
+re-swept the same surface and found no regressions in those areas.
+
+The following wave-2 items relevant to this report were addressed in wave-7:
+
+- **H-07 (legacy credential store data bifurcation)** — promoted to wave-7
+  CRITICAL **C-1** when it was confirmed to break the fresh-install device-exec
+  path for every operator who only used the new `POST /api/credentials` HTTP
+  CRUD. **Fixed in this session** via the `_v2_db_path()` + `_read_from_v2()`
+  fall-through bridge in `backend/credential_store.py`. The wave-2 audit's
+  recommendation to ship the full migration script remains valid (and shipped
+  in wave-6 as `scripts/migrate_credentials_v1_to_v2.py`); the wave-7 bridge
+  is the in-process safety net for installs that have not yet run the script.
+- **M-11 (`ssh_runner.run_command` returns `str(exc)` to caller)** — **fixed
+  in wave-7** via `_classify_ssh_error()` bucketing. Pinned by
+  `tests/test_security_ssh_runner_close_on_exception.py`.
+- **L-02 (HSTS over HTTP)** — production-safe (HSTS is ignored over HTTP); the
+  wave-7 e2e fix to `security-headers.spec.ts` scoped the test assertion to
+  HTTPS only, matching the request-logging middleware behaviour.
+
+Remaining wave-2 MEDIUM/LOW items not addressed in wave-7 are tracked in
+`DONE_audit_2026-04-23-wave7.md` §5 alongside the new wave-7 MEDIUM/LOW
+items. See that file for the consolidated open list.
+
+— end of follow-up note —

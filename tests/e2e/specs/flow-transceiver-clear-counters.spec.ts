@@ -36,7 +36,7 @@ test("Clear Counters per-row action posts and shows success status", async ({
     route.fulfill({
       status: 200,
       contentType: "application/json",
-      body: JSON.stringify({ halls: [] }),
+      body: JSON.stringify({ halls: ["CC-Hall"] }),
     }),
   );
   await page.route("**/api/roles**", (route) =>
@@ -122,8 +122,22 @@ test("Clear Counters per-row action posts and shows success status", async ({
   const app = new AppShell(page);
   await app.gotoHash("transceiver");
 
-  await page.locator("#transceiverFabric").selectOption("CC-FAB");
-  await page.locator("#transceiverSite").selectOption("CC-Site");
+  // Cascade: fabric → loadSites; site change → loadHalls; hall change
+  // → loadRoles; role change → loadDevices (app.js:997-1000). Roles
+  // never populate without picking a hall first, so we mock one hall
+  // and walk the full chain.
+  const fabricSel = page.locator("#transceiverFabric");
+  await expect.poll(async () => fabricSel.locator("option").count(), { timeout: 5_000 }).toBeGreaterThan(1);
+  await fabricSel.selectOption("CC-FAB");
+  const siteSel = page.locator("#transceiverSite");
+  await expect.poll(async () => siteSel.locator("option").count(), { timeout: 5_000 }).toBeGreaterThan(1);
+  await siteSel.selectOption("CC-Site");
+  const hallSel = page.locator("#transceiverHall");
+  await expect.poll(async () => hallSel.locator("option").count(), { timeout: 5_000 }).toBeGreaterThan(1);
+  await hallSel.selectOption("CC-Hall");
+  const roleSel = page.locator("#transceiverRole");
+  await expect.poll(async () => roleSel.locator("option").count(), { timeout: 5_000 }).toBeGreaterThan(1);
+  await roleSel.selectOption("Leaf");
 
   await expect(page.locator("#transceiverDeviceList .device-row")).toHaveCount(1, {
     timeout: 5_000,

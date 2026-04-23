@@ -14,6 +14,11 @@ test("Subnet calculator divides one /24 into two /25 rows", async ({
   const app = new AppShell(page);
   await app.gotoHash("subnet");
 
+  // The subnet page initialises with 192.168.0.0/16 (HTML defaults), so
+  // changing the mask from /16 to /24 fires a confirm() dialog asking to
+  // reset the divisions. Auto-accept it so the new base network sticks.
+  page.on("dialog", (d) => d.accept());
+
   // Use a smaller network than the 192.168.0.0/16 default so the table
   // stays one row wide and the test is fast.
   await page.locator("#subnetNetwork").fill("10.0.0.0");

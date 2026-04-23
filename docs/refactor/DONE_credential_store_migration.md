@@ -368,3 +368,102 @@ These are explicitly **not** part of this refactor and should be filed as separa
 - [ ] Operator runbook section in `HOWTOUSE.md` is reviewed by at least one operator.
 - [ ] One full release cycle (1–2 weeks) elapses between Phase 5 (deprecation shim) and Phase 6 (deletion).
 - [ ] `instance/credentials.legacy.bak` file is preserved through the deprecation window.
+
+---
+
+## Wave-7 update: v2 fall-through bridge landed (2026-04-23)
+
+The wave-6 `scripts/migrate_credentials_v1_to_v2.py` operator CLI is the
+canonical data-move mechanism described above. **Wave-7 added an
+in-process safety net** so that an operator who has not yet run the
+migration script (or who has a fresh install with no legacy DB at all)
+does not see broken device-exec routes:
+
+### What landed
+
+`backend/credential_store.py:111-168` gained two helpers:
+
+```python
+def _v2_db_path() -> str:
+    base = os.path.dirname(os.path.abspath(__file__))
+    return os.path.join(base, "instance", "credentials_v2.db")
+
+
+def _read_from_v2(name: str, secret_key: str) -> dict | None:
+    """Best-effort read from the v2 (PBKDF2 + AES-CBC+HMAC) store."""
+    db_path = _v2_db_path()
+    if not os.path.exists(db_path):
+        return None
+    try:
+        from backend.repositories.credential_repository import CredentialRepository
+        from backend.security.encryption import EncryptionService
+        enc = EncryptionService.from_secret(secret_key)
+        repo = CredentialRepository(db_path, enc)
+        return repo.get((name or "").strip())
+    except Exception:  # noqa: BLE001 — best-effort fall-through
+        return None
+```
+
+`get_credential()` now calls `_read_from_v2(name, secret_key)` when the
+legacy DB has no row — instead of returning `None` immediately.
+
+### Why this matters for the migration plan
+
+The migration plan above (Phases 1–6) cuts the **read path** over to
+`CredentialService` step by step (Phase 2). Without the wave-7 bridge,
+that cut-over **must** ship in lockstep with the migration script run,
+or the fresh-install operator gets a broken device-exec path during the
+window between "I added a credential through the new HTTP CRUD" and
+"the operator pointed me at the v2 DB via Phase 4's `CREDENTIAL_DB_PATH`
+default change".
+
+With the wave-7 bridge in place, that lockstep constraint is **removed**.
+The migration phases can now ship independently:
+
+- **Phase 1** (runner contract change) — independent.
+- **Phase 2** (cut-over read-path call sites) — independent. The legacy
+  `get_credential()` is no longer the only read path; new code can
+  bypass it entirely.
+- **Phase 3** (migration script + tests) — **shipped in wave-6** as
+  `scripts/migrate_credentials_v1_to_v2.py` and
+  `backend/repositories/credential_migration.py` (97 % covered).
+- **Phase 4** (operator runs the script + bootstrap cleanup) — operator-led,
+  unchanged. The bridge means an operator who delays Phase 4 indefinitely
+  still has a working app.
+- **Phase 5** (deprecate the legacy module) — can ship independently;
+  the bridge will be removed at the same time as the legacy module
+  body, since the bridge is itself inside `credential_store.py`.
+- **Phase 6** (delete legacy module + legacy DB file) — unchanged.
+
+### What did NOT change
+
+- The migration script remains the canonical operator action. The bridge
+  is a safety net, not a replacement; it does **not** re-encrypt rows
+  with the stronger PBKDF2 KDF, it just reads from whichever store has
+  the row.
+- The deprecation timeline (Phase 5 ships one release after Phase 4) is
+  unchanged. Operators still need to run the migration before the
+  legacy module's body is deleted.
+- The acceptance criteria above are unchanged. The bridge is added
+  alongside the migration plan, not as a substitute for it.
+
+### Tests
+
+The bridge is pinned by `tests/test_security_credential_v2_fallthrough.py`
+(6 tests):
+
+- v2-only credential read returns the payload (no legacy DB present).
+- Legacy-only credential read still works (no v2 DB present).
+- Both stores present, legacy-DB hit takes precedence (operator's
+  manual `sqlite3` is the source of truth).
+- Both stores present, v2-only credential found via fall-through.
+- Wrong `secret_key` → bridge swallows the decrypt failure → returns None.
+- v2 DB missing → bridge returns None without raising.
+
+### Cross-reference
+
+- Wave-7 audit: `docs/security/DONE_audit_2026-04-23-wave7.md` §4.1 (C-1 / H-4 fix).
+- Wave-7 Python review: `docs/code-review/DONE_python_review_2026-04-23-wave7.md` §4.1.
+- Wave-6 Phase E (migration script): `patch_notes.md` v0.7.0.
+
+— end of update —

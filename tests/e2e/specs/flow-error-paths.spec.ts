@@ -25,17 +25,14 @@ test("find-leaf shows error state when /api/find-leaf returns 5xx", async ({ pag
   const app = new AppShell(page);
   await app.gotoHash("findleaf");
 
-  // The search field id varies a bit between releases; tolerate either.
-  const ipInput = page.locator("#findLeafIp, #findLeafIpInput, input[type=text]").first();
+  // Use the specific findleaf-page selector. The previous union
+  // (`#findLeafIp, ..., input[type=text]`) resolved to the first
+  // matching node in DOM order — `#customCommandInput` on the prepost
+  // page — because hidden pages still exist in the DOM (only `.active`
+  // toggles visibility). Scope tightly to the findleaf section.
+  const ipInput = page.locator("#page-findleaf #findLeafIp");
   await ipInput.fill("10.0.0.99");
-
-  // Trigger search via the visible button or Enter key.
-  const button = page.locator("button:has-text('Find'), #findLeafBtn").first();
-  if (await button.isVisible().catch(() => false)) {
-    await button.click();
-  } else {
-    await ipInput.press("Enter");
-  }
+  await page.locator("#findLeafBtn").click();
 
   // No JS pageerrors (the SPA must handle the 500 gracefully).
   await page.waitForTimeout(500);

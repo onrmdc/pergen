@@ -18,6 +18,7 @@ deployment (auto-add new keys, log a warning).
 """
 from __future__ import annotations
 
+import contextlib
 import logging
 import os
 from typing import Any
@@ -95,9 +96,17 @@ def run_command(
     command: str,
     timeout: int = 25,
 ) -> tuple[str | None, str | None]:
-    """Run one command over SSH. Returns ``(output_text, error_message_or_None)``."""
+    """Run one command over SSH. Returns ``(output_text, error_message_or_None)``.
+
+    Audit (Python review C-5): the SSH transport is closed in a
+    ``finally`` block so an exception between ``connect()`` and the
+    explicit ``client.close()`` cannot leak the file descriptor /
+    source-port slot. Sustained device-side flakiness used to
+    drain the FD limit on the controller.
+    """
     if paramiko is None:
         return None, "paramiko not installed"
+    client = None
     try:
         client = _build_client()
         if client is None:
@@ -113,7 +122,6 @@ def run_command(
         _, stdout, stderr = client.exec_command(command, timeout=timeout)
         out = (stdout.read().decode("utf-8", errors="replace") or "").strip()
         err = (stderr.read().decode("utf-8", errors="replace") or "").strip()
-        client.close()
         if err and not out:
             return None, err
         return out, None
@@ -124,6 +132,11 @@ def run_command(
         bucket = _classify_ssh_error(exc)
         _log.warning("ssh_runner.run_command failed (%s): %r", bucket, exc)
         return None, bucket
+    finally:
+        if client is not None:
+            # close() must not mask the original error.
+            with contextlib.suppress(Exception):
+                client.close()
 
 
 def run_config_lines_pty(
@@ -133,12 +146,22 @@ def run_config_lines_pty(
     lines: list[str],
     timeout: int = 120,
 ) -> tuple[str | None, str | None]:
-    """Run config lines over SSH with a PTY (NX-OS / IOS-style CLI)."""
+    """Run config lines over SSH with a PTY (NX-OS / IOS-style CLI).
+
+    Audit (Python review C-4): exceptions are now bucketed via
+    ``_classify_ssh_error`` instead of returning ``str(exc)`` —
+    matching the hardening already applied to ``run_command``. This
+    closes the credential-leak vector on the interface-recovery path.
+
+    Audit (Python review C-5): the SSH transport is closed in a
+    ``finally`` block to prevent FD leaks on exception paths.
+    """
     if paramiko is None:
         return None, "paramiko not installed"
     if not lines:
         return None, "no configuration lines"
     script = "\n".join(lines) + "\n"
+    client = None
     try:
         client = _build_client()
         if client is None:
@@ -154,12 +177,17 @@ def run_config_lines_pty(
         _, stdout, stderr = client.exec_command(script, timeout=timeout, get_pty=True)
         out = (stdout.read().decode("utf-8", errors="replace") or "").strip()
         err = (stderr.read().decode("utf-8", errors="replace") or "").strip()
-        client.close()
         if err and not out:
             return None, err
         return out, None
-    except Exception as e:  # noqa: BLE001
-        return None, str(e)
+    except Exception as exc:  # noqa: BLE001
+        bucket = _classify_ssh_error(exc)
+        _log.warning("ssh_runner.run_config_lines_pty failed (%s): %r", bucket, exc)
+        return None, bucket
+    finally:
+        if client is not None:
+            with contextlib.suppress(Exception):
+                client.close()
 
 
 def run_commands(

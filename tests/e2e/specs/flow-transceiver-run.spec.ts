@@ -29,7 +29,7 @@ test("transceiver Run renders mocked rows", async ({ page }) => {
     route.fulfill({
       status: 200,
       contentType: "application/json",
-      body: JSON.stringify({ halls: [] }),
+      body: JSON.stringify({ halls: ["TX-Hall"] }),
     }),
   );
   await page.route("**/api/roles**", (route) =>
@@ -99,13 +99,23 @@ test("transceiver Run renders mocked rows", async ({ page }) => {
   const app = new AppShell(page);
   await app.gotoHash("transceiver");
 
-  // Pick fabric / site / role (cascading change events load devices).
+  // Cascade: fabric → loadSites; site change → loadHalls; hall change
+  // → loadRoles; role change → loadDevices (app.js:997-1000). So we
+  // MUST pick a real hall to make roles populate, and a role to make
+  // devices populate. The earlier version mocked halls=[] which left
+  // the role select empty forever.
   const fabric = page.locator("#transceiverFabric");
   await expect.poll(async () => fabric.locator("option").count(), { timeout: 5_000 }).toBeGreaterThan(1);
   await fabric.selectOption("TX-FAB");
   const site = page.locator("#transceiverSite");
   await expect.poll(async () => site.locator("option").count(), { timeout: 5_000 }).toBeGreaterThan(1);
   await site.selectOption("TX-Site");
+  const hall = page.locator("#transceiverHall");
+  await expect.poll(async () => hall.locator("option").count(), { timeout: 5_000 }).toBeGreaterThan(1);
+  await hall.selectOption("TX-Hall");
+  const role = page.locator("#transceiverRole");
+  await expect.poll(async () => role.locator("option").count(), { timeout: 5_000 }).toBeGreaterThan(1);
+  await role.selectOption("Leaf");
 
   // Wait for device rows to render.
   await expect(page.locator("#transceiverDeviceList .device-row")).toHaveCount(2, {

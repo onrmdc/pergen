@@ -6,6 +6,15 @@
 > **Status**: enforced.
 >
 > **Owner**: Frontend / Security.
+>
+> **Verified 2026-04-23** (wave-7 audit re-sweep): policy still accurate;
+> `tests/test_security_innerhtml_lint.py` still passes; CSP `script-src 'self'`
+> + `style-src 'self'` still in effect; no new UNSAFE sites were introduced
+> by wave-6 Phase D / F or any subsequent commit. The wave-7 review
+> (`docs/security/DONE_audit_2026-04-23-wave7.md` §3.3 M-7) flagged that
+> `safeHtml` does NOT defend against `javascript:` URLs in attribute
+> position — that is a defence-in-depth follow-up, not a regression in
+> the existing policy.
 
 ---
 

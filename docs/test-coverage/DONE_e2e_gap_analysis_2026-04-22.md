@@ -364,3 +364,24 @@ All paths are relative to repo root. Files use the existing `tests/e2e/specs/` +
 | Recommendation | **Stay on Playwright.** Add the 9 P0 flow specs in §7 first (highest risk: prepost run, inventory CRUD, transceiver, route-map compare, custom-command, find-leaf, nat). Then 7 P1 specs, then 4 P2 quality specs. Add the harness isolation fixture before the first mutating flow lands. |
 
 No code or packages were modified during this audit.
+
+---
+
+## Wave-7 follow-up (2026-04-23)
+
+The wave-2 P0 list landed in wave-3 (15 new flow specs, per the wave-4
+audit). The wave-7 audit
+(`docs/test-coverage/DONE_e2e_gap_analysis_2026-04-23-wave7.md`) measures:
+
+- Spec files: **43** (+5 from wave-6: auth login + XSS regression + 3 wave-5
+  P0 flows).
+- Tests: **100 / 100 green** (was 88 / 12 failing at wave-6 close; the
+  12 failures were all spec-side selector/dialog brittleness from the
+  wave-6 SPA refactor and were fixed in wave-7 with no SPA changes).
+- SPA hash routes covered: **13 / 14** (`#help` still uncovered).
+- Endpoints UI-tested: **34 / 53** (unchanged from wave-4).
+
+Wave-7 itself added zero new specs — the contribution was suite
+stability. See the wave-7 doc for the per-spec fix list (12 specs).
+
+— end of follow-up note —

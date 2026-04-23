@@ -1,7 +1,9 @@
 # Pergen — Network device panel
 
 > **`refactor/ood-tdd` branch — phases 0–13 + audit-wave-1 + parse_output
-> refactor (8 phases) + audit-wave-2.**
+> refactor (8 phases) + audit-wave-2 + wave-3 god-module split + wave-4
+> actor-scoping followups + wave-5 close-out + wave-6 reclassified-items
+> shipped + wave-7 audit followup (2026-04-23).**
 >
 > Pergen has been migrated to a strict OOD layout (App Factory +
 > 12 Blueprints + service layer + RunnerFactory + ParserEngine) on top
@@ -12,27 +14,25 @@
 > Every route lives in a per-domain blueprint registered through
 > `create_app()`.
 >
-> Post-decomposition, four parallel audits (`security-reviewer`,
-> `python-reviewer`, `coverage analysis`, `e2e-runner`) surfaced
-> **38 findings** in wave 1 (all remediated) and an additional
-> **49 findings in wave 2** (5 NEW HIGH security + 6 HIGH code-review +
-> 23 endpoint-level coverage gaps + 9 missing E2E flows). Wave 2's
-> mitigations: a full parser-package refactor (1,552 → 151 LOC, +33 pp
-> parser coverage), 16 vendor parser unit test files (+196 tests),
-> 12 new security test files (+44 pass + 15 strict-xfail trackers),
-> 4 new Playwright specs (including the previously missing
-> `#inventory` CRUD round-trip), a Vitest scaffold for frontend unit
-> tests (+16 tests), and the Playwright harness fix that prevents flow
-> specs from polluting the operator's real `instance/` dir.
+> Post-decomposition, parallel audits (`security-reviewer`,
+> `python-reviewer`, `coverage analysis`, `e2e-runner`) surfaced and
+> closed **38 findings in wave 1**, **49 in wave 2**, **24 in wave 3**,
+> **6 in wave 4**, **5 reclassified items in wave 6**, and **7
+> CRITICAL+HIGH in wave 7** (1 CRITICAL + 6 HIGH security + 2 CRITICAL
+> Python — credential v2 fall-through bridge, SSH runner FD leak,
+> proxy-aware throttle, bounded session lifetime, `__main__` bind guard,
+> audit-log scrubbing, username-enum closure).
 >
- > Every existing API still ships unchanged — **1,717 pytest tests +
-> 45 Vitest + 100 Playwright** lock the response shapes byte-for-byte
-> across all 28 golden parser snapshots.
+> Every existing API still ships unchanged — **1,767 pytest tests + 1
+> strict xfail + 45 Vitest + 100 Playwright** lock the response shapes
+> byte-for-byte across all 28 golden parser snapshots.
 >
 > **Coverage:** **87 %** on the parser surface; **92 %** on the 4 new
 > wave-3 packages; **97 %** on the wave-6 modules (auth_bp, csrf,
-> credential_migration); **90.51 %** whole-project (was 74.94 %
-> pre-refactor, +15.6 pp net); 94 % on the OOD layer.
+> credential_migration); **100 %** on extracted frontend helpers
+> (`subnet.js`, `utils.js`); **90.79 %** whole-project (was 74.94 %
+> pre-refactor, +15.85 pp net); **91.34 %** on the OOD-scoped layer
+> (`make cov-new`, gate 85).
 >
 > **Refactor program FULLY COMPLETE** — wave-6 shipped all 5 reclassified
 > items in a single dedicated session: credential migration tooling
@@ -42,31 +42,40 @@
 > CSP locked down to `style-src 'self'`), long-tail XSS sweep with
 > CI lint guard + classifier + 5 audit-confirmed XSS sites closed,
 > and find-leaf parallel-cancel (10s → 0.35s). Every plan in
-> `docs/refactor/` is now `DONE_*`-prefixed. See
-> [`docs/refactor/DONE_wave3_roadmap.md`](docs/refactor/DONE_wave3_roadmap.md)
-> §"Reclassified items — ALL CLOSED in wave-6". All historical
-> plan/audit docs in `docs/` carry the `DONE_` prefix; new work
-> should land in fresh, undecorated docs.
+> `docs/refactor/` is now `DONE_*`-prefixed.
 >
-> **Recent UI/Boot work** (post-batch-4): the Phase-13 CSP
-> (`script-src 'self'`) was silently blocking the SPA. Inline `<script>`
-> blocks were extracted to `backend/static/js/{theme-init,app}.js` and
-> JSZip was vendored to `backend/static/vendor/jszip.min.js` (commit
-> `c997fe0`). `run.sh` now boots through `backend.app_factory:create_app`
-> by default; booting `FLASK_APP=backend.app` directly serves 404 on
-> every URL because the shim has zero routes.
+> **Latest (wave-7, 2026-04-23):** post-`v0.7.0` security + python
+> reviews surfaced 1 CRITICAL + 6 HIGH (audit) + 2 CRITICAL (python)
+> findings in the seams between the wave-6 surface and the legacy
+> modules. **All 9 fixed in the same session**, pinned by 9 new test
+> files (51 tests). The 12 brittle Playwright specs failing at wave-6
+> close were stabilised with **test-only changes** — suite is back to
+> **100 / 100 green**. New env knobs:
+> `PERGEN_SESSION_LIFETIME_HOURS` (default 8h, was 31 days),
+> `PERGEN_SESSION_IDLE_HOURS`, `PERGEN_TRUST_PROXY`,
+> `PERGEN_DEV_BIND_HOST` (default `127.0.0.1`),
+> `PERGEN_DEV_ALLOW_PUBLIC_BIND`. See
+> [`patch_notes.md` v0.7.1](./patch_notes.md) for the full changelog.
 >
-> **Latest:** [`patch_notes.md` v0.3.0-audit-wave-2](./patch_notes.md)
-> — parse_output refactor (8 phases), four-track audit, +516 pytest
-> tests, +16 Vitest tests, Vitest scaffold, Playwright harness fix.
+> **Recent UI/Boot work**: the Phase-13 CSP (`script-src 'self'`) is
+> served by `backend/static/js/{theme-init,app}.js` + the vendored
+> `backend/static/vendor/jszip.min.js`. `run.sh` defaults to
+> `FLASK_APP=backend.app_factory:create_app`; booting
+> `FLASK_APP=backend.app` directly serves 404 on every URL. **Wave-7
+> (2026-04-23):** `python -m backend.app __main__` now refuses any
+> non-loopback bind unless `PERGEN_DEV_ALLOW_PUBLIC_BIND=1` is set —
+> closes the latent foot-gun where the shim could have exposed every
+> route publicly without auth if a future contributor restored
+> blueprint imports there.
 >
 > See [`patch_notes.md`](./patch_notes.md) for the per-phase log,
 > [`ARCHITECTURE.md`](./ARCHITECTURE.md) for the layered design,
 > [`HOWTOUSE.md`](./HOWTOUSE.md) for the operational guide,
 > [`FUNCTIONS_EXPLANATIONS.md`](./FUNCTIONS_EXPLANATIONS.md) for the
 > per-class reference, [`TEST_RESULTS.md`](./TEST_RESULTS.md) for
-> the full test matrix, and `docs/refactor/DONE_parse_output_split.md` +
-> `docs/security/DONE_audit_2026-04-22.md` for the wave-2 deep-dive reports.
+> the full test matrix, and
+> [`docs/security/DONE_audit_2026-04-23-wave7.md`](docs/security/DONE_audit_2026-04-23-wave7.md)
+> for the wave-7 audit deep-dive.
 
 ## Refactor at a glance (Phase 12 final shape)
 
@@ -117,6 +126,13 @@
 | **M11** | MED | Arista runCmds dict-form whitelist — non-`enable` dicts only forward `{cmd}`; injection vectors stripped. |
 | **L1** | LOW | `route-map/run` per-device errors log full detail server-side; envelope stays generic. |
 | **A09** | INFO | Audit log channel (`app.audit`) records `actor=<name>` on every credential set/delete and interface bounce (audit C-2). |
+| **W7-C-1** / **W7-H-4** | CRITICAL / HIGH | (Wave-7, 2026-04-23) `credential_store.get_credential()` falls through to `credentials_v2.db` via new `_v2_db_path()` + `_read_from_v2()` helpers when the legacy DB has no row — closes the fresh-install device-exec break for operators who only used the new HTTP CRUD. |
+| **W7-H-1** | HIGH | (Wave-7) `werkzeug.middleware.proxy_fix.ProxyFix` mounted only when `PERGEN_TRUST_PROXY=1` so the login throttle can key on the real client IP behind nginx / Caddy / cloud LB without naively trusting `X-Forwarded-For` from un-proxied deployments. |
+| **W7-H-2** | HIGH | (Wave-7) Session cookie lifetime bounded at 8h via `PERGEN_SESSION_LIFETIME_HOURS` (was Flask's 31-day default); idle-timeout enforced via `PERGEN_SESSION_IDLE_HOURS`; cookie-auth branch clears the session and emits `audit auth.session.expired` on overflow. |
+| **W7-H-3** | HIGH | (Wave-7) `python -m backend.app __main__` refuses any non-loopback bind unless `PERGEN_DEV_ALLOW_PUBLIC_BIND=1` is set; binds via `PERGEN_DEV_BIND_HOST` (default `127.0.0.1`). Closes the latent foot-gun where the shim could expose every route publicly without auth. |
+| **W7-H-5** | HIGH | (Wave-7) Audit-log emission on find-leaf / nat-lookup routes scrubs control characters via a small `_safe_audit_str(...)` helper before formatting — closes the audit-log injection vector for inventory rows seeded from outside the app. |
+| **W7-H-6** | HIGH | (Wave-7) `auth.login.fail` audit line records `actor=<unknown>` for usernames that are not in the configured token map — closes the username-existence oracle via audit-log volume. |
+| **W7-py-C-4** / **W7-py-C-5** | CRITICAL | (Wave-7, python review) `backend/runners/ssh_runner.py` `run_command` and `run_config_lines_pty` now wrap the full session in `try/finally: client.close()` (FD-leak fix) and bucket exceptions through `_classify_ssh_error()` (controlled vocabulary, no credential-tail leak via `str(exc)`). |
 
 ### Phase-13 hardening (preserved)
 
@@ -344,8 +360,10 @@ If you already committed `inventory.csv`, `example_inventory.csv`, or `.env` in 
 ## Configuration
 
 - **Inventory**: CSV with columns such as hostname, ip, fabric, site, hall, vendor, model, role, tag, credential. Use tag `leaf-search` for Find Leaf, `nat lookup` for NAT Lookup firewalls, role `wan-router` for BGP WAN RTR search. Put your file at `backend/inventory/inventory.csv` (or set `PERGEN_INVENTORY_PATH`). Repo contains only `inventory_sample.csv` (minimal); `inventory.csv` and `example_inventory.csv` are gitignored.
-- **Credentials**: Stored encrypted in `backend/instance/credentials.db`; set credential name per device in inventory. Use **Credential** page in the app to add/update; do not commit `.env` or the `instance/` folder.
-- **Binding**: Set `FLASK_RUN_HOST=0.0.0.0` for production; default is `127.0.0.1`.
+- **Credentials**: Stored encrypted in `backend/instance/credentials.db` (legacy) and/or `backend/instance/credentials_v2.db` (new — written by `POST /api/credentials`). The legacy `credential_store.get_credential()` now falls through to the v2 store when the legacy DB has no row (wave-7 C-1 / H-4 fix), so a fresh-install operator who only used the new HTTP CRUD has working device-exec routes. The migration script (`scripts/migrate_credentials_v1_to_v2.py`) remains the canonical operator action when both stores are populated. Set credential name per device in inventory; use the **Credential** page to add/update; do not commit `.env` or the `instance/` folder.
+- **Binding**: For the canonical entry point (`FLASK_APP=backend.app_factory:create_app`), set `FLASK_RUN_HOST=0.0.0.0` for production; default is `127.0.0.1`. The legacy `python -m backend.app __main__` shim binds via `PERGEN_DEV_BIND_HOST` (default `127.0.0.1`) and refuses any non-loopback bind unless `PERGEN_DEV_ALLOW_PUBLIC_BIND=1` is set (wave-7 H-3 fix).
+- **Session lifetime** (wave-7 H-2): `PERGEN_SESSION_LIFETIME_HOURS` (default `8`) bounds the maximum lifetime of a `pergen_session` cookie issued by the optional cookie-auth path. `PERGEN_SESSION_IDLE_HOURS` (default = lifetime) enforces an idle-timeout via the `iat` stamp on every request. Audit line emitted on idle-timeout: `audit auth.session.expired actor=<name> ip=<ip> age_s=<seconds>`.
+- **Reverse proxy** (wave-7 H-1): set `PERGEN_TRUST_PROXY=1` to mount `werkzeug.middleware.proxy_fix.ProxyFix` so the login throttle keys on the real client IP. **Required behind nginx / Caddy / cloud LB**. Do NOT set this in deployments that are NOT behind a proxy — naively trusting `X-Forwarded-For` lets an attacker rotate the header value to bypass the throttle.
 
 ## Troubleshooting
 

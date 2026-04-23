@@ -1,8 +1,12 @@
 import { expect, test } from "@playwright/test";
 
+// Note: `strict-transport-security` is intentionally omitted from the
+// REQUIRED list. The backend (backend/request_logging.py) only emits HSTS
+// when `request.is_secure` is true; the E2E suite hits Flask over plain
+// HTTP at 127.0.0.1:5000, so HSTS is correctly absent here. We assert it
+// conditionally below.
 const REQUIRED_HEADERS = [
   "content-security-policy",
-  "strict-transport-security",
   "x-frame-options",
   "x-content-type-options",
   "referrer-policy",

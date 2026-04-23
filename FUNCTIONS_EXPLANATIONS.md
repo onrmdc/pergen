@@ -14,10 +14,11 @@ that have not yet been migrated keep their existing inline docstrings.
 
 | Symbol | Description |
 |--------|-------------|
-| `create_app(config_name="default") -> Flask` | App Factory entry point. Resolves config class from `CONFIG_MAP`, validates it, imports the legacy `backend.app` module to grab the module-level `Flask` global (the shim no longer registers routes — every route is mounted by `_register_blueprints` below), applies config onto `app.config`, configures structured logging, mounts the request-id middleware, registers the OOD service layer into `app.extensions`, mounts the 12 per-domain blueprints, re-inits the legacy credential store, installs the API-token gate. Returns a fully configured `Flask` instance. Security: `ProductionConfig.validate()` and the API-token gate raise before any side effects on a misconfigured deploy. |
+| `create_app(config_name="default") -> Flask` | App Factory entry point. Resolves config class from `CONFIG_MAP`, validates it, imports the legacy `backend.app` module to grab the module-level `Flask` global (the shim no longer registers routes — every route is mounted by `_register_blueprints` below), applies config onto `app.config`, configures structured logging, mounts the request-id middleware, registers the OOD service layer into `app.extensions`, mounts the 12 per-domain blueprints, re-inits the legacy credential store, installs the API-token gate. Returns a fully configured `Flask` instance. Security: `ProductionConfig.validate()` and the API-token gate raise before any side effects on a misconfigured deploy. **Wave-7 (2026-04-23):** also (a) optionally mounts `werkzeug.middleware.proxy_fix.ProxyFix` when `PERGEN_TRUST_PROXY=1` (closes login-throttle bypass behind a reverse proxy — audit H-1); (b) sets `PERMANENT_SESSION_LIFETIME` from `PERGEN_SESSION_LIFETIME_HOURS` (default 8h, was Flask's 31-day default) and `PERGEN_SESSION_IDLE_HOURS` from the matching env var (default = lifetime) — both written onto `app.config` for the cookie-auth idle-timeout enforcement (audit H-2). |
 | `_register_services(app)` | Builds `InventoryService`, `NotepadService`, `ReportService`, `CredentialService`, `DeviceService`, `TransceiverService`, `RunStateStore` and stores each in `app.extensions[...]`. Idempotent. Inventory CSV path resolution mirrors the legacy `_inventory_path` helper. Credentials use `credentials_v2.db` to avoid clashing with the legacy Fernet blob format. |
-| `_register_blueprints(app)` | Mounts the 12 per-domain blueprints: `health_bp`, `inventory_bp`, `notepad_bp`, `commands_bp`, `network_ops_bp`, `credentials_bp`, `bgp_bp`, `network_lookup_bp`, `transceiver_bp`, `device_commands_bp`, `runs_bp`, `reports_bp`. Skips any blueprint already present in `app.blueprints` (idempotent across multiple `create_app` calls). |
+| `_register_blueprints(app)` | Mounts the 12 per-domain blueprints: `health_bp`, `inventory_bp`, `notepad_bp`, `commands_bp`, `network_ops_bp`, `credentials_bp`, `bgp_bp`, `network_lookup_bp`, `transceiver_bp`, `device_commands_bp`, `runs_bp`, `reports_bp`. Wave-6 added `auth_bp` as an optional 13th blueprint when cookie auth is enabled. Skips any blueprint already present in `app.blueprints` (idempotent across multiple `create_app` calls). |
 | `_apply_config(app, cfg)` | Mirrors the dataclass attributes of the chosen config class onto `app.config`. |
+| `_enforce_api_token(...)` (cookie-auth branch — wave-7 H-2) | Idle-timeout enforcement. Stamped on every request that carries a `pergen_session` cookie: if `now - session["iat"] > PERGEN_SESSION_IDLE_HOURS * 3600`, the session is cleared, treated as anonymous, and the next response surfaces a 401. Audit line emitted before clearing: `audit auth.session.expired actor=<name> ip=<ip> age_s=<seconds>`. The check is a no-op for the legacy `X-API-Token` header path. |
 
 ---
 
@@ -92,6 +93,49 @@ Null bytes (`\x00`) are rejected in every method with a WARN log.
 
 ---
 
+## 7a. `backend/credential_store.py` (legacy module + wave-7 v2 fall-through bridge)
+
+The legacy credential store. Marked deprecated in wave-3 Phase 6 but
+still imported by 6 callers (5 blueprints + `runner.py`). Rather than
+ship a breaking signature change to all 6 consumers, wave-7 added a
+small fall-through bridge inside this module so the legacy `get_credential()`
+public API can transparently serve credentials written via the new
+`CredentialService` HTTP CRUD.
+
+| Symbol | Description |
+|--------|-------------|
+| `init_db(secret_key)` | Idempotent legacy schema creation in `instance/credentials.db`. Chmodded to `0o600` on POSIX (audit M-6). |
+| `set_credential(name, method, secret_key, *, api_key=None, username=None, password=None)` | Legacy write — encrypts via SHA-256 → Fernet (no PBKDF2). Used today only by operators who hand-edit through the legacy module's API. New writes go through `CredentialService`. |
+| `get_credential(name, secret_key) -> dict | None` | Legacy read. **Wave-7:** when the legacy DB has no row, falls through to `_read_from_v2(name, secret_key)` before declaring "not found". This closes the fresh-install device-exec break (audit C-1 / H-4). |
+| `list_credentials(secret_key) -> list[dict]` | Legacy list (name + method only, no payload). Does NOT fall through to v2 — list operations stay legacy-only because the new HTTP CRUD has its own list at `GET /api/credentials` via `CredentialService`. |
+| `delete_credential(name, secret_key) -> bool` | Legacy delete. Does NOT fall through. Delete is destructive; the legacy and v2 stores are independent for delete operations. Operator who needs to delete a v2 credential should use `DELETE /api/credentials/<name>` (which goes through `CredentialService`). |
+| **`_v2_db_path() -> str` (NEW wave-7)** | Computes the absolute path to `instance/credentials_v2.db` from this module's own `__file__`. Note: does NOT honour `PERGEN_INSTANCE_DIR` — that's a tracked LOW finding for the day an operator sets a non-default instance path (wave-7 review LOW-5). |
+| **`_read_from_v2(name, secret_key) -> dict | None` (NEW wave-7)** | Best-effort read from the v2 store. Imports `CredentialRepository` and `EncryptionService.from_secret(...)` lazily (no module-load cost for legacy-only deployments). Returns `None` if the v2 DB doesn't exist OR the row is missing OR the decrypt fails (`SECRET_KEY` mismatch / corruption). Failures are swallowed by design — the legacy code path stays at-least-as-functional as before the bridge. Audit citation in the docstring: "Audit (Python review C-1 / Security audit H-4)". |
+
+### Wave-7 read-path data flow
+
+```
+                    legacy callers (5 blueprints + runner.py + find_leaf + nat_lookup)
+                                              │
+                                              ▼
+                              credential_store.get_credential()
+                                              │
+                              ┌───────────────┴───────────────┐
+                              ▼                               ▼
+                    instance/credentials.db          row missing → _read_from_v2()
+                    (legacy SHA-256 → Fernet)        instance/credentials_v2.db
+                                                     (PBKDF2 600k → AES-CBC+HMAC)
+```
+
+The bridge is **a transition aid, not a replacement** for the migration
+script (`scripts/migrate_credentials_v1_to_v2.py`, wave-6 Phase E). The
+script remains the canonical operator action when the legacy DB has data
+that needs the stronger PBKDF2 KDF. See
+`docs/refactor/DONE_credential_store_migration.md` "Wave-7 update" for
+the complete plan.
+
+---
+
 ## 8. `backend/repositories/`
 
 ### `CredentialRepository`
@@ -149,6 +193,19 @@ All runners are stateless; credentials and timeouts are passed per call.
 
 ### `RunnerFactory`
 - `get_runner(*, vendor, model, method) -> BaseRunner` — thread-safe singleton cache keyed by the `(vendor, model, method)` tuple.  Raises `ValueError` for unsupported combinations.
+
+### Wave-7 SSH runner hardening (audit Python-review C-4 / C-5)
+
+`backend/runners/ssh_runner.py` (the legacy paramiko module wrapped by
+`SshRunner`) gained two correctness fixes:
+
+| Symbol | Description |
+|--------|-------------|
+| `_classify_ssh_error(exc) -> str` (NEW wave-7) | Maps a paramiko / network exception to a controlled vocabulary: `auth_failed`, `network`, `timeout`, `banner_mismatch`, `other`. The original `repr(exc)` is logged server-side via `_log.warning(...)` for triage; the returned string is bucket-name only — paramiko exception strings can carry the supplied username (always) and sometimes a password tail (server bouncing an auth attempt with an unusual error code), and pre-wave-7 those would have leaked back to the operator via the JSON envelope. |
+| `run_command(...)` (modified wave-7) | Now wraps the full session in `try/finally: client.close()` so the SSH client is always closed on the exception path (FD-leak fix — C-5). Exception text is bucketed through `_classify_ssh_error()` (C-4) instead of returned as `str(exc)`. |
+| `run_config_lines_pty(...)` (modified wave-7) | Same pattern as `run_command`. The interactive PTY config-push helper is the highest-blast-radius leak surface because authentication failures during config push happen mid-session, and pre-wave-7 the paramiko exception string was returned verbatim. |
+
+Pinned by `tests/test_security_ssh_runner_close_on_exception.py` (8 tests).
 
 ---
 

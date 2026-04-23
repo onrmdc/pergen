@@ -355,3 +355,34 @@ git diff --name-only --diff-filter=A 33a6a07..HEAD -- \
 
 The raw JSON report (`docs/test-coverage/coverage_wave4.json`) is left
 in the repo for follow-up tooling.
+
+---
+
+## Wave-7 follow-up (2026-04-23)
+
+The wave-4 Tier-1 backfill list (10 items) was largely closed in
+wave-5 / wave-6:
+
+- `find_leaf/strategies/cisco.py`: 9.5 % → **88 %**
+- `find_leaf/strategies/arista.py`: 10.8 % → **89 %**
+- `find_leaf/service.py`: 51.9 % → **91 %**
+- `nat_lookup/xml_helpers.py`: 22 % → **88 %**
+- `nat_lookup/service.py`: 51.9 % → **92 %**
+- `route_map_analysis/comparator.py`: 23.3 % → **97 %**
+- `route_map_analysis/parser.py`: 71.5 % → **93 %**
+- `bgp_looking_glass/ripestat.py`: 72.1 % → **86 %**
+
+Wave-7 added 51 new tests in 9 files (security regressions for the
+CRITICAL+HIGH cluster — see `docs/security/DONE_audit_2026-04-23-wave7.md`).
+Net suite: **1767 passed + 1 xfailed**, combined coverage **90.79 %**.
+
+The wave-4 audit's "files <80 %" count went from **17 → 6** (wave-7).
+Tier-1 backfill items are now closed; remaining 6 sub-80 % files are
+chronic operator-output-variance gaps in the parser surface, plus
+`backend/credential_store.py` (75 %) which has the wave-7 v2 fall-through
+bridge added — only the legacy `list_credentials` / `delete_credential`
+functions remain 0-body covered (acceptable; deprecated module).
+
+Cross-reference: `docs/test-coverage/DONE_coverage_audit_2026-04-23-wave7.md`.
+
+— end of follow-up note —

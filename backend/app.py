@@ -84,4 +84,20 @@ creds.init_db(app.config["SECRET_KEY"])
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))  # noqa: S104 - dev entry, bind on all interfaces by design
+    # Audit (Security review H-3): the legacy ``backend/app`` shim no
+    # longer registers any routes — running ``python -m backend.app``
+    # used to bind ``0.0.0.0`` with ZERO routes AND bypass the API
+    # token gate (which is mounted by ``create_app``). That created a
+    # latent foot-gun: a future contributor restoring ``from
+    # backend.blueprints import …`` here would expose every route
+    # publicly without auth. Refuse to bind unless the operator has
+    # explicitly opted in and pin the bind to localhost by default.
+    _bind_host = os.environ.get("PERGEN_DEV_BIND_HOST", "127.0.0.1")
+    if _bind_host != "127.0.0.1" and os.environ.get("PERGEN_DEV_ALLOW_PUBLIC_BIND") != "1":
+        raise SystemExit(
+            f"backend.app __main__ refuses to bind '{_bind_host}' without "
+            "PERGEN_DEV_ALLOW_PUBLIC_BIND=1. Use the documented "
+            "entrypoint: FLASK_APP=backend.app_factory:create_app "
+            "flask run."
+        )
+    app.run(host=_bind_host, port=int(os.environ.get("PORT", 5000)))

@@ -79,22 +79,58 @@ test("Reports page restore flow calls POST /api/reports/<id>/restore", async ({
     });
   });
 
-  const app = new AppShell(page);
-  await app.gotoHash("prepost");
-  // Scroll to the reports listing on the prepost page (it lives there).
-  await page.locator("#savedReportsDetails").scrollIntoViewIfNeeded();
-  await page.locator("#savedReportsDetails").click({ force: true });
-
-  // Click the report row — the SPA fetches the full report + restores it.
-  const row = page.locator("#savedReportsList li", { hasText: "wave4-e2e-restore" });
-  await expect(row).toBeVisible({ timeout: 5_000 });
-  await row.click();
-
   // The SPA may show a confirmation dialog before restore — accept any.
   page.on("dialog", (d) => d.accept());
 
-  // Wait for the restore call to land. The SPA may need a button click first.
-  // The wave-3 flow uses GET → then POST /restore as a separate call.
+  // Pre-seed localStorage with our report BEFORE the SPA boots so the
+  // first call to renderSavedReportsList() (fired on the prepost hash
+  // navigation) picks it up via getSavedReports() → localStorage path.
+  // The SPA writes to "pergen_saved_reports" (app.js: SAVED_REPORTS_KEY).
+  // We deliberately store an entry with empty devices/device_results so
+  // openSavedReport() takes the GET /api/reports/<id> + POST /restore
+  // branch (which is what we want to exercise).
+  await page.addInitScript((rid) => {
+    try {
+      localStorage.setItem(
+        "pergen_saved_reports",
+        JSON.stringify([
+          {
+            run_id: rid,
+            name: "wave4-e2e-restore",
+            created_at: "2026-04-22T00:00:00Z",
+            devices: [],
+            device_results: [],
+          },
+        ]),
+      );
+    } catch {
+      /* localStorage unavailable in some test envs */
+    }
+  }, reportRid);
+
+  const app = new AppShell(page);
+  await app.gotoHash("prepost");
+
+  // <details> is collapsed by default — open it so the inner select +
+  // Open button are interactable.
+  await page.evaluate(() => {
+    const el = document.getElementById(
+      "savedReportsDetails",
+    ) as HTMLDetailsElement | null;
+    if (el) el.open = true;
+  });
+
+  // Wait for the dropdown to render the seeded report (idx=0).
+  const preSel = page.locator("#savedReportsPreSelect");
+  await expect.poll(async () => preSel.locator("option").count(), {
+    timeout: 5_000,
+  }).toBeGreaterThan(1);
+
+  // Select the report and click Open — this is the user-facing flow.
+  await preSel.selectOption("0");
+  await page.locator("#savedReportsPreOpen").click();
+
+  // Wait for the restore call to land.
   await expect
     .poll(() => restoreCalled, { timeout: 8_000 })
     .toBe(true);

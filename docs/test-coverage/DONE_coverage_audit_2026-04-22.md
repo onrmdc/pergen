@@ -381,3 +381,23 @@ counted as failures.
 
 The raw JSON report (`coverage_audit.json`) is left in the repo root
 for follow-up tooling.
+
+---
+
+## Wave-7 follow-up (2026-04-23)
+
+The wave-2 audit's coverage-gap inventory was largely closed in wave-3 /
+wave-4 / wave-5 / wave-6 (per `docs/test-coverage/DONE_coverage_audit_2026-04-22-wave4.md`
+and the wave-6 close-out notes in `patch_notes.md` v0.7.0). The wave-7
+audit (`docs/test-coverage/DONE_coverage_audit_2026-04-23-wave7.md`) measures:
+
+- pytest: **1767 passed + 1 xfailed** (was 1394 + 0 at wave-4 close).
+- Combined coverage: **90.79 %** (was 84.17 % at wave-4 close).
+- OOD-scoped (`make cov-new`): **91.34 %** (gate 85 %).
+- Files <80 %: **6** (was 17 at wave-4 close).
+
+The single new xfail tracks audit GAP #8 (inventory import row cap),
+flagged in the wave-7 audit and pinned by
+`tests/test_security_inventory_import_row_cap.py`.
+
+— end of follow-up note —

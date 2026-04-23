@@ -49,9 +49,11 @@ test.describe("inventory CRUD round-trip", () => {
     await expect(row).toContainText(ip);
 
     // --- EDIT -------------------------------------------------------- //
-    // Select the row by clicking it, then hit Edit (button only enables
-    // after a row is selected).
-    await row.click();
+    // Selection is driven by the per-row .inv-row-cb checkbox (app.js:
+    // invSelectedHostnames is a Set toggled on cb change), NOT by
+    // clicking the <tr>. The Edit button is enabled when exactly one
+    // checkbox is checked.
+    await row.locator("input.inv-row-cb").check();
     await expect(page.locator("#invEditBtn")).toBeEnabled();
     await page.locator("#invEditBtn").click();
     await expect(page.locator("#invModal")).toBeVisible();
@@ -71,13 +73,17 @@ test.describe("inventory CRUD round-trip", () => {
     // Re-locate the row (re-rendered after edit) and open the modal again
     // so the Delete button (only shown in edit mode) is reachable.
     const refreshedRow = page.locator("#invTbody tr", { hasText: hostname });
-    await refreshedRow.click();
+    await refreshedRow.locator("input.inv-row-cb").check();
+    await expect(page.locator("#invEditBtn")).toBeEnabled();
     await page.locator("#invEditBtn").click();
     await expect(page.locator("#invModal")).toBeVisible();
 
+    // DELETE is a query-string call: /api/inventory/device?hostname=...
+    // (app.js:4008), so endsWith("/device") is wrong — match the path
+    // segment instead.
     const deleteReq = page.waitForResponse(
       (r) =>
-        r.url().endsWith("/api/inventory/device") &&
+        r.url().includes("/api/inventory/device") &&
         r.request().method() === "DELETE",
     );
     await page.locator("#invModalDelete").click();

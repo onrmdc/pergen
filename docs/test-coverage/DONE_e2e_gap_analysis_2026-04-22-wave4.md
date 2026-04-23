@@ -372,3 +372,30 @@ Each extraction = 1 new file in `lib/` + 1 new Vitest spec. None are required fo
 | Wave-3 specs needing rework | **2** (`flow-custom-command`, error-paths find-leaf branch); 1 informational |
 
 No code or packages were modified during this audit.
+
+---
+
+## Wave-7 follow-up (2026-04-23)
+
+The wave-4 P0 backlog (3 specs) landed in wave-6. The wave-4 P1 backlog
+(4 specs) partially landed (3 of 4 in wave-5/6). At wave-6 close the suite
+was **88 / 100 with 12 failing** because the wave-6 SPA refactor
+invalidated several wave-5/wave-6 spec selectors.
+
+**Wave-7 fixed all 12 failing specs (test-only changes; no SPA / backend
+modifications).** Suite is back to **100 / 100 green**. See
+`docs/test-coverage/DONE_e2e_gap_analysis_2026-04-23-wave7.md` §2 for
+the per-spec root-cause / fix table.
+
+The wave-4 carry-overs **still open**:
+
+- `flow-custom-command.spec.ts` rename — still misleadingly tests
+  `/api/arista/run-cmds`, not `/api/custom-command`.
+- `flow-error-paths.spec.ts` find-leaf branch was fixed in wave-7
+  (selector ambiguity scoped to `#page-findleaf input[type=text]`).
+- The 4 P2 defensive-depth specs (timeouts, aborted requests, double-click
+  debounce, empty shapes) and the `#help` smoke spec remain unwritten.
+
+Cross-reference: `docs/test-coverage/DONE_e2e_gap_analysis_2026-04-23-wave7.md`.
+
+— end of follow-up note —

@@ -3,9 +3,11 @@
 Generated for the refactor branch after **phases 1–12 decomposition** +
 **audit batches 1–4 remediation** + **UI/CSP/boot-path alignment** +
 **audit-wave-1** + **parse_output refactor (8 phases)** + **audit-wave-2**
-(`v0.3.0` — security audit + Python review + coverage audit + E2E gap
-analysis + 16 vendor parser unit tests + 11 new security tests + 4 new
-Playwright specs + Vitest scaffold).
++ **wave-3 god-module split** + **wave-4 actor-scoping followups** +
+**wave-5 close-out** + **wave-6 reclassified-items shipped** +
+**wave-7 audit followup 2026-04-23** (CRITICAL+HIGH cluster fixed,
+12 brittle Playwright specs stabilised).
+
 All numbers are reproducible by running `python -m pytest -q`,
 `npx playwright test`, `npm run test:frontend`, and the `coverage`
 commands shown below.
@@ -16,26 +18,32 @@ commands shown below.
 
 | Metric | Value |
 |--------|-------|
-| Tests passing (pytest) | **1717 / 1717** + **0 xfailed** (wave-6 close-out: every reclassified item shipped) |
-| Total test functions | **1717** (all passing) |
-| Test files (Python) | **102** (was 89 at wave-5 close — +13 wave-6 test files: XSS lint, CSP HTML/JSON/all-types, credential-migration, SPA fetch wrapper, CSRF unit + required, auth login flow + actor pinning + session fixation + throttling, find-leaf cancel) |
-| Time to run full pytest suite | ~79 s on an M-series Mac |
-| End-to-end tests (Playwright) | **100** in **43 spec files** (+5 wave-6: auth login flow + XSS regression) |
-| Frontend unit tests (Vitest) | **45 / 45** in <1 s (utils.js helpers + new safeHtml + escapeHtml hardening) |
+| Tests passing (pytest) | **1767 / 1768** + **1 xfailed** (wave-7: +50 new tests across 9 files; xfail tracks the open audit GAP #8 inventory-import row cap) |
+| Total test functions | **1768** (1767 pass + 1 strict xfail) |
+| Test files (Python) | **111** (was 102 at wave-6 close — +9 wave-7 security regression files) |
+| Time to run full pytest suite | ~93 s on an M-series Mac |
+| End-to-end tests (Playwright) | **100 / 100 passing** in **43 spec files** (was 88 / 12 failing at wave-6 close; **wave-7 fixed all 12** with test-only changes — no SPA / backend modifications) |
+| Frontend unit tests (Vitest) | **45 / 45** in <1 s (utils.js helpers + safeHtml + escapeHtml hardening) |
 | Lint (`ruff check`) on new code | **0 errors** |
 | Coverage — parser surface (`backend.parsers/*` + shim) | **87 %** |
 | Coverage — wave-3 4 new packages combined | **92 %** |
 | Coverage — wave-6 new modules (auth_bp, csrf, credential_migration) | **97 %** combined |
-| Coverage — whole-project | **90.51 %** |
-| Audit findings remediated | **38 / 38** (batches 1–4) + **7 frontend XSS** (wave-1) + **24 wave-3** + **6 wave-4** + **5 wave-6 reclassified items** (all closed) |
-| Audit findings tracked via `xfail` | **0** |
+| Coverage — frontend extracted helpers (subnet.js, utils.js) | **100 %** |
+| Coverage — whole-project | **90.79 %** (gate 45 %; was 90.51 % at wave-6 close) |
+| Coverage — OOD-scoped (`make cov-new`) | **91.34 %** (gate 85 %) |
+| Coverage — branch | **~88 %** (was 86.4 % at wave-6 close) |
+| Audit findings remediated | **38 / 38** (batches 1–4) + **7 frontend XSS** (wave-1) + **24 wave-3** + **6 wave-4** + **5 wave-6 reclassified items** + **7 wave-7** (1 CRITICAL + 6 HIGH, plus 2 Python-review CRITICAL ssh_runner) |
+| Audit findings tracked via `xfail` | **1** (audit GAP #8 — inventory import row cap) |
 | God modules remaining | **0** |
 | CSP `'unsafe-inline'` | **REMOVED** from `style-src` (wave-6 Phase D) |
-| Inline `style="..."` attributes in SPA | **0** (was 239 + 1 `<style>` block; all moved to CSS classes) |
-| Cookie auth + CSRF | **shipped** (wave-6 Phase F, Council Option B) — opt-in via `PERGEN_AUTH_COOKIE_ENABLED=1`, dual-path with legacy `X-API-Token` |
+| Inline `style="..."` attributes in SPA | **0** |
+| Cookie auth + CSRF | **shipped** (wave-6 Phase F, Council Option B) — opt-in via `PERGEN_AUTH_COOKIE_ENABLED=1` |
+| Session lifetime | **bounded** (wave-7 H-2) — default 8h via `PERGEN_SESSION_LIFETIME_HOURS`; idle-timeout via `PERGEN_SESSION_IDLE_HOURS` (default = lifetime); was 31-day Flask default |
+| Reverse-proxy support | **opt-in** (wave-7 H-1) — `PERGEN_TRUST_PROXY=1` mounts `werkzeug.middleware.proxy_fix.ProxyFix` so login throttle keys on the real client IP |
+| Credential read v2 fall-through | **shipped** (wave-7 C-1 / H-4) — `credential_store.get_credential()` falls through to `credentials_v2.db` when the legacy DB has no row; closes the fresh-install device-exec break |
 | Credential migration tooling | **shipped** (wave-6 Phase E) — `python scripts/migrate_credentials_v1_to_v2.py [--dry-run]` |
 | `docs/refactor/` plans remaining | **0** (all `DONE_*`-prefixed) |
-| `backend/parse_output.py` size | **151 lines** (was 1,552 — 90 % reduction; now a back-compat shim over `backend/parsers/*` package, 31 modules) |
+| `backend/parse_output.py` size | **151 lines** (was 1,552 — 90 % reduction; back-compat shim over `backend/parsers/*`) |
 | `backend/app.py` size | **87 lines** (was 1,577 — 95 % reduction) |
 | Routes registered through factory | **55** across **12 blueprints** |
 
@@ -62,17 +70,40 @@ commands shown below.
 | Coverage push (NEW code) | 1 | 71 |
 | Legacy coverage (bgp_lg, route_map, find_leaf, nat_lookup, parse_output, runner, loader) | 5 | 152 |
 | Pre-existing unit/integration | 9 | 216 |
-| **Audit-wave-1** (XSS lint guards, vendor integrity, CSP/JSON, BGP host pin, token-gate parsing, /api/diff DoS, audit-log coverage, /api/v2/health, router-devices projection, legacy credstore deprecation, token-gate immutability) | 11 | 12 + 9 xfail = 21 |
-| **Audit-wave-2 — vendor parser unit tests** (8 Arista + 8 Cisco NX-OS, lifted parser coverage from 67 → 87 %) | 16 | 196 |
-| **Audit-wave-2 — new security tests** (CSRF, XSS dropdowns, XSS findleaf/NAT, diff line DoS, dev-boot open API, run-result IDOR, report restore method, report empty-id, inventory enum, ssh leak, RIPEStat redirect, parsers no-IO) | 12 | 44 + 15 xfail = 59 |
+| **Audit-wave-1** lint guards / xfail trackers | 11 | 12 (post-flip pre-wave-6) |
+| **Audit-wave-2 — vendor parser unit tests** (8 Arista + 8 Cisco NX-OS) | 16 | 196 |
+| **Audit-wave-2 — security tests** | 12 | 59 (post-flip pre-wave-5) |
 | **Audit-wave-2 — parser shim contract** | 1 | 83 |
 | **Audit-wave-2 — parsers/common + dispatcher unit tests** | 9 | 256 |
-| **Vitest frontend unit tests** (escapeHtml, formatBytes, isValidIPv4, parseHash) | 1 | 16 |
-| **Total** | **74** | **1392** (1368 pass + 24 xfail) — pytest only; +16 Vitest |
+| **Wave-3 / wave-4 / wave-5 closures** (cumulative) | ~30 | ~250 |
+| **Wave-6 reclassified-items tests** (XSS lint, CSP HTML/JSON/all-types, credential-migration, SPA fetch wrapper, CSRF unit + required, auth login flow + actor pinning + session fixation + throttling, find-leaf cancel) | 13 | ~85 |
+| **Wave-7 audit followup** — see §1.1 below | **9** | **51** |
+| **Vitest frontend unit tests** (escapeHtml, formatBytes, isValidIPv4, parseHash, subnet helpers, safeHtml/escapeHtml hardening) | 2 | **45** |
+| **Total (Python)** | **111** | **1767 + 1 xfail** |
+
+### 1.1 Wave-7 NEW test files (2026-04-23)
+
+Nine new security-regression files landed in this session, pinning the
+CRITICAL + HIGH fixes documented in
+`docs/security/DONE_audit_2026-04-23-wave7.md` §4 and
+`docs/code-review/DONE_python_review_2026-04-23-wave7.md` §4:
+
+| File | Tests | Pinning | Audit ID |
+|------|------:|---------|----------|
+| `tests/test_security_credential_v2_fallthrough.py` | 6 | `_v2_db_path()` + `_read_from_v2()` bridge in `credential_store.py` | C-1 / H-4 |
+| `tests/test_security_session_idle_timeout.py` | 5 | `PERMANENT_SESSION_LIFETIME` + `PERGEN_SESSION_IDLE_HOURS` enforcement in `app_factory._enforce_api_token` | H-2 |
+| `tests/test_security_app_main_bind_guard.py` | 4 | `python -m backend.app` refuses non-loopback bind without `PERGEN_DEV_ALLOW_PUBLIC_BIND=1` | H-3 |
+| `tests/test_security_login_username_enum.py` | 3 | `auth.login.fail` audit line records `actor=<unknown>` for unknown usernames | H-6 |
+| `tests/test_security_proxy_fix_gated.py` | 10 | `werkzeug.middleware.proxy_fix.ProxyFix` mounted only when `PERGEN_TRUST_PROXY=1` | H-1 |
+| `tests/test_security_ssh_runner_close_on_exception.py` | 8 | `try/finally: client.close()` + `_classify_ssh_error` bucketing | Python-review C-4 / C-5 |
+| `tests/test_security_max_content_length.py` | 5 | Flask refuses request bodies > `MAX_CONTENT_LENGTH` (10 MiB) on 5 routes | audit GAP #14 |
+| `tests/test_security_audit_hostname_log_scrubbing.py` | 6 | `_safe_audit_str(...)` strips control chars in find-leaf / nat-lookup audit emission | audit GAP #10 (NEW H-5) |
+| `tests/test_security_inventory_import_row_cap.py` | 3 + 1 xfail | row-count cap on `POST /api/inventory/import` (xfail tracks the unfixed cap) | audit GAP #8 |
+| **Total** | **51** | — | — |
 
 ### Coverage by layer (new OOD code)
 
-Run: `python -m coverage run --source=backend.blueprints,backend.services,backend.utils -m pytest -q && python -m coverage report`
+Run: `make cov-new`
 
 | Module | Coverage |
 |--------|----------|
@@ -89,6 +120,7 @@ Run: `python -m coverage run --source=backend.blueprints,backend.services,backen
 | `backend/blueprints/reports_bp.py` | 93 % |
 | `backend/blueprints/bgp_bp.py` | 95 % |
 | `backend/blueprints/transceiver_bp.py` | 88 % |
+| `backend/blueprints/auth_bp.py` (wave-6) | 95 % |
 | `backend/services/credential_service.py` | 100 % |
 | `backend/services/device_service.py` | 100 % |
 | `backend/services/notepad_service.py` | 100 % |
@@ -96,57 +128,51 @@ Run: `python -m coverage run --source=backend.blueprints,backend.services,backen
 | `backend/services/inventory_service.py` | 92 % |
 | `backend/services/run_state_store.py` | 100 % |
 | `backend/services/transceiver_service.py` | 90 % |
+| `backend/security/csrf.py` (wave-6) | 100 % |
+| `backend/repositories/credential_migration.py` (wave-6) | 97 % |
+| `backend/runners/ssh_runner.py` (wave-7 fix lifted) | **83 %** (was 66 %) |
 | `backend/utils/transceiver_display.py` | 94 % |
-| `backend/utils/bgp_helpers.py` | 92 % |
+| `backend/utils/bgp_helpers.py` | 100 % |
 | `backend/utils/interface_status.py` | 97 % |
 | `backend/utils/ping.py` | 87 % (Windows branch only) |
-| **TOTAL** | **94 %** |
+| **TOTAL (`make cov-new`)** | **91.34 %** (gate 85) |
 
 ### Coverage by layer (whole-project)
 
-Run: `python -m coverage run --source=backend -m pytest && python -m coverage report --sort=cover`
+Run: `python -m pytest --cov=backend --cov-branch --cov-report=term -q`
 
 | Module group | Coverage |
 |--------------|----------|
-| New OOD layer (blueprints + services + utils + factory) | 94 % |
-| Repositories (credential / inventory / notepad / report) | 88–98 % |
-| Security (sanitizer / validator / encryption) | 90–92 % |
-| Runners (arista_eapi, cisco_nxapi, ssh_runner, interface_recovery) | 51–86 % |
-| Parsers (engine + parse_output) | 53–90 % |
-| Helpers (bgp_looking_glass, route_map_analysis, find_leaf, nat_lookup) | 36–74 % |
-| Other (logging, config, request_logging) | 82–98 % |
-| **WHOLE-PROJECT** | **78.33 %** (line 82.47 %, branch 68.13 %; was 74.94 % pre-wave-2) |
+| New OOD layer (blueprints + services + utils + factory + auth_bp + csrf + credential_migration) | 91.34 % |
+| Repositories (credential / inventory / notepad / report) | 88–97 % |
+| Security (sanitizer / validator / encryption / csrf) | 90–100 % |
+| Runners (arista_eapi, cisco_nxapi, ssh_runner, interface_recovery) | 74–100 % |
+| Parsers (engine + parse_output + dispatcher + 31-module package) | 67–100 % |
+| Helpers (bgp_looking_glass, route_map_analysis, find_leaf, nat_lookup) | 86–97 % (was 36–74 % pre-wave-3) |
+| Other (logging, config, request_logging) | 82–100 % |
+| **WHOLE-PROJECT** | **90.79 %** (line); **~88 %** (branch); was 74.94 % pre-wave-2 |
 
-The legacy parsers (`parse_output.py` 53 %, `find_leaf.py` 36 %,
-`nat_lookup.py` 42 %, `route_map_analysis.py` 51 %) drag the average
-down. Their **public APIs are all covered**; only deep parser branches
-that exercise specific device-output shapes remain uncovered. Lifting
-those to 90 % would require ~500 LOC of canned-fixture tests; tracked
-as future work.
+The 6 sub-80 % files post wave-7 are all chronic operator-output-variance
+gaps in the parser surface plus the legacy `credential_store.py` shim
+(75 %) — see `docs/test-coverage/DONE_coverage_audit_2026-04-23-wave7.md` §2.
 
-### Audit-batch security regression tests (76 total)
+### Audit-batch security regression tests (76 + 51 = 127 total)
 
 * `tests/test_security_audit_findings.py` — 25 tests (batches 1+2)
 * `tests/test_security_audit_batch3.py` — 14 tests (batch 3)
-* `tests/test_security_audit_batch4.py` — 24 tests (batch 4: fail-closed
-  prod auth, per-actor tokens, hard `cryptography` / `defusedxml` imports,
-  inventory-binding on every device-targeted route, sanitised credential
-  delete, SSRF guard on cloud-metadata IPs, `hmac.compare_digest` regression
-  detection, generic error envelopes on `find-leaf` / `nat-lookup`)
-* `tests/test_runner_dispatch_coverage.py` — 13 tests covering every branch
-  of `runner.run_device_commands` (api/ssh/unknown method, `command_id_filter`,
-  `command_id_exact`, hostname extraction, parser application). Lifted
-  `backend/runners/runner.py` from 51 % → 91.7 %.
+* `tests/test_security_audit_batch4.py` — 24 tests (batch 4)
+* `tests/test_runner_dispatch_coverage.py` — 13 tests
+* **Wave-7 (2026-04-23):** 9 new files / 51 tests — see §1.1.
 
-Each test names its audit finding ID (C1, H6, M11, etc.) so the audit
-report and the test suite are cross-referenceable.
+Each test names its audit finding ID (C1, H6, M11, W4-H-01, W7-C-1, etc.)
+so the audit report and the test suite are cross-referenceable.
 
 ---
 
 ## 2. Per-test-file pass matrix
 
-| File | Tests | Status | Phase |
-|------|-------|--------|-------|
+| File | Tests | Status | Phase / Wave |
+|------|-------|--------|--------------|
 | `tests/golden/test_parsers_golden.py` | 22 | ✅ | 1 |
 | `tests/golden/test_runners_baseline.py` | 17 | ✅ | 1 |
 | `tests/golden/test_routes_baseline.py` | 31 | ✅ | 1 |
@@ -168,11 +194,6 @@ report and the test suite are cross-referenceable.
 | `tests/test_phase9_blueprints.py` | 9 | ✅ | 9 |
 | `tests/test_security_owasp.py` | 72 | ✅ | 11 |
 | `tests/test_security_phase13.py` | 33 | ✅ | 13 |
-| `tests/test_bgp_looking_glass.py` (legacy) | 14 | ✅ | pre-refactor |
-| `tests/test_interface_recovery.py` (legacy) | 9 | ✅ | pre-refactor |
-| `tests/test_parse_arista_interface_status.py` (legacy) | 3 | ✅ | pre-refactor |
-| `tests/test_transceiver_recovery_policy.py` (legacy) | 2 | ✅ | pre-refactor |
-| `tests/test_parse_cisco_interface_detailed.py` (legacy) | 1 | ✅ | pre-refactor |
 | `tests/test_utils_phase2.py` | 30 | ✅ | decomp-2 |
 | `tests/test_inventory_writes_phase3.py` | 19 | ✅ | decomp-3 |
 | `tests/test_commands_bp_phase4.py` | 6 | ✅ | decomp-4 |
@@ -188,36 +209,23 @@ report and the test suite are cross-referenceable.
 | `tests/test_security_audit_batch4.py` | 24 | ✅ | audit-batch-4 |
 | `tests/test_runner_dispatch_coverage.py` | 13 | ✅ | audit-batch-4 |
 | `tests/test_coverage_push.py` | 71 | ✅ | coverage-push |
-| `tests/test_legacy_coverage_bgp_lg.py` | 24 | ✅ | legacy-coverage |
-| `tests/test_legacy_coverage_route_map.py` | 12 | ✅ | legacy-coverage |
-| `tests/test_legacy_coverage_find_leaf_nat.py` | 14 | ✅ | legacy-coverage |
-| `tests/test_legacy_coverage_parse_output.py` | 43 | ✅ | legacy-coverage |
-| `tests/test_legacy_coverage_runners.py` | 35 | ✅ | legacy-coverage |
-| `tests/test_security_xss_spa.py` | 4 | ✅ | audit-wave-1 |
-| `tests/test_security_vendor_integrity.py` | 1 | ✅ | audit-wave-1 |
-| `tests/test_security_html_responses_include_csp.py` | 2 | ✅ | audit-wave-1 |
-| `tests/test_security_bgp_routes_pin_ripestat_host.py` | 2 | ✅ | audit-wave-1 |
-| `tests/test_security_token_gate_parsing.py` | 2 | ✅ | audit-wave-1 |
-| `tests/test_security_diff_dos.py` | 1 | ✅ | audit-wave-1 |
-| `tests/test_security_audit_log_coverage.py` | 1 + 4 xfail | ✅ / ⚠ xfail | audit-wave-1 |
-| `tests/test_security_health_disclosure.py` | 1 xfail | ⚠ xfail | audit-wave-1 |
-| `tests/test_security_router_devices_projection.py` | 1 xfail | ⚠ xfail | audit-wave-1 |
-| `tests/test_security_legacy_credstore_deprecation.py` | 2 xfail | ⚠ xfail | audit-wave-1 |
-| `tests/test_security_token_gate_immutable.py` | 1 xfail | ⚠ xfail | audit-wave-1 |
-| **Total** | **861** (852 pass + 9 xfail) | **✅** | — |
+| `tests/test_legacy_coverage_*` (5 files) | 152 | ✅ | legacy-coverage |
+| **Wave-1..wave-6 security tests** (~30 files) | ~250 | ✅ | wave-1..wave-6 |
+| **Wave-7 (2026-04-23) security tests** (9 files — see §1.1) | **50 + 1 xfail** | ✅ / ⚠ xfail | wave-7 |
+| **Total** | **1768** (1767 pass + 1 xfail) | **✅** | — |
 
 Re-run a single file with:
 
 ```bash
-venv/bin/python -m pytest tests/test_security_owasp.py -q
+venv/bin/python -m pytest tests/test_security_credential_v2_fallthrough.py -q
 ```
 
 Re-run the whole suite with:
 
 ```bash
 make test           # quiet
-make cov            # global coverage report
-make cov-new        # OOD-layer coverage report
+make cov            # global coverage report (gate 45 %, currently 90.79 %)
+make cov-new        # OOD-layer coverage report (gate 85 %, currently 91.34 %)
 ```
 
 ---
@@ -225,104 +233,79 @@ make cov-new        # OOD-layer coverage report
 ## 3. Coverage — new OOD layer
 
 ```
-backend/app_factory.py                             65      1     18      1    98%
-backend/blueprints/__init__.py                      4      0      0      0   100%
-backend/blueprints/health_bp.py                     7      0      0      0   100%
-backend/blueprints/inventory_bp.py                 67      2     16      2    95%
-backend/blueprints/notepad_bp.py                   26      4      4      1    83%
-backend/config/__init__.py                          2      0      0      0   100%
-backend/config/app_config.py                       56      4      6      2    90%
-backend/config/commands_loader.py                  72     38     28      4    46%
-backend/config/settings.py                          6      0      0      0   100%
-backend/logging_config.py                          85     15     24      5    82%
-backend/parsers/__init__.py                         2      0      0      0   100%
-backend/parsers/engine.py                          33      2      8      2    90%
-backend/repositories/__init__.py                    5      0      0      0   100%
-backend/repositories/credential_repository.py      65      5     12      2    91%
-backend/repositories/inventory_repository.py       90      8     24      6    88%
-backend/repositories/notepad_repository.py         62      2     14      2    95%
-backend/repositories/report_repository.py          73      0     10      0   100%
-backend/request_logging.py                         33      1      4      1    95%
-backend/runners/arista_runner.py                    7      0      0      0   100%
-backend/runners/base_runner.py                      6      0      0      0   100%
-backend/runners/cisco_runner.py                     7      0      0      0   100%
-backend/runners/factory.py                         34      0     10      0   100%
-backend/runners/ssh_runner_class.py                 7      0      0      0   100%
-backend/security/__init__.py                        4      0      0      0   100%
-backend/security/encryption.py                    211     16     54     11    90%
-backend/security/sanitizer.py                      93      7     52      5    92%
-backend/security/validator.py                      27      0     12      0   100%
-backend/services/__init__.py                        6      0      0      0   100%
-backend/services/credential_service.py             17      0      2      0   100%
-backend/services/device_service.py                 45      0      8      0   100%
-backend/services/inventory_service.py              21      1      0      0    95%
-backend/services/notepad_service.py                 9      0      0      0   100%
-backend/services/report_service.py                 13      0      0      0   100%
-TOTAL                                            1260    106    306     44    90%
+$ make cov-new
+TOTAL                                            ...    91.34%
 ```
 
-`backend/config/commands_loader.py` is left at 46% on purpose — it is
-a pure thin loader for `commands.yaml` and is exercised end-to-end by
-the golden tests (no error in any baseline run).  Adding a dedicated
-unit test is tracked as a follow-up.
+See §1 "Coverage by layer (new OOD code)" for the per-module breakdown.
+The wave-6 modules (`auth_bp` 95 %, `csrf` 100 %, `credential_migration`
+97 %) and the wave-7 `ssh_runner` lift (66 % → 83 %) are the most
+recent additions.
 
 ---
 
 ## 4. Coverage — global
 
 ```
-TOTAL  4837  2270  2094  297  47%
+TOTAL  6162  430  2376  296  90.79%  (line) / ~88% (branch)
 ```
 
-The 53% gap is entirely inside the legacy modules listed below.  Each
-is unchanged by this PR and is still served by the legacy
-`backend/app.py` Flask routes for the domains that have not yet been
-migrated to a Blueprint:
+The remaining gap is concentrated in:
 
 | Module | Coverage | Why |
 |--------|----------|-----|
-| `backend/app.py` | 21% | Most routes still here (BGP, NAT, Find Leaf, transceiver, run, credentials).  Phases 9–10 only migrated `inventory_*` + `notepad`. |
-| `backend/find_leaf.py` | 5% | Pure legacy, unchanged. |
-| `backend/nat_lookup.py` | 7% | Pure legacy, unchanged. |
-| `backend/route_map_analysis.py` | 4% | Pure legacy, unchanged. |
-| `backend/parse_output.py` | 42% | 1223 statements; only the parsers exercised by the golden snapshots are covered. |
+| `backend/parsers/arista/interface_status.py` | 67 % | operator-output shape variance; chronic gap |
+| `backend/parsers/cisco_nxos/arp_suppression.py` | 71.6 % | same |
+| `backend/runners/interface_recovery.py` | 74 % | interactive PTY config-push paths |
+| `backend/credential_store.py` | 75 % | legacy module; `_v2_db_path` + `_read_from_v2` (wave-7) covered, but legacy `list_credentials` / `delete_credential` 0-body |
+| `backend/bgp_looking_glass/peeringdb.py` | 76 % | unchanged from wave-4 |
+| `backend/parsers/cisco_nxos/isis_brief.py` | 76.8 % | minor |
 
-These will rise automatically as subsequent phases migrate each
-domain to its own Blueprint + Service + Repository.
+These will rise when (a) the operator-fleet output corpus expands, and
+(b) the legacy `credential_store` shim is deleted (Phase 6 of the
+migration plan in `docs/refactor/DONE_credential_store_migration.md`).
 
 ---
 
-## 5. Security evaluation (OWASP Top-10 + business-logic)
+## 5. Security evaluation (OWASP Top-10 + business-logic + wave-7 sweep)
 
 `tests/test_security_owasp.py` ships **72 named tests** grouped by
-OWASP category.  Every category has at least one regression test.
+OWASP category. Every category has at least one regression test.
+The wave-7 cluster adds **51 more security regression tests** across
+9 files — see §1.1.
 
 | Category | Test count | Status |
 |----------|------------|--------|
-| **A01** Broken Access Control — credential payload never leaks via `CredentialRepository.list()` | 1 | ✅ |
-| **A02 / A08** Cryptographic Failures + Software/Data Integrity — round-trip, single-byte tamper raises `EncryptionError`, empty-secret raises `ValueError`, cross-secret decrypt fails | 4 | ✅ |
-| **A03** Injection — `CommandValidator` accepts safe `show`/`dir`, rejects `conf t`, shell meta (`;`, `&&`, `\|`, backticks, `$()`), length explosion, non-string types.  `InputSanitizer` rejects null bytes across `ip / hostname / credential_name / asn / prefix / string`, rejects shell-meta hostnames, rejects garbage IPs. | 47 | ✅ |
-| **A04** Insecure Design — `ProductionConfig.validate()` raises on default `SECRET_KEY`, raises on empty, accepts strong | 3 | ✅ |
-| **A05** Security Misconfiguration — `redact_sensitive` masks `password / api_key / Authorization / Cookie` (case-insensitive) | 1 | ✅ |
-| **A07** Identification & Auth Failures — `CredentialService.set` refuses unsafe credential names *before* the repo is touched | 1 | ✅ |
-| **A09** Logging & Monitoring Failures — every Flask response carries `X-Request-ID` | 1 | ✅ |
-| **A10 / business-logic** — inventory hierarchy routes return empty lists when required params are missing; notepad PUT rejects missing `content`; notepad GET returns only the documented keys | 5 | ✅ |
-| Cross-cutting helpers and parametrised cases | 9 | ✅ |
-| **Total** | **72** | ✅ |
+| **A01** Broken Access Control | 1 (OWASP) + ~30 (audit batches + actor-scoping waves) | ✅ |
+| **A02 / A08** Cryptographic Failures + Software/Data Integrity | 4 (OWASP) + the new `csrf` module (100 % covered) + wave-7 credential v2 fall-through | ✅ |
+| **A03** Injection | 47 (OWASP) + audit batches 3/4 + wave-7 audit-log scrubbing | ✅ |
+| **A04** Insecure Design | 3 (OWASP) + wave-7 H-3 (`__main__` bind guard) | ✅ |
+| **A05** Security Misconfiguration | 1 (OWASP) + wave-7 C-1 (credential v2 fall-through) | ✅ |
+| **A07** Identification & Auth Failures | 1 (OWASP) + wave-6 cookie auth (auth_bp 95 %) + wave-7 H-2 (session lifetime) + wave-7 H-6 (username enum) | ✅ |
+| **A09** Logging & Monitoring Failures | 1 (OWASP) + wave-7 H-5 (audit hostname scrub) + audit_logger_coverage closures | ✅ |
+| **A10 / business-logic** | 5 (OWASP) | ✅ |
+| Cross-cutting helpers + parametrised cases | 9 | ✅ |
+| **Wave-7 NEW security regressions** | **51** (9 files; see §1.1) | ✅ + 1 xfail |
+| **Total** | **123** named + the audit-batch / wave-N closures | ✅ |
 
 ### Notes on what was *not* possible to weaken
 
-* `EncryptionService` refuses to instantiate with an empty secret — no
-  silent fallback to a default key.
+* `EncryptionService` refuses to instantiate with an empty secret.
 * `EncryptionService` refuses to instantiate at all when neither the
   `cryptography` package nor the in-tree AES-128-CBC + HMAC-SHA256
   fallback can produce a valid Fernet-shape key.
-* `ProductionConfig` refuses to start with the placeholder secret —
-  enforced by `_register_services` in the App Factory.
-* `CommandValidator` is the *only* gate to a runner — every non-`show /
+* `ProductionConfig` refuses to start with the placeholder secret.
+* `CommandValidator` is the only gate to a runner — every non-`show /
   dir` command is rejected before transport.
-* Every blueprint route logs a request id, both inbound and outbound,
-  via `RequestLogger` (test asserts the response header).
+* Every blueprint route logs a request id, both inbound and outbound.
+* **Wave-7 additions:** session cookies are bounded at
+  `PERGEN_SESSION_LIFETIME_HOURS` (default 8h) AND idle-timeouted via
+  `PERGEN_SESSION_IDLE_HOURS`. `python -m backend.app` refuses any
+  non-loopback bind without `PERGEN_DEV_ALLOW_PUBLIC_BIND=1`.
+  `credential_store.get_credential()` falls through to
+  `credentials_v2.db` when the legacy DB has no row, so a fresh-install
+  operator who only used the new HTTP CRUD has working device-exec
+  routes. SSH runner closes its client on every exception path.
 
 ---
 
@@ -335,10 +318,12 @@ git checkout refactor/ood-tdd
 python3 -m venv venv
 source venv/bin/activate
 python -m pip install -r requirements-dev.txt
-make test         # 402 passed
-make cov-new      # 89.66 % on the new layer (gate 85)
-make cov          # 47.41 % global (gate 45)
+make test         # 1767 passed + 1 xfailed (~93 s)
+make cov-new      # 91.34 % on the new layer (gate 85)
+make cov          # 90.79 % global (gate 45)
 make lint         # ruff clean on new files
+npm run test:frontend   # 45 Vitest
+make e2e          # 100 / 100 Playwright
 ```
 
 If any number above changes, `patch_notes.md` is updated in the same
@@ -348,90 +333,100 @@ commit.
 
 ## 7. Phase-13 security hardening — regression matrix
 
-`tests/test_security_phase13.py` ships **33 named tests**, one (or
-more) per audit finding from the parallel `security-reviewer` and
-`python-reviewer` audits.  Every test pins the exact contract that
-was fixed; a failure unambiguously identifies the regressed control.
+`tests/test_security_phase13.py` ships **33 named tests**. Every
+control listed in the wave-2 matrix is still in effect; the wave-7
+audit re-confirmed each via a representative spot-check.
 
 | Audit ID | Severity | Fix | Tests |
 |----------|----------|-----|-------|
 | C-2 | CRITICAL | `/api/arista/run-cmds` routes every cmd through `CommandValidator` | 3 |
-| C-3 | CRITICAL | Palo Alto API key moved to `X-PAN-KEY` header, never in URL | 1 |
-| C-4 | CRITICAL | `/api/custom-command` uses `CommandValidator` (replaces local blocklist) | 3 |
-| C-5 | CRITICAL | `/api/ping` validates each IP via `InputSanitizer.sanitize_ip` and caps device list at 64 | 3 |
-| H-1 | HIGH     | `NotepadRepository.update` is atomic under concurrent writers | 1 |
-| H-2 | HIGH     | NAT XML uses `defusedxml` (Billion-Laughs / external-entity) | 1 |
-| H-5 | HIGH     | Notepad write returns generic 500 envelope (no message leak) | 1 |
-| H-6 | HIGH     | `X-Frame-Options`, `nosniff`, `Referrer-Policy`, `Permissions-Policy` on every response | 4 |
+| C-3 | CRITICAL | Palo Alto API key moved to `X-PAN-KEY` header | 1 |
+| C-4 | CRITICAL | `/api/custom-command` uses `CommandValidator` | 3 |
+| C-5 | CRITICAL | `/api/ping` validates IPs + caps device list at 64 | 3 |
+| H-1 | HIGH     | `NotepadRepository.update` is atomic | 1 |
+| H-2 | HIGH     | NAT XML uses `defusedxml` | 1 |
+| H-5 | HIGH     | Notepad write returns generic 500 envelope | 1 |
+| H-6 | HIGH     | Defence-in-depth headers on every response | 4 |
 | H-8 | HIGH     | SSH commands from `commands.yaml` go through `CommandValidator` | 1 |
-| M-4 | MEDIUM   | `CommandValidator` NFKC-normalises input (defeats homoglyph bypass via fullwidth/IDS) | 3 |
-| M-5 | MEDIUM   | `CommandValidator` strips leading whitespace and rejects embedded `\n`/`\r` | 2 |
-| M-8 | MEDIUM   | `MAX_CONTENT_LENGTH` set on `BaseConfig`; per-route notepad cap returns 413 | 2 |
+| M-4 | MEDIUM   | `CommandValidator` NFKC-normalises input | 3 |
+| M-5 | MEDIUM   | Strips leading whitespace, rejects embedded `\n`/`\r` | 2 |
+| M-8 | MEDIUM   | `MAX_CONTENT_LENGTH` set on `BaseConfig`; per-route notepad cap → 413 | 2 (+5 new wave-7 tests) |
 | py-HIGH | HIGH  | `encryption._key_expand_128` raises `ValueError` (survives `python -O`) | 1 |
-| py-HIGH | HIGH  | `CredentialRepository` works with `:memory:` SQLite (persistent connection) | 1 |
-| py-HIGH | HIGH  | `ReportRepository._safe_id` strips path separators; `_report_path` stays in reports dir | 2 |
-| py-MED  | MED   | `_ip_sort_key` returns 4-tuple for malformed IPs (sort stability) | 1 |
+| py-HIGH | HIGH  | `CredentialRepository` works with `:memory:` SQLite | 1 |
+| py-HIGH | HIGH  | `ReportRepository._safe_id` strips path separators | 2 |
+| py-MED  | MED   | `_ip_sort_key` returns 4-tuple for malformed IPs | 1 |
 | py-MED  | MED   | Blueprint `_svc()` helpers raise `RuntimeError` instead of `KeyError` | 2 |
 | **Total** | — | — | **33** |
 
-### Findings explicitly *retested* in `test_security_owasp.py`
-
-The pre-existing OWASP suite (72 tests) continues to pass on every
-phase-13-modified module: `CommandValidator` still rejects
-`conf t / write mem / shell-meta`, `InputSanitizer` still rejects
-NUL bytes / shell-meta hostnames / garbage IPs, encryption still
-refuses tampered tokens, the Production config still rejects the
-default `SECRET_KEY`.  Phase-13 *added* coverage on top; it removed
-nothing.
-
 ---
 
-## 8. Playwright E2E (audit-wave-1)
+## 8. Playwright E2E (post wave-7 stability fixes)
 
-Added in `v0.2.0-audit-wave-1`. Drives the real SPA against a real
-Flask server (no mocked backend); `webServer` config in
-`playwright.config.ts` boots `./run.sh` and reuses any server already
-on port 5000.
+The Playwright suite drives the real SPA against a real Flask server
+(no mocked backend). `webServer` config in `playwright.config.ts` boots
+`./run.sh` and reuses any server already on port 5000.
 
 | Metric | Value |
 |--------|-------|
-| Spec files | **20** under `tests/e2e/specs/` |
-| Tests | **62 / 62 passing** |
-| Wall time | **~6–8 s** on a warm M-series Mac, headless Chromium |
+| Spec files | **43** under `tests/e2e/specs/` |
+| Tests | **100 / 100 passing** (was 88 / 12 failing at wave-6 close) |
+| Wall time | **~10–30 s** on a warm M-series Mac, headless Chromium |
 | Browser | Chromium only (`projects: [{ name: "chromium" }]`) |
 | Reporters | `list` (stdout) + `html` (`playwright-report/`) + `junit` (`test-results/junit.xml`) |
 | Artefacts on failure | screenshot + video + trace on retry |
 | Boot path under test | `./run.sh` → `FLASK_APP=backend.app_factory:create_app` |
 
-### Spec coverage
+### 8.1 Wave-7 spec stability fixes (12 specs)
 
-| Spec | What it asserts |
-|------|-----------------|
-| `home.spec.ts` | landing page, 3×3 feature card grid renders |
-| `navigation.spec.ts` | hash router, menu transitions, event-popup wiring |
-| `prepost.spec.ts` | Pre/Post page boots, filters render |
-| `notepad.spec.ts` | notepad page boots, line-editor list visible |
-| `nat.spec.ts` | NAT lookup form, "Open on BGP page" link present |
-| `findleaf.spec.ts` | Find Leaf page boots |
-| `bgp.spec.ts` | BGP / Looking Glass page renders all three sub-tables |
-| `restapi.spec.ts` | REST API page accepts a multi-line payload |
-| `transceiver.spec.ts` | transceiver page filters + table headers |
-| `credential.spec.ts` | credential page form + table render |
-| `routemap.spec.ts` | DCI/WAN routers page boots |
-| `subnet.spec.ts` | subnet calculator divides + joins correctly |
-| `diff.spec.ts` | diff checker accepts two inputs and renders LCS sections |
-| `api-health.spec.ts` | `/api/health` and `/api/v2/health` return 200 + expected envelope |
-| `api-routes.spec.ts` | `/api/fabrics` / `/api/inventory` / `/api/credentials` smoke |
-| `csp-no-inline.spec.ts` | regression guard — index.html has no inline `<script>`; CSP header is `script-src 'self'` |
-| `security-headers.spec.ts` | every response carries CSP / HSTS / X-Frame / X-Content-Type / Referrer-Policy / Permissions-Policy |
-| `flow-credential-add.spec.ts` | full flow: add credential → list shows it → delete → list empty |
-| `flow-notepad-roundtrip.spec.ts` | full flow: PUT notepad → GET → content matches |
-| `flow-diff-checker.spec.ts` | full flow: paste two payloads → diff renders, Added/Deleted/Changed counts correct |
+The wave-6 SPA refactor (Phase D inline-style sweep + Phase F cookie
+auth) introduced selector / dialog / URL-shape changes that invalidated
+12 wave-5 / wave-6 specs. Wave-7 fixed all 12 with **test-only changes**
+— no SPA, no backend, no CSS:
+
+| Spec | Root cause | Fix |
+|------|------------|-----|
+| `security-headers.spec.ts` | HSTS asserted over HTTP | scoped to HTTPS only |
+| `flow-subnet-split.spec.ts` | unhandled `confirm()` dialog on mask change | accept dialog before assertion |
+| `flow-transceiver-run.spec.ts` | devices only load on role select | walk full `fabric→site→hall→role` cascade |
+| `flow-transceiver-clear-counters.spec.ts` | same | same |
+| `flow-prepost-run.spec.ts` | missing role select | inserted role-select step |
+| `flow-postrun-complete.spec.ts` | placeholder selectors against unwritten DOM | rewritten against real `#runId` + Run Post + success banner |
+| `flow-inventory-crud.spec.ts` | Delete clicked row, not checkbox; DELETE URL has query string | switched to checkbox; relaxed URL regex |
+| `flow-report-restore.spec.ts` | saved-reports list empty by default | pre-seed `localStorage["pergen_saved_reports"]` |
+| `flow-error-paths.spec.ts` | find-leaf input matched hidden bgp page input | scoped to `#page-findleaf input[type=text]` |
+| `flow-error-paths-extended.spec.ts` | same selector ambiguity | same scoping fix |
+| `flow-xss-defence.spec.ts` | same | same |
+
+Full per-spec table: `docs/test-coverage/DONE_e2e_gap_analysis_2026-04-23-wave7.md` §2.
+
+### 8.2 Spec coverage (essentially unchanged from wave-4 audit)
+
+20 base specs from wave-1 + 15 wave-3 flow specs + 8 wave-5/6 P0 flows +
+the wave-6 auth + XSS regression specs = 43 spec files. Coverage matrix:
+
+- **42 / 53** endpoints have at least one spec (UI mock + smoke).
+- **34 / 53** endpoints fully UI-tested.
+- **13 / 14** SPA hash routes covered (`#help` still uncovered).
+- **10 / 10** extracted `lib/` helpers covered by Vitest (100 %).
+
+See `docs/test-coverage/DONE_e2e_gap_analysis_2026-04-23-wave7.md` §3-§5
+for the full matrix.
 
 Run with:
 
 ```bash
 make e2e-install     # one-time
-make e2e             # 62 / 62 in ~8 s
+make e2e             # 100 / 100 in ~10–30 s
 npx playwright show-report   # open the HTML report
 ```
+
+---
+
+## 9. Cross-references
+
+- `docs/security/DONE_audit_2026-04-23-wave7.md` — full wave-7 security audit (1 CRITICAL + 6 HIGH fixes + remaining MEDIUM/LOW open list).
+- `docs/code-review/DONE_python_review_2026-04-23-wave7.md` — wave-7 Python review (5 CRITICAL fixes + remaining MEDIUM cluster).
+- `docs/test-coverage/DONE_coverage_audit_2026-04-23-wave7.md` — coverage breakdown by module + Tier-1 backfill closure.
+- `docs/test-coverage/DONE_e2e_gap_analysis_2026-04-23-wave7.md` — Playwright suite stability + per-spec fix list.
+- `docs/refactor/DONE_credential_store_migration.md` "Wave-7 update" — v2 fall-through bridge.
+- `patch_notes.md` v0.7.1 — full wave-7 changelog entry.

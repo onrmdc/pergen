@@ -16,6 +16,176 @@ return shape. Behaviour changes are explicitly noted; otherwise none.
 
 ---
 
+## v0.7.1 — Wave-7: audit followup (2026-04-23)
+
+**Scope:** post-`v0.7.0` security-reviewer + python-reviewer sweep
+surfaced a NEW cluster of CRITICAL+HIGH items in the seams between
+the wave-6 surface and the unchanged legacy modules. All CRITICAL +
+HIGH findings (1 + 6 from security review, plus 2 CRITICAL from
+python review) **fixed in the same session**, pinned by 9 new test
+files (51 tests). The 12 brittle Playwright specs that were failing
+at wave-6 close were stabilised with **test-only changes** (no SPA /
+backend modifications) — suite is back to **100 / 100 green**.
+
+**Backend fixes (CRITICAL + HIGH from this session's audits)**
+
+- **C-1 / H-4 (audit) + C-1 (python review): credential v2 fall-through bridge.**
+  `backend/credential_store.py:111-168` gained `_v2_db_path()` and
+  `_read_from_v2()` helpers. `get_credential()` now falls through to
+  `credentials_v2.db` (via `CredentialRepository` + `EncryptionService.from_secret`)
+  when the legacy DB has no row. Closes the fresh-install break:
+  credentials added through `POST /api/credentials` (which writes via
+  `CredentialService` to the v2 store) are now reachable from every
+  legacy device-exec read site (5 blueprints + `runner.py` + `find_leaf`
+  + `nat_lookup`). Pinned by `tests/test_security_credential_v2_fallthrough.py` (6 tests).
+
+- **C-4 + C-5 (python review): SSH client always closed; exceptions bucketed.**
+  `backend/runners/ssh_runner.py::run_command` and `run_config_lines_pty`
+  now use `try/finally` so the SSH client is closed on every exception
+  path (FD-leak fix — C-5). The exception text is bucketed through
+  `_classify_ssh_error()` (controlled vocabulary: `auth_failed` /
+  `network` / `timeout` / `banner_mismatch` / `other`); the original
+  `repr(e)` is logged server-side only (credential-tail leak fix — C-4).
+  Pinned by `tests/test_security_ssh_runner_close_on_exception.py` (8 tests).
+
+- **H-1 (audit): optional `ProxyFix` mount.**
+  `backend/app_factory.py:123-136` mounts
+  `werkzeug.middleware.proxy_fix.ProxyFix(x_for=1, x_proto=1, x_host=1)`
+  only when `PERGEN_TRUST_PROXY=1`. Closes the throttle-bypass behind a
+  reverse proxy without naively trusting `X-Forwarded-For` from un-proxied
+  deployments. Pinned by `tests/test_security_proxy_fix_gated.py` (10 tests).
+
+- **H-2 (audit): bounded session lifetime + idle-timeout.**
+  `backend/app_factory.py:137-150` sets `PERMANENT_SESSION_LIFETIME` from
+  `PERGEN_SESSION_LIFETIME_HOURS` (default 8h, was Flask's 31-day default).
+  `backend/app_factory.py:432-450` cookie-auth branch enforces
+  `now - session["iat"] > PERGEN_SESSION_IDLE_HOURS * 3600` and clears
+  the session on overflow. `auth_bp.api_auth_login` stamps `iat` on
+  every successful login. Audit line emitted on idle-timeout:
+  `audit auth.session.expired actor=<name> ip=<ip> age_s=<seconds>`.
+  Pinned by `tests/test_security_session_idle_timeout.py` (5 tests).
+
+- **H-3 (audit): `python -m backend.app __main__` bind guard.**
+  `backend/app.py:86-103` refuses any non-loopback bind unless
+  `PERGEN_DEV_ALLOW_PUBLIC_BIND=1` is set, and binds via
+  `PERGEN_DEV_BIND_HOST` (default `127.0.0.1`). Closes the latent
+  foot-gun where the 87-line shim's `__main__` branch could expose
+  every route publicly without auth if a future contributor restored
+  blueprint imports there. Pinned by `tests/test_security_app_main_bind_guard.py` (4 tests).
+
+- **H-5 (audit): audit-log control-char scrub on find-leaf / nat-lookup.**
+  `backend/find_leaf/service.py` and `backend/nat_lookup/service.py`
+  audit-log emission sites now route every interpolated string through a
+  small `_safe_audit_str(...)` helper that strips `\x00-\x1f`/`\x7f` and
+  caps length at 256 chars. Closes the audit-log injection vector when
+  inventory rows seeded from outside the app carry CRLF in `hostname`.
+  Pinned by `tests/test_security_audit_hostname_log_scrubbing.py` (6 tests).
+
+- **H-6 (audit): `auth.login.fail` actor scrubbing for unknown usernames.**
+  `backend/blueprints/auth_bp.py::api_auth_login` audit line now records
+  `actor=<unknown>` for usernames that are not in the configured token
+  map. Closes the username-existence oracle via audit-log volume.
+  Throttle key continues to use the real `(ip, username)` pair so
+  rate-limit semantics are unchanged. Pinned by `tests/test_security_login_username_enum.py` (3 tests).
+
+**Test-only fixes**
+
+- **12 Playwright specs stabilised** (no SPA / backend changes):
+  `security-headers`, `flow-subnet-split`, `flow-transceiver-run`,
+  `flow-transceiver-clear-counters`, `flow-prepost-run`,
+  `flow-postrun-complete` (rewritten), `flow-inventory-crud`,
+  `flow-report-restore`, `flow-error-paths`, `flow-error-paths-extended`,
+  `flow-xss-defence`, plus the find-leaf branch of
+  `flow-error-paths`. Common pattern: the wave-6 SPA refactor (Phase D
+  inline-style sweep + Phase F cookie auth + dropdowns moved to role-based
+  cascade) invalidated brittle wave-5/wave-6 selectors. Fixes scoped to
+  canonical IDs (`#page-findleaf input[type=text]`,
+  `#deviceList .device-row`, etc.), proper dialog handling, full
+  fabric→site→hall→role cascade walks, and pre-seeded localStorage where
+  the SPA expected stored state. Per-spec fix table:
+  `docs/test-coverage/DONE_e2e_gap_analysis_2026-04-23-wave7.md` §2.
+
+- **3 audit GAPs closed** by new regression tests without code changes:
+  - `tests/test_security_max_content_length.py` (5 tests) — pins Flask
+    refusal of >10 MiB bodies on 5 representative routes (audit GAP #14).
+  - `tests/test_security_audit_hostname_log_scrubbing.py` (6 tests) —
+    paired with the H-5 backend fix.
+  - `tests/test_security_inventory_import_row_cap.py` (3 + 1 xfail) —
+    the xfail tracks the unfixed cap on `POST /api/inventory/import`
+    row count (audit GAP #8); will XPASS when the 5000-row cap lands.
+
+**Numbers**
+
+- pytest: 1717 + 0 xfailed → **1767 passing + 1 xfailed** (+50 tests, +1 strict xfail).
+- Vitest: 45 → **45** (unchanged).
+- Playwright: 88 / 12 failing → **100 / 100 passing** (+12 stabilised, 0 new specs).
+- Whole-project coverage: 90.51 % → **90.79 %**.
+- OOD-scoped (`make cov-new`): 94 % → **91.34 %** (denominator grew faster than
+  numerator; both gates remain green).
+- Branch coverage: 86.4 % → **~88 %**.
+- Files <80 %: 9 → **6**.
+- New test files: **9** (`tests/test_security_*.py` — credential v2 fall-through,
+  session idle timeout, app __main__ bind guard, login username enum, ProxyFix
+  gated, ssh_runner close on exception, MAX_CONTENT_LENGTH, audit hostname log
+  scrubbing, inventory import row cap).
+
+**New env knobs (5)**
+
+| Env var | Default | Purpose |
+|---------|---------|---------|
+| `PERGEN_SESSION_LIFETIME_HOURS` | 8 | Maximum lifetime of a `pergen_session` cookie. Was Flask's 31-day default. |
+| `PERGEN_SESSION_IDLE_HOURS` | = lifetime | Idle-timeout threshold. Cookie-auth branch checks `now - session["iat"]` and clears the session on overflow. |
+| `PERGEN_TRUST_PROXY` | unset | When `=1`, mount `werkzeug.middleware.proxy_fix.ProxyFix` so `request.remote_addr` reflects the original client IP. Required behind a reverse proxy for the login throttle to key correctly. |
+| `PERGEN_DEV_BIND_HOST` | `127.0.0.1` | Bind host for `python -m backend.app __main__`. Non-loopback values are refused unless `PERGEN_DEV_ALLOW_PUBLIC_BIND=1`. |
+| `PERGEN_DEV_ALLOW_PUBLIC_BIND` | unset | Override for the bind-host guard. Required only for the legacy `python -m backend.app` entry point; production deploys should always use `FLASK_APP=backend.app_factory:create_app`. |
+
+**Backwards compatibility**
+
+- All env knobs default to safe values. No operator action required for
+  existing deployments running on `127.0.0.1` behind no proxy with the
+  cookie-auth path disabled.
+- The credential v2 fall-through bridge is **additive** — operators with
+  rows in `instance/credentials.db` see no behavioural change. The bridge
+  only fires when the legacy DB has no row, which is the fresh-install
+  case.
+- The SSH-runner `_classify_ssh_error` bucketing returns less-detailed
+  error strings to the caller than before. Operator-facing messages are
+  now controlled vocabulary (`auth_failed` / `network` / etc.); the
+  original `repr(e)` is logged server-side via `_log.warning(...)` for
+  triage. Existing assertions on `err.startswith("...")` may need to be
+  loosened to match the bucket name — the test suite was updated to
+  cover this.
+- Wave-3 token-gate immutability invariant preserved: tokens still
+  resolved once at `create_app` via `MappingProxyType`; no per-request
+  env reads on either auth path.
+
+**Audit findings still OPEN (not addressed in this session)**
+
+- 14 wave-7 MEDIUM (M-1..M-14) — defence-in-depth and UX items. None
+  are directly exploitable under the internal-tool threat model.
+- 11 wave-7 LOW (L-1..L-11) — polish items.
+- 13 Python-review MEDIUM carry-overs (MED-1..MED-13) — unified `_actor()`
+  helper, `RunStateStore.update()` actor enforcement, find-leaf
+  observability, etc.
+- 8 audit GAPs (#2 cookie attribute test, #4 device-runner redirect refusal,
+  #5 RunnerFactory CommandValidator path, #6 strict-host-key prod default,
+  #11 session-permanent rotation, #12 login timing, #13 notepad path
+  traversal — GAP #15 closed by H-3 fix).
+
+Full open-list and recommended next-wave sequencing:
+`docs/security/DONE_audit_2026-04-23-wave7.md` §5 + §7.
+
+**Cross-references**
+
+- Full wave-7 security audit: `docs/security/DONE_audit_2026-04-23-wave7.md`
+- Wave-7 Python code review: `docs/code-review/DONE_python_review_2026-04-23-wave7.md`
+- Wave-7 coverage audit: `docs/test-coverage/DONE_coverage_audit_2026-04-23-wave7.md`
+- Wave-7 E2E gap analysis: `docs/test-coverage/DONE_e2e_gap_analysis_2026-04-23-wave7.md`
+- v2 fall-through bridge in the migration plan:
+  `docs/refactor/DONE_credential_store_migration.md` "Wave-7 update" section.
+
+---
+
 ## v0.7.0 — Wave-6: ALL reclassified items shipped (refactor FULLY COMPLETE)
 
 **Scope:** Land all 5 items the wave-5 close-out reclassified as "future

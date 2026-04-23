@@ -995,3 +995,37 @@ The two remaining structural concerns are:
 
 Everything else is non-blocking polish. **Approve.**
 
+---
+
+## Wave-7 follow-up (2026-04-23)
+
+The wave-2 review's grade (A−) and approval stand. The wave-7 review
+(`docs/code-review/DONE_python_review_2026-04-23-wave7.md`) re-swept the
+same backend surface and found:
+
+- **Wave-2 LOW-3** (`_get_credentials` private import reach-through) — still
+  open, escalated to wave-7 MED-7 because wave-3 doubled the importer count
+  (3 → 6).
+- **Wave-2 HIGH-6** (`("", "")` ambiguity in runner returns) — still open;
+  Python-review wave-7 has it as part of the same ssh_runner cluster that
+  produced wave-7 C-4 / C-5 (FD leak + credential-tail echo). The
+  `_classify_ssh_error` bucketing fix landed in wave-7 narrows the
+  ambiguity but does not fully resolve it.
+- **Wave-2 HIGH-1** (parser bare-except narrowing) — held; every
+  previously-flagged `except Exception` in `backend/parsers/` is still
+  narrowed (verified by grep on the wave-7 tree).
+
+Two NEW CRITICAL items surfaced in wave-7 and were fixed in the same
+session:
+
+- **C-1** — `credential_store.get_credential()` blind to v2 writes (fresh-
+  install break). Fixed via the 28-LOC `_v2_db_path()` + `_read_from_v2()`
+  bridge; pinned by `tests/test_security_credential_v2_fallthrough.py`.
+- **C-4 / C-5** — `ssh_runner` FD leak + credential-tail echo. Fixed via
+  `try/finally` + `_classify_ssh_error()`; pinned by
+  `tests/test_security_ssh_runner_close_on_exception.py`.
+
+See the wave-7 review for the full open-MEDIUM cluster.
+
+— end of follow-up note —
+
