@@ -329,12 +329,15 @@ class TestNxosRecoverySleepAndDispatch:
 
 class TestAristaRecoverySleepAndDispatch:
     def test_calls_eapi_twice_per_interface_with_sleep_between(self):
+        """Wave-7.8: Arista dispatch goes through ``run_cmds`` (with
+        enable+password prepended), not the older ``run_commands``.
+        """
         from backend.runners import interface_recovery
 
         with (
             patch(
-                "backend.runners.arista_eapi.run_commands",
-                return_value=([{}], None),
+                "backend.runners.arista_eapi.run_cmds",
+                return_value=([{}, {}, {}, {}, {}], None),
             ) as mock_eapi,
             patch(
                 "backend.runners.interface_recovery.time.sleep"
@@ -347,10 +350,14 @@ class TestAristaRecoverySleepAndDispatch:
         assert err is None
         assert mock_eapi.call_count == 2
         first_cmds = mock_eapi.call_args_list[0][0][3]
-        assert "shutdown" in first_cmds
-        assert "no shutdown" not in first_cmds
+        # Wave-7.8: enable dict is at index 0; "shutdown" is somewhere else.
+        assert isinstance(first_cmds[0], dict)
+        assert first_cmds[0]["cmd"] == "enable"
+        assert "shutdown" in first_cmds[1:]
+        assert "no shutdown" not in first_cmds[1:]
         second_cmds = mock_eapi.call_args_list[1][0][3]
-        assert "no shutdown" in second_cmds
+        assert isinstance(second_cmds[0], dict)
+        assert "no shutdown" in second_cmds[1:]
         mock_sleep.assert_called_once()
         assert mock_sleep.call_args[0][0] >= 5
 

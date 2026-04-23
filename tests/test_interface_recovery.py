@@ -69,22 +69,27 @@ class TestRecoverCisco(unittest.TestCase):
 
 class TestRecoverArista(unittest.TestCase):
     @patch("backend.runners.interface_recovery.time.sleep")
-    @patch("backend.runners.arista_eapi.run_commands")
+    @patch("backend.runners.arista_eapi.run_cmds")
     def test_arista_cmds(self, mock_rc, _mock_sleep):
-        """Wave-7.3: Arista bounce now also splits into two eAPI batches."""
+        """Wave-7.3 + 7.8: Arista bounce splits into two eAPI batches AND
+        prepends ``{cmd: enable, input: <password>}`` to each batch.
+        """
         from backend.runners.interface_recovery import recover_interfaces_arista_eos
 
-        mock_rc.return_value = ([{}], None)
+        mock_rc.return_value = ([{}, {}, {}, {}, {}], None)
         recover_interfaces_arista_eos("10.0.0.1", "u", "p", ["Ethernet1/1"])
         self.assertEqual(mock_rc.call_count, 2)
         first_cmds = mock_rc.call_args_list[0][0][3]
         second_cmds = mock_rc.call_args_list[1][0][3]
+        # Wave-7.8: enable prepended.
+        self.assertEqual(first_cmds[0], {"cmd": "enable", "input": "p"})
         self.assertEqual(
-            first_cmds,
+            first_cmds[1:],
             ["configure", "interface Ethernet1/1", "shutdown", "end"],
         )
+        self.assertEqual(second_cmds[0], {"cmd": "enable", "input": "p"})
         self.assertEqual(
-            second_cmds,
+            second_cmds[1:],
             ["configure", "interface Ethernet1/1", "no shutdown", "end"],
         )
 
@@ -96,16 +101,21 @@ class TestClearCounters(unittest.TestCase):
         self.assertEqual(build_clear_counters_command("Ethernet8"), "clear counters interface Ethernet8")
         self.assertEqual(build_clear_counters_command(""), "")
 
-    @patch("backend.runners.arista_eapi.run_commands")
+    @patch("backend.runners.arista_eapi.run_cmds")
     def test_arista_clear_calls_eapi(self, mock_rc):
+        """Wave-7.8: clear-counters now goes through ``run_cmds`` with
+        the enable+password dict prepended.
+        """
         from backend.runners.interface_recovery import clear_counters_arista_eos
 
-        mock_rc.return_value = ([{}], None)
+        mock_rc.return_value = ([{}, {}], None)
         clear_counters_arista_eos("10.0.0.1", "u", "p", "Ethernet1/1")
         mock_rc.assert_called_once()
-        cmd = mock_rc.call_args[0][3][0]
-        self.assertIn("clear counters interface", cmd)
-        self.assertIn("Ethernet1/1", cmd)
+        cmds = mock_rc.call_args[0][3]
+        # Wave-7.8: enable prepended.
+        self.assertEqual(cmds[0], {"cmd": "enable", "input": "p"})
+        self.assertIn("clear counters interface", cmds[1])
+        self.assertIn("Ethernet1/1", cmds[1])
 
     @patch("backend.runners.ssh_runner.run_command")
     def test_cisco_clear_calls_ssh(self, mock_cmd):

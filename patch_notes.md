@@ -16,6 +16,146 @@ return shape. Behaviour changes are explicitly noted; otherwise none.
 
 ---
 
+## v0.7.8 — Wave-7.8: Arista recovery — prepend `enable` + inspect per-cmd results (2026-04-23)
+
+**Scope:** root-cause follow-up to v0.7.7.
+
+After v0.7.7 the SPA correctly rendered the recover and clear-counters
+buttons for Arista rows, but the actual recovery dispatch returned
+``200 ok`` without the device's interface state changing. Operator log
+evidence 2026-04-23 against ``LSW-IL2-H2-R609-MARSTEST-P1-N03 /
+Ethernet8``:
+
+```
+recovery: arista running ip=10.59.1.3 iface=Ethernet8 phase=shutdown
+https://10.59.1.3:443 "POST /command-api HTTP/1.1" 200 None
+recovery: arista sleeping 5s before no-shutdown of Ethernet8
+recovery: arista running ip=10.59.1.3 iface=Ethernet8 phase=no_shutdown
+https://10.59.1.3:443 "POST /command-api HTTP/1.1" 200 None
+audit transceiver.recover ok actor=anonymous host=... vendor=arista
+    interfaces=['Ethernet8'] bounce_delay_s=5
+← 200 6005.7ms
+```
+
+Two HTTP 200s, six seconds end-to-end, audit log clean — and the
+device did nothing.
+
+### Root cause
+
+Arista's eAPI requires the user to be in **privileged-exec** mode
+before ``configure`` is accepted. The legacy dispatch sent
+``["configure", "interface Ethernet8", "shutdown", "end"]`` over
+``arista_eapi.run_commands`` with no ``enable`` step. For TACACS /
+RADIUS users without implicit privilege 15, eAPI silently rejects
+``configure``. The ``stopOnError`` semantics combined with the
+top-level-only error check meant we never noticed:
+
+- The HTTP response was 200 (transport succeeded).
+- ``data["error"]`` was absent (eAPI did not raise a top-level error).
+- The runner returned ``ok``.
+- The per-command results inside ``data["result"]`` carried
+  ``{"errors": ["% Insufficient privilege"]}`` — never inspected.
+
+Pergen's existing ``device_commands_bp`` already supports the correct
+pattern for operator-supplied Arista commands (prepend
+``{"cmd": "enable", "input": <password>}``). Recovery and
+clear-counters were not wired through it.
+
+### Fix
+
+`backend/runners/interface_recovery.py`:
+
+- New ``_extract_arista_per_cmd_error(results)`` helper: walks the
+  ``data["result"]`` array and returns the first ``errors`` entry
+  found, or ``None``. Catches the silent-failure mode that 200-OK
+  papered over.
+- ``recover_interfaces_arista_eos`` now:
+  1. Dispatches via ``arista_eapi.run_cmds`` (the dict-aware helper)
+     instead of ``run_commands``.
+  2. Prepends ``{"cmd": "enable", "input": <password>}`` to every
+     batch.
+  3. Calls ``run_cmds`` with ``include_error_detail=True`` so per-cmd
+     errors come back populated.
+  4. Inspects each batch's results via ``_extract_arista_per_cmd_error``
+     and short-circuits on the first failure (mirrors the NX-OS
+     short-circuit behaviour from wave-7.4).
+  5. Logs the device response per stanza as INFO (parity with the
+     wave-7.5 NX-OS device-response logging).
+- ``clear_counters_arista_eos`` got the same treatment: enable
+  prepended, ``run_cmds`` instead of ``run_commands``, per-cmd error
+  inspection.
+
+### Strict allowlist note
+
+The wave-7.3 strict allowlist (``_assert_lines_allowed``) is
+intentionally NOT applied to the ``{"cmd": "enable", "input": ...}``
+dict. The allowlist gates **operator-supplied config lines** — the
+enable transition is a runner-internal privilege step that no
+operator can influence (the input is the credential password from
+the inventory, not user input). The allowlist still vets every
+operator-derived line in the stanza.
+
+### Tests (TDD: 8 new + 4 updated)
+
+`tests/test_interface_recovery_arista_enable.py` (NEW, 8 tests):
+
+- 3 tests on enable-prepend behaviour: every recover stanza begins
+  with the enable+password dict; the multi-interface batch prepends
+  enable to each of the 4 calls; ``run_cmds`` is used (not
+  ``run_commands``).
+- 2 tests on per-cmd error inspection: simulated
+  ``{"errors": ["% Insufficient privilege"]}`` mid-batch surfaces
+  as the dispatcher's error string; the runner short-circuits before
+  the no-shutdown stanza.
+- 2 tests on clear-counters parity: enable prepended, per-cmd error
+  surfaced.
+- 1 test on the wave-7.5-style device-response INFO log (regression
+  guard: operators must always see what Arista said).
+
+`tests/test_interface_recovery.py` and
+`tests/test_interface_recovery_bounce_delay.py`: existing
+``run_commands`` mocks switched to ``run_cmds`` and the assertions
+extended to expect the enable dict at index 0 of every batch.
+
+### Verification
+
+- pytest: **1877 passed, 1 xfailed** (was 1869 + 1 xfail; +8 net
+  new tests; 4 existing tests updated, none broken)
+- Lint (`ruff check`): no net change (184 errors total)
+
+### Manual smoke (post-deploy, repeat your test)
+
+POST `/api/transceiver/recover` against the failing Arista leaf.
+Expected backend log additions vs v0.7.7:
+
+```
+recovery: arista running ip=10.59.1.3 iface=Ethernet8 phase=shutdown
+recovery: arista device-response ip=10.59.1.3 iface=Ethernet8
+    phase=shutdown: [{}, {}, {}, {}, {}]
+recovery: arista sleeping 5s before no-shutdown of Ethernet8
+recovery: arista running ip=10.59.1.3 iface=Ethernet8 phase=no_shutdown
+recovery: arista device-response ip=10.59.1.3 iface=Ethernet8
+    phase=no_shutdown: [{}, {}, {}, {}, {}]
+audit transceiver.recover ok ... vendor=arista bounce_delay_s=5
+```
+
+If the user still lacks privilege after wave-7.8 (e.g. the credential
+password is NOT also the enable secret), you'll now see:
+
+```
+recovery: arista per-cmd error ip=10.59.1.3 iface=Ethernet8
+    phase=shutdown err=% Insufficient privilege
+```
+
+…and the API returns 500 instead of a misleading 200. That tells
+the operator exactly what to fix on the device side (TACACS user's
+privilege level or enable secret mismatch).
+
+On the device: ``show interface Ethernet8`` should now confirm the
+link state went down → up.
+
+---
+
 ## v0.7.7 — Wave-7.7: SPA twin of the Arista bare-Ethernet host-port classifier (2026-04-23)
 
 **Scope:** SPA-side follow-up to v0.7.6.

@@ -349,16 +349,54 @@ def recover_interfaces_cisco_nxos(
     return ("\n\n".join(outputs) if outputs else "ok"), None
 
 
+def _extract_arista_per_cmd_error(results: list[Any]) -> str | None:
+    """Walk an Arista eAPI ``data["result"]`` array looking for per-cmd
+    error markers. Returns the first error string found, or ``None``.
+
+    Wave-7.8: even when the top-level eAPI response is 200 with no
+    ``error`` key, individual command results can still carry an
+    ``errors`` list (e.g. ``["% Insufficient privilege"]``) when the
+    user lacks the privilege to run a command but the device chose to
+    continue the batch. Without this check the runner cheerfully
+    returned ``ok`` while the device did nothing.
+    """
+    for entry in results or []:
+        if not isinstance(entry, dict):
+            continue
+        errs = entry.get("errors")
+        if isinstance(errs, list) and errs:
+            # Each entry is typically a string; coerce defensively.
+            return "; ".join(str(e) for e in errs)
+        if isinstance(errs, str) and errs.strip():
+            return errs.strip()
+    return None
+
+
 def recover_interfaces_arista_eos(
     ip: str, username: str, password: str, interfaces: list[str]
 ) -> tuple[list[Any] | None, str | None]:
-    """Arista bounce: per interface, two eAPI batches with a sleep between."""
+    """Arista bounce: per interface, two eAPI batches with a sleep between.
+
+    Wave-7.8 (operator log evidence 2026-04-23): every batch now
+    prepends ``{"cmd": "enable", "input": <password>}`` so the device
+    enters privileged-exec before processing ``configure``. Without
+    this, eAPI silently rejected configure for any user without
+    implicit privilege 15 — recovery returned 200 ok in 6 seconds
+    while the device did nothing. Each eAPI response is also inspected
+    for per-cmd errors via ``_extract_arista_per_cmd_error``.
+    """
     from backend.runners import arista_eapi
 
     plan = build_arista_recovery_plan(interfaces)
     all_results: list[Any] = []
     for stanza in plan:
         _assert_lines_allowed(stanza["lines"])
+        # Prepend enable+password so config commands are accepted.
+        # The strict allowlist intentionally does NOT inspect this dict
+        # — it is a runner-internal privilege transition, not an
+        # operator-supplied config line.
+        cmds: list[Any] = [{"cmd": "enable", "input": password or ""}]
+        cmds.extend(stanza["lines"])
         _log.info(
             "recovery: arista %s ip=%s iface=%s phase=%s",
             "running",
@@ -366,9 +404,21 @@ def recover_interfaces_arista_eos(
             stanza["interface"],
             stanza["phase"],
         )
-        results, err = arista_eapi.run_commands(
-            ip, username, password, stanza["lines"], timeout=180
+        results, err = arista_eapi.run_cmds(
+            ip, username, password, cmds, timeout=180,
+            include_error_detail=True,
         )
+        # Always log the device's response so operators can see what
+        # Arista said (parity with NX-OS wave-7.5).
+        if results:
+            preview = repr(results)[:800]
+            _log.info(
+                "recovery: arista device-response ip=%s iface=%s phase=%s: %s",
+                ip,
+                stanza["interface"],
+                stanza["phase"],
+                preview,
+            )
         if err:
             _log.warning(
                 "recovery: arista failed ip=%s iface=%s phase=%s err=%s",
@@ -378,6 +428,17 @@ def recover_interfaces_arista_eos(
                 err,
             )
             return results, err
+        # Per-cmd error inspection (the wave-7.8 fix the log proved we needed).
+        per_cmd_err = _extract_arista_per_cmd_error(results)
+        if per_cmd_err:
+            _log.warning(
+                "recovery: arista per-cmd error ip=%s iface=%s phase=%s err=%s",
+                ip,
+                stanza["interface"],
+                stanza["phase"],
+                per_cmd_err,
+            )
+            return results, per_cmd_err
         if results:
             all_results.extend(results)
         if stanza["post_delay_sec"] > 0:
@@ -479,13 +540,29 @@ def build_clear_counters_command(interface: str) -> str:
 def clear_counters_arista_eos(
     ip: str, username: str, password: str, interface: str,
 ) -> tuple[list[Any] | None, str | None]:
-    """EOS: eAPI runCmds in exec mode (no configure)."""
+    """EOS: eAPI runCmds in privileged-exec mode (enable + clear counters).
+
+    Wave-7.8: prepends ``{"cmd": "enable", "input": <password>}`` and
+    inspects per-cmd results — same fix as recover. Without enable,
+    ``clear counters interface ...`` is silently rejected on TACACS
+    users without implicit privilege 15.
+    """
     from backend.runners import arista_eapi
 
     cmd = build_clear_counters_command(interface)
     if not cmd:
         return None, "interface name required"
-    return arista_eapi.run_commands(ip, username, password, [cmd], timeout=60)
+    cmds: list[Any] = [{"cmd": "enable", "input": password or ""}, cmd]
+    results, err = arista_eapi.run_cmds(
+        ip, username, password, cmds, timeout=60,
+        include_error_detail=True,
+    )
+    if err:
+        return results, err
+    per_cmd_err = _extract_arista_per_cmd_error(results)
+    if per_cmd_err:
+        return results, per_cmd_err
+    return results, None
 
 
 def clear_counters_cisco_nxos(
